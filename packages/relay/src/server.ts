@@ -424,6 +424,154 @@ export class RelayServer {
     }
   }
 
+  /** Get turn status for an agent (HTTP polling) */
+  getTurnStatus(battleId: string, agentAddress: string): {
+    yourTurn: boolean;
+    turnNumber: number;
+    opponentMessage?: string;
+    state: string;
+    role: string;
+    turns: SignedTurn[];
+    outcome?: BattleOutcome;
+  } | null {
+    const battle = this.battles.get(battleId);
+    if (!battle) return null;
+
+    const role = battle.roles[agentAddress] ?? 'unknown';
+    const activeAgent = battle.agents[battle.activeAgentIndex];
+    const yourTurn = battle.state === 'active' &&
+      activeAgent?.address.toLowerCase() === agentAddress.toLowerCase();
+
+    const lastTurn = battle.turns[battle.turns.length - 1];
+    const opponentMessage = lastTurn && lastTurn.agentAddress.toLowerCase() !== agentAddress.toLowerCase()
+      ? lastTurn.message
+      : undefined;
+
+    return {
+      yourTurn,
+      turnNumber: battle.turns.length + 1,
+      opponentMessage,
+      state: battle.state,
+      role,
+      turns: battle.turns,
+      outcome: battle.outcome ?? undefined,
+    };
+  }
+
+  /** Submit a turn via HTTP (no WebSocket needed) */
+  async submitTurnHttp(battleId: string, turn: {
+    agentAddress: string;
+    message: string;
+    turnNumber: number;
+    timestamp: number;
+    signature: string;
+  }): Promise<{ ok: boolean; error?: string }> {
+    const battle = this.battles.get(battleId);
+    if (!battle) return { ok: false, error: 'Battle not found' };
+    if (battle.state !== 'active') return { ok: false, error: 'Battle is not active' };
+
+    const activeAgent = battle.agents[battle.activeAgentIndex];
+    if (!activeAgent || activeAgent.address.toLowerCase() !== turn.agentAddress.toLowerCase()) {
+      return { ok: false, error: 'Not your turn' };
+    }
+
+    // Verify signature
+    const turnMessage: TurnMessage = {
+      battleId,
+      agentAddress: turn.agentAddress,
+      message: turn.message,
+      turnNumber: turn.turnNumber,
+      timestamp: turn.timestamp,
+    };
+
+    if (!verifyTurn(turnMessage, turn.signature)) {
+      return { ok: false, error: 'Invalid signature' };
+    }
+
+    // Verify turn number
+    const expectedTurn = battle.turns.length + 1;
+    if (turn.turnNumber !== expectedTurn) {
+      return { ok: false, error: `Expected turn ${expectedTurn}, got ${turn.turnNumber}` };
+    }
+
+    // Record signed turn
+    const signedTurn: SignedTurn = {
+      agentAddress: turn.agentAddress,
+      message: turn.message,
+      turnNumber: turn.turnNumber,
+      timestamp: turn.timestamp,
+      signature: turn.signature,
+      role: battle.roles[turn.agentAddress] ?? 'unknown',
+    };
+    battle.turns.push(signedTurn);
+
+    // Broadcast to spectators
+    this.broadcastToSpectators(battle.id, {
+      type: 'opponent_turn',
+      battleId: battle.id,
+      data: { turn: signedTurn },
+    });
+
+    // Notify WS-connected opponent
+    const opponentIndex = battle.agents.findIndex(
+      a => a.address.toLowerCase() !== turn.agentAddress.toLowerCase(),
+    );
+
+    // Check max turns
+    if (battle.turns.length >= battle.maxTurns) {
+      await this.endBattle(battle, {
+        winnerAddress: null,
+        loserAddress: null,
+        reason: 'Max turns reached',
+        verified: false,
+      });
+      return { ok: true };
+    }
+
+    // Advance turn
+    battle.activeAgentIndex = opponentIndex;
+
+    // Notify WS-connected agents about turn
+    for (const [ws, state] of this.connections) {
+      if (
+        state.battleId === battle.id &&
+        state.role === 'agent' &&
+        state.agentAddress?.toLowerCase() === battle.agents[opponentIndex]?.address.toLowerCase()
+      ) {
+        this.sendRelay(ws, {
+          type: 'your_turn',
+          battleId: battle.id,
+          data: {
+            turnNumber: battle.turns.length + 1,
+            opponentMessage: turn.message,
+          },
+        });
+      }
+    }
+
+    return { ok: true };
+  }
+
+  /** Register an agent for HTTP-only participation (no WS needed) */
+  registerAgentHttp(battleId: string, agentAddress: string): { ok: boolean; error?: string } {
+    const battle = this.battles.get(battleId);
+    if (!battle) return { ok: false, error: 'Battle not found' };
+
+    const agent = battle.agents.find(a => a.address.toLowerCase() === agentAddress.toLowerCase());
+    if (!agent) return { ok: false, error: 'Not a participant in this battle' };
+
+    agent.connected = true;
+
+    // Check if all agents connected → start battle
+    if (battle.state === 'waiting' && battle.agents.every(a => a.connected)) {
+      battle.state = 'active';
+      battle.startedAt = Date.now();
+      battle.activeAgentIndex = 0;
+    }
+
+    return { ok: true };
+  }
+
   /** Get list of active battles */
   listBattles(): RelayBattle[] {
     return Array.from(this.battles.values());
