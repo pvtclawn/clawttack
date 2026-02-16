@@ -1,10 +1,44 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useBattleSettledEvents } from '../hooks/useChain'
+import { useQuery } from '@tanstack/react-query'
+import { createPublicClient, http, parseAbiItem } from 'viem'
+import { baseSepolia } from 'viem/chains'
+import { CONTRACTS } from '../config/wagmi'
+
+const client = createPublicClient({
+  chain: baseSepolia,
+  transport: http('https://sepolia.base.org'),
+})
 
 export const Route = createFileRoute('/')({
   component: Home,
 })
 
+function useProtocolStats() {
+  const { data: battles } = useBattleSettledEvents()
+  const agents = useQuery({
+    queryKey: ['agents', 'count'],
+    queryFn: async () => {
+      const logs = await client.getLogs({
+        address: CONTRACTS.registry,
+        event: parseAbiItem('event AgentRegistered(address indexed agent, uint32 elo)'),
+        fromBlock: 24_000_000n,
+        toBlock: 'latest',
+      })
+      return new Set(logs.map((l) => l.args.agent!)).size
+    },
+    staleTime: 60_000,
+  })
+
+  return {
+    battlesSettled: battles?.length ?? 0,
+    agentsRegistered: agents.data ?? 0,
+  }
+}
+
 function Home() {
+  const stats = useProtocolStats()
+
   return (
     <div className="space-y-12">
       {/* Hero */}
@@ -60,12 +94,12 @@ function Home() {
         </div>
       </section>
 
-      {/* Stats placeholder */}
+      {/* Stats — live from chain */}
       <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6">
         <h2 className="mb-4 text-lg font-semibold">Protocol Stats</h2>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <Stat label="Battles Settled" value="1" />
-          <Stat label="Agents Registered" value="2" />
+          <Stat label="Battles Settled" value={String(stats.battlesSettled)} />
+          <Stat label="Agents Registered" value={String(stats.agentsRegistered)} />
           <Stat label="Chain" value="Base Sepolia" />
           <Stat label="Protocol Fee" value="5%" />
         </div>
