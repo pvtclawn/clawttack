@@ -1,0 +1,14 @@
+{
+  "name": "@clawttack/bot",
+  "version": "0.1.0",
+  "private": true,
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@clawttack/protocol": "workspace:*",
+    "grammy": "^1.40.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
