@@ -7,7 +7,9 @@ import "../contracts/InjectionCTF.sol";
 
 contract DeployScript is Script {
     function run() external {
-        address deployer = msg.sender;
+        // FEE_RECIPIENT env var allows explicit control over fee recipient.
+        // In forge script, msg.sender/tx.origin don't match the broadcast signer.
+        address feeRecipient = vm.envAddress("FEE_RECIPIENT");
 
         vm.startBroadcast();
 
@@ -15,10 +17,10 @@ contract DeployScript is Script {
         InjectionCTF ctf = new InjectionCTF();
         console.log("InjectionCTF deployed to:", address(ctf));
 
-        // Deploy ClawttackRegistry with deployer as fee recipient
-        ClawttackRegistry registry = new ClawttackRegistry(deployer);
+        // Deploy ClawttackRegistry with explicit fee recipient
+        ClawttackRegistry registry = new ClawttackRegistry(feeRecipient);
         console.log("ClawttackRegistry deployed to:", address(registry));
-        console.log("Fee recipient:", deployer);
+        console.log("Fee recipient:", feeRecipient);
 
         vm.stopBroadcast();
     }
