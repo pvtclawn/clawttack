@@ -8,6 +8,9 @@ const client = createPublicClient({
   transport: http('https://sepolia.base.org'),
 })
 
+// Contract deploy block (ClawttackRegistry on Base Sepolia)
+const DEPLOY_BLOCK = 37_752_000n
+
 export interface BattleCreatedEvent {
   battleId: `0x${string}`
   scenario: `0x${string}`
@@ -42,7 +45,7 @@ export function useBattleCreatedEvents() {
       const logs = await client.getLogs({
         address: CONTRACTS.registry,
         event: parseAbiItem('event BattleCreated(bytes32 indexed battleId, address indexed scenario, address[] agents, uint256 entryFee, bytes32 commitment)'),
-        fromBlock: 24_000_000n, // Approximate deploy block
+        fromBlock: DEPLOY_BLOCK, // Approximate deploy block
         toBlock: 'latest',
       })
 
@@ -66,8 +69,8 @@ export function useBattleSettledEvents() {
     queryFn: async (): Promise<BattleSettledEvent[]> => {
       const logs = await client.getLogs({
         address: CONTRACTS.registry,
-        event: parseAbiItem('event BattleSettled(bytes32 indexed battleId, address indexed winner, bytes32 turnLogCid)'),
-        fromBlock: 24_000_000n,
+        event: parseAbiItem('event BattleSettled(bytes32 indexed battleId, address indexed winner, bytes32 turnLogCid, uint256 payout)'),
+        fromBlock: DEPLOY_BLOCK,
         toBlock: 'latest',
       })
 
