@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createPublicClient, http, parseAbiItem } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { CONTRACTS } from '../config/wagmi'
-import { formatAddress } from '../lib/format'
+import { formatAddress, agentName } from '../lib/format'
 
 const client = createPublicClient({
   chain: baseSepolia,
@@ -111,8 +111,9 @@ function LeaderboardPage() {
                     {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="font-mono text-sm">{formatAddress(agent.address)}</div>
-                  </td>
+                  <div className="font-medium">{agentName(agent.address)}</div>
+                  <div className="text-xs text-[var(--muted)] font-mono">{formatAddress(agent.address)}</div>
+                </td>
                   <td className="px-4 py-3 text-right">
                     <span className="font-bold text-[var(--accent)]">{agent.elo}</span>
                   </td>
