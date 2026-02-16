@@ -1,277 +1,316 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/**
- * @title Clawttack — Agent Battle Arena Registry
- * @notice On-chain registry for AI agent battles with cryptographic outcome verification.
- * @dev Integrates with ERC-8004 (agent identity) and ERC-8021 (builder attribution).
- *
- * Flow:
- *   1. commitBattle() — hash of secret is stored before battle starts
- *   2. settleBattle() — winner + secret submitted; hash verified on-chain
- *   3. Agent records (wins/losses/elo) updated automatically
- *
- * ERC-8021 attribution: builder codes embedded in settlement tx calldata.
- */
+import "./IScenario.sol";
+
+/// @title ClawttackRegistry — Battle creation, settlement, and Elo tracking
+/// @notice The core contract for the Clawttack protocol.
+///         Handles escrow, outcome verification, and on-chain reputation.
 contract ClawttackRegistry {
-    // --- Structs ---
+    // --- Types ---
+
+    enum BattleState { Created, Active, Settled, Cancelled }
 
     struct Battle {
-        bytes32 secretHash;      // keccak256(secret) — committed before battle
-        uint256[] agentIds;      // ERC-8004 agent IDs participating
-        uint256 winnerId;        // 0 = not settled or draw
-        bool settled;
-        uint64 createdAt;
-        uint64 settledAt;
-        string scenarioId;       // e.g., "injection-ctf"
+        bytes32 id;
+        address scenario;           // IScenario contract address
+        address[] agents;
+        BattleState state;
+        uint256 entryFee;           // Per agent, held in escrow
+        bytes32 commitment;         // From scenario.setup()
+        bytes32 turnLogCid;         // IPFS CID of signed turn log
+        address winner;
+        uint256 createdAt;
+        uint256 settledAt;
     }
 
-    struct AgentRecord {
-        uint256 wins;
-        uint256 losses;
-        uint256 draws;
-        uint256 elo;
-        uint256 totalBattles;
-        bool registered;
+    struct AgentStats {
+        uint32 elo;
+        uint32 wins;
+        uint32 losses;
+        uint32 draws;
+        uint256 lastActiveAt;
     }
 
     // --- State ---
 
     mapping(bytes32 => Battle) public battles;
-    mapping(uint256 => AgentRecord) public agentRecords;
-
+    mapping(address => AgentStats) public agents;
+    
+    uint256 public protocolFeeRate = 500; // 5% (basis points)
     address public owner;
-    address public operator; // The Clawttack orchestrator (can commit/settle)
-
-    uint256 public totalBattles;
-    uint256 public constant DEFAULT_ELO = 1200;
-    uint256 public constant K_FACTOR = 32;
+    address public feeRecipient;
+    
+    uint32 public constant DEFAULT_ELO = 1200;
+    uint32 public constant K_FACTOR = 32;
 
     // --- Events ---
 
-    event BattleCommitted(
+    event BattleCreated(
         bytes32 indexed battleId,
-        bytes32 secretHash,
-        uint256[] agentIds,
-        string scenarioId
+        address indexed scenario,
+        address[] agents,
+        uint256 entryFee,
+        bytes32 commitment
     );
 
     event BattleSettled(
         bytes32 indexed battleId,
-        uint256 indexed winnerId,
-        bytes32 secretHash,
-        bool verified
+        address indexed winner,
+        bytes32 turnLogCid,
+        uint256 payout
     );
 
-    event AgentRegistered(uint256 indexed agentId);
+    event BattleCancelled(bytes32 indexed battleId);
+
+    event AgentRegistered(address indexed agent, uint32 elo);
+
+    event EloUpdated(
+        address indexed agent,
+        uint32 oldElo,
+        uint32 newElo
+    );
 
     // --- Errors ---
 
-    error NotOperator();
-    error BattleAlreadyExists();
     error BattleNotFound();
-    error BattleAlreadySettled();
-    error InvalidVerification();
-    error AgentNotRegistered();
-
-    // --- Modifiers ---
-
-    modifier onlyOperator() {
-        if (msg.sender != operator && msg.sender != owner) revert NotOperator();
-        _;
-    }
+    error BattleNotInState(BattleState expected, BattleState actual);
+    error NotParticipant();
+    error InsufficientFee();
+    error InvalidWinner();
+    error Unauthorized();
 
     // --- Constructor ---
 
-    constructor(address _operator) {
+    constructor(address _feeRecipient) {
         owner = msg.sender;
-        operator = _operator;
+        feeRecipient = _feeRecipient;
     }
 
     // --- Agent Registration ---
 
-    /**
-     * @notice Register an ERC-8004 agent for battles.
-     * @param agentId The ERC-8004 token ID.
-     */
-    function registerAgent(uint256 agentId) external onlyOperator {
-        if (!agentRecords[agentId].registered) {
-            agentRecords[agentId] = AgentRecord({
+    /// @notice Register an agent (or update lastActiveAt)
+    function registerAgent() external {
+        if (agents[msg.sender].elo == 0) {
+            agents[msg.sender] = AgentStats({
+                elo: DEFAULT_ELO,
                 wins: 0,
                 losses: 0,
                 draws: 0,
-                elo: DEFAULT_ELO,
-                totalBattles: 0,
-                registered: true
+                lastActiveAt: block.timestamp
             });
-            emit AgentRegistered(agentId);
+            emit AgentRegistered(msg.sender, DEFAULT_ELO);
+        } else {
+            agents[msg.sender].lastActiveAt = block.timestamp;
         }
     }
 
     // --- Battle Lifecycle ---
 
-    /**
-     * @notice Commit a battle before it starts.
-     * @dev The secret hash is stored on-chain for later verification.
-     * @param battleId Unique battle identifier.
-     * @param secretHash keccak256 hash of the secret phrase.
-     * @param agentIds Array of ERC-8004 agent IDs participating.
-     * @param scenarioId The scenario type (e.g., "injection-ctf").
-     */
-    function commitBattle(
+    /// @notice Create a battle with escrow
+    /// @param battleId Unique identifier (should be generated off-chain)
+    /// @param scenario Address of the IScenario contract
+    /// @param agentAddresses Participant addresses (must include msg.sender)
+    /// @param setupData Scenario-specific setup data
+    function createBattle(
         bytes32 battleId,
-        bytes32 secretHash,
-        uint256[] calldata agentIds,
-        string calldata scenarioId
-    ) external onlyOperator {
-        if (battles[battleId].createdAt != 0) revert BattleAlreadyExists();
+        address scenario,
+        address[] calldata agentAddresses,
+        bytes calldata setupData
+    ) external payable {
+        if (battles[battleId].createdAt != 0) revert BattleNotFound(); // Already exists
+        
+        uint256 entryFee = msg.value;
+
+        // Call scenario setup
+        bytes32 commitment = IScenario(scenario).setup(
+            battleId,
+            agentAddresses,
+            setupData
+        );
 
         battles[battleId] = Battle({
-            secretHash: secretHash,
-            agentIds: agentIds,
-            winnerId: 0,
-            settled: false,
-            createdAt: uint64(block.timestamp),
-            settledAt: 0,
-            scenarioId: scenarioId
+            id: battleId,
+            scenario: scenario,
+            agents: agentAddresses,
+            state: BattleState.Active,
+            entryFee: entryFee,
+            commitment: commitment,
+            turnLogCid: bytes32(0),
+            winner: address(0),
+            createdAt: block.timestamp,
+            settledAt: 0
         });
 
-        totalBattles++;
-        emit BattleCommitted(battleId, secretHash, agentIds, scenarioId);
+        // Auto-register agents if new
+        for (uint256 i = 0; i < agentAddresses.length; i++) {
+            if (agents[agentAddresses[i]].elo == 0) {
+                agents[agentAddresses[i]] = AgentStats({
+                    elo: DEFAULT_ELO,
+                    wins: 0,
+                    losses: 0,
+                    draws: 0,
+                    lastActiveAt: block.timestamp
+                });
+                emit AgentRegistered(agentAddresses[i], DEFAULT_ELO);
+            }
+        }
+
+        emit BattleCreated(battleId, scenario, agentAddresses, entryFee, commitment);
     }
 
-    /**
-     * @notice Settle a battle with the outcome.
-     * @dev Verifies the secret against the committed hash.
-     *      ERC-8021 builder attribution should be included in tx calldata.
-     * @param battleId The battle to settle.
-     * @param winnerId ERC-8004 agent ID of the winner (0 for draw).
-     * @param secret The revealed secret (verified against commitment).
-     */
-    function settleBattle(
+    /// @notice Settle a battle — anyone with the reveal can call this
+    /// @param battleId Battle to settle
+    /// @param turnLogCid IPFS CID of the full signed turn log
+    /// @param reveal Scenario-specific reveal data
+    function settle(
         bytes32 battleId,
-        uint256 winnerId,
-        string calldata secret
-    ) external onlyOperator {
+        bytes32 turnLogCid,
+        bytes calldata reveal
+    ) external {
         Battle storage battle = battles[battleId];
         if (battle.createdAt == 0) revert BattleNotFound();
-        if (battle.settled) revert BattleAlreadySettled();
+        if (battle.state != BattleState.Active) {
+            revert BattleNotInState(BattleState.Active, battle.state);
+        }
 
-        // Verify secret against commitment
-        bytes32 revealedHash = keccak256(abi.encodePacked(secret));
-        bool verified = (revealedHash == battle.secretHash);
-        if (!verified) revert InvalidVerification();
+        // Let the scenario determine the winner
+        address winner = IScenario(battle.scenario).settle(
+            battleId,
+            turnLogCid,
+            reveal
+        );
 
-        battle.winnerId = winnerId;
-        battle.settled = true;
-        battle.settledAt = uint64(block.timestamp);
+        // Validate winner is a participant (or address(0) for draw)
+        if (winner != address(0)) {
+            bool isParticipant = false;
+            for (uint256 i = 0; i < battle.agents.length; i++) {
+                if (battle.agents[i] == winner) {
+                    isParticipant = true;
+                    break;
+                }
+            }
+            if (!isParticipant) revert InvalidWinner();
+        }
 
-        // Update agent records
-        _updateRecords(battle.agentIds, winnerId);
+        // Update battle state
+        battle.state = BattleState.Settled;
+        battle.winner = winner;
+        battle.turnLogCid = turnLogCid;
+        battle.settledAt = block.timestamp;
 
-        emit BattleSettled(battleId, winnerId, battle.secretHash, verified);
-    }
+        // Update Elo ratings
+        _updateElo(battle.agents, winner);
 
-    // --- Internal ---
+        // Distribute funds
+        uint256 totalPool = battle.entryFee;
+        if (totalPool > 0 && winner != address(0)) {
+            uint256 fee = (totalPool * protocolFeeRate) / 10000;
+            uint256 payout = totalPool - fee;
 
-    function _updateRecords(uint256[] storage agentIds, uint256 winnerId) internal {
-        if (agentIds.length != 2) return; // Only 1v1 Elo for now
+            // Pay winner
+            (bool sent, ) = winner.call{value: payout}("");
+            require(sent, "Payout failed");
 
-        uint256 id1 = agentIds[0];
-        uint256 id2 = agentIds[1];
+            // Pay protocol fee
+            if (fee > 0) {
+                (bool feeSent, ) = feeRecipient.call{value: fee}("");
+                require(feeSent, "Fee transfer failed");
+            }
 
-        AgentRecord storage r1 = agentRecords[id1];
-        AgentRecord storage r2 = agentRecords[id2];
-
-        if (!r1.registered || !r2.registered) return;
-
-        r1.totalBattles++;
-        r2.totalBattles++;
-
-        if (winnerId == 0) {
-            // Draw
-            r1.draws++;
-            r2.draws++;
-            (r1.elo, r2.elo) = _calculateElo(r1.elo, r2.elo, 1); // 0=a_wins, 1=draw, 2=b_wins
-        } else if (winnerId == id1) {
-            r1.wins++;
-            r2.losses++;
-            (r1.elo, r2.elo) = _calculateElo(r1.elo, r2.elo, 0);
-        } else if (winnerId == id2) {
-            r1.losses++;
-            r2.wins++;
-            (r1.elo, r2.elo) = _calculateElo(r1.elo, r2.elo, 2);
+            emit BattleSettled(battleId, winner, turnLogCid, payout);
+        } else {
+            emit BattleSettled(battleId, winner, turnLogCid, 0);
         }
     }
 
-    /**
-     * @notice Calculate new Elo ratings.
-     * @param eloA Rating of player A.
-     * @param eloB Rating of player B.
-     * @param result 0 = A wins, 1 = draw, 2 = B wins.
-     */
-    function _calculateElo(
-        uint256 eloA,
-        uint256 eloB,
-        uint256 result
-    ) internal pure returns (uint256 newA, uint256 newB) {
-        // Simplified Elo: use fixed-point math
-        // Expected score = 1 / (1 + 10^((ratingB - ratingA)/400))
-        // For simplicity in Solidity, use linear approximation
-        int256 diff = int256(eloA) - int256(eloB);
+    // --- Elo ---
+
+    function _updateElo(address[] storage players, address winner) internal {
+        if (players.length != 2) return; // Only 1v1 for now
+
+        address a = players[0];
+        address b = players[1];
+        uint32 eloA = agents[a].elo;
+        uint32 eloB = agents[b].elo;
+
+        // Expected scores (simplified integer math)
+        // E_A = 1 / (1 + 10^((eloB - eloA) / 400))
+        // Using fixed-point: multiply by 1000 for precision
+        int256 diff = int256(uint256(eloB)) - int256(uint256(eloA));
         
-        // Clamp diff to [-400, 400] for simplified calculation
-        if (diff > 400) diff = 400;
-        if (diff < -400) diff = -400;
+        // Approximate expected score (linear for small diff, capped)
+        uint32 expectedA;
+        if (diff > 400) expectedA = 100;      // ~0.1
+        else if (diff < -400) expectedA = 900; // ~0.9  
+        else expectedA = uint32(uint256(int256(500) - diff * 500 / 400)); // Linear approx
 
-        // expectedA ≈ 0.5 + diff/800 (linear approximation, scaled by 100)
-        int256 expectedA100 = 50 + (diff * 50) / 400;
+        uint32 expectedB = 1000 - expectedA;
 
-        int256 scoreA100;
-        if (result == 0) scoreA100 = 100;      // A wins
-        else if (result == 1) scoreA100 = 50;   // Draw
-        else scoreA100 = 0;                      // B wins
+        uint32 scoreA;
+        uint32 scoreB;
 
-        int256 deltaA = (int256(K_FACTOR) * (scoreA100 - expectedA100)) / 100;
+        if (winner == address(0)) {
+            // Draw
+            scoreA = 500;
+            scoreB = 500;
+            agents[a].draws++;
+            agents[b].draws++;
+        } else if (winner == a) {
+            scoreA = 1000;
+            scoreB = 0;
+            agents[a].wins++;
+            agents[b].losses++;
+        } else {
+            scoreA = 0;
+            scoreB = 1000;
+            agents[b].wins++;
+            agents[a].losses++;
+        }
 
-        newA = uint256(int256(eloA) + deltaA);
-        newB = uint256(int256(eloB) - deltaA);
+        // New Elo = Old + K * (Score - Expected) / 1000
+        uint32 newEloA = _clampElo(int256(uint256(eloA)) + int256(uint256(K_FACTOR)) * (int256(uint256(scoreA)) - int256(uint256(expectedA))) / 1000);
+        uint32 newEloB = _clampElo(int256(uint256(eloB)) + int256(uint256(K_FACTOR)) * (int256(uint256(scoreB)) - int256(uint256(expectedB))) / 1000);
 
-        // Floor at 100
-        if (newA < 100) newA = 100;
-        if (newB < 100) newB = 100;
+        if (newEloA != eloA) {
+            agents[a].elo = newEloA;
+            emit EloUpdated(a, eloA, newEloA);
+        }
+        if (newEloB != eloB) {
+            agents[b].elo = newEloB;
+            emit EloUpdated(b, eloB, newEloB);
+        }
+
+        agents[a].lastActiveAt = block.timestamp;
+        agents[b].lastActiveAt = block.timestamp;
+    }
+
+    function _clampElo(int256 elo) internal pure returns (uint32) {
+        if (elo < 100) return 100;
+        if (elo > 3000) return 3000;
+        return uint32(uint256(elo));
     }
 
     // --- Views ---
 
-    function getBattle(bytes32 battleId) external view returns (
-        bytes32 secretHash,
-        uint256 winnerId,
-        bool settled,
-        uint64 createdAt,
-        uint64 settledAt,
-        string memory scenarioId
-    ) {
-        Battle storage b = battles[battleId];
-        return (b.secretHash, b.winnerId, b.settled, b.createdAt, b.settledAt, b.scenarioId);
+    function getBattle(bytes32 battleId) external view returns (Battle memory) {
+        return battles[battleId];
     }
 
-    function getAgentRecord(uint256 agentId) external view returns (
-        uint256 wins,
-        uint256 losses,
-        uint256 draws,
-        uint256 elo,
-        uint256 totalBattlesCount,
-        bool registered
-    ) {
-        AgentRecord storage r = agentRecords[agentId];
-        return (r.wins, r.losses, r.draws, r.elo, r.totalBattles, r.registered);
+    function getAgent(address agent) external view returns (AgentStats memory) {
+        return agents[agent];
     }
 
     // --- Admin ---
 
-    function setOperator(address _operator) external {
-        require(msg.sender == owner, "Not owner");
-        operator = _operator;
+    function setProtocolFeeRate(uint256 newRate) external {
+        if (msg.sender != owner) revert Unauthorized();
+        require(newRate <= 1000, "Max 10%");
+        protocolFeeRate = newRate;
+    }
+
+    function setFeeRecipient(address newRecipient) external {
+        if (msg.sender != owner) revert Unauthorized();
+        feeRecipient = newRecipient;
     }
 }
