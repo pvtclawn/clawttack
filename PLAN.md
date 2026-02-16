@@ -1,4 +1,4 @@
-# Clawttack — Build Plan (Updated 2026-02-16 16:26)
+# Clawttack — Build Plan (Updated 2026-02-16 16:58)
 
 ## Current Status
 
@@ -7,55 +7,39 @@
 | # | Task | Status | Commit/Notes |
 |---|------|--------|-------|
 | 1 | WebSocket relay server with signed messages | ✅ DONE | `19d4d13`, `d62402f`, `880029a` |
-| 2 | ECDSA signing (Solidity-compatible) | ✅ DONE | `19d4d13` — canonicalTurnHash, signTurn, verifyTurn |
-| 3 | Battle log export/verify + Merkle root | ✅ DONE | `b040466` — self-settlement enabled |
+| 2 | ECDSA signing (Solidity-compatible) | ✅ DONE | `19d4d13` |
+| 3 | Battle log export/verify + Merkle root | ✅ DONE | `b040466` |
 | 4 | Rate limiter | ✅ DONE | `b040466` |
-| 5 | HTTP API (Hono) | ✅ DONE | `d62402f` — CRUD + WS upgrade |
-| 6 | E2E integration test (real WS) | ✅ DONE | `880029a` — full battle lifecycle |
+| 5 | HTTP API (Hono) | ✅ DONE | `d62402f` |
+| 6 | E2E integration test (real WS) | ✅ DONE | `880029a` |
 | 7 | Architecture doc v2 | ✅ DONE | `bd01fcb` |
-| 8 | Waku transport PoC | 🟡 PARTIAL | Connects, subscribes. Send fails (peer availability). Documented. |
-| 9 | Transport-agnostic SDK (`ITransport`) | 🔲 TODO | Pending Egor's transport decision |
-| 10 | IPFS upload service (Pinata) | 🔲 TODO | Research done, Pinata free tier chosen |
-| 11 | ClawttackRegistry.sol v2 | 🔲 TODO | Commit-reveal, IPFS CID, escrow |
-| 12 | InjectionCTF.sol scenario | 🔲 TODO | On-chain secret verification |
-| 13 | Basic web UI (clawttack.com) | 🔲 TODO | Vercel, reads chain + IPFS |
-| 14 | Agent SDK package | 🔲 TODO | `@clawttack/fighter` |
+| 8 | Waku transport PoC | 🟡 PARTIAL | Connects, send fails (peer issue). Documented. |
+| 9 | Transport-agnostic SDK (`ITransport`) | ✅ DONE | `cc40c9c` — WebSocketTransport impl |
+| 10 | ClawttackRegistry.sol | ✅ DONE | `beed3bd` — escrow, Elo, settlement |
+| 11 | InjectionCTF.sol scenario | ✅ DONE | `beed3bd` — commit-reveal |
+| 12 | IScenario.sol interface | ✅ DONE | `beed3bd` — pluggable scenarios |
+| 13 | Foundry tests (12) | ✅ DONE | `e4dcf7d` — full lifecycle |
+| 14 | Deploy to Base Sepolia | ✅ DONE | `56b95ea` — both contracts live |
+| 15 | IPFS upload service (Pinata) | 🔲 TODO | Research done, Pinata free tier |
+| 16 | Basic web UI (clawttack.com) | 🔲 TODO | Vercel, reads chain + IPFS |
+| 17 | Agent SDK package | 🔲 TODO | `@clawttack/fighter` |
 
-### Tests: 70 passing | LOC: 2,783 src + 1,350 tests | Commits today: 9
+### Stats: 83 tests (71 TS + 12 Sol) | 3,100+ LOC src | 380 LOC Solidity | 15 commits today
 
-## Blocking Decisions
+### Deployed Contracts (Base Sepolia)
+- **InjectionCTF:** `0x85Fc8A8C457956cD34dDa2428CdDfB4D8dB06C70`
+- **ClawttackRegistry:** `0xBb981FC4D093bCeA782018E4CD584A42ACCbb5aB`
 
-1. **Transport layer**: WS relay (works now) vs Waku (P2P, needs maturation) vs both (transport-agnostic)
-   - Egor's preference: platform-agnostic, minimal server load
-   - Proposed: ship WS, add Waku later via `ITransport` interface
-   - **AWAITING EGOR'S INPUT**
+## Next 3 Tasks
 
-2. **clawttack.com hosting**: Vercel confirmed ✅ (Egor bought domain)
+1. **IPFS upload service** — Pinata integration, wire to `onBattleEnd`
+2. **Agent SDK** — `@clawttack/fighter` package (transport + signing + battle flow)
+3. **Web UI** — clawttack.com on Vercel (battle list, live view, replay from IPFS)
 
-## Next 3 Tasks (after transport decision)
+## Architecture Decision: Transport
 
-1. **`ITransport` interface + WebSocket implementation** — abstract the transport so Waku slots in later
-2. **IPFS upload service** — Pinata integration, wire to `onBattleEnd`
-3. **Solidity contracts** — ClawttackRegistry.sol + InjectionCTF.sol on Base Sepolia
-
-## Red-Team Findings (from Lane F)
-
-Top 3 priorities to address in code:
-1. **Sybil resistance** — Elo decay, opponent strength weighting, min battle history
-2. **Self-settlement** — ✅ Partially done (battle-log.ts). Need contract support.
-3. **WSS + rate limiting** — ✅ Rate limiter done. WSS via reverse proxy (nginx/Caddy).
-
-## Reading Notes Applied
-
-From Game Theory Fundamentals:
-- Elo should decay for inactive agents (prevents farm-and-sit)
-- Repeated games change equilibrium — reputation matters more than one-shot wins
-- Prisoner's Dilemma is a great second scenario (pure game theory)
-- Entry fees make Sybil expensive (economic barrier)
-
-## Research Findings
-
-- **No competitor** builds a trustless, open protocol for agent battles
-- Bot Games (centralized, event-based, no blockchain) — different niche
-- Pinata free tier: 1GB = ~20,000 battle logs
-- Waku: promising but needs maturation or own relay node
+Egor prefers minimal server load, platform-agnostic design.
+- **Built:** `ITransport` interface + `WebSocketTransport` implementation
+- **Explored:** Waku P2P (connects but send fails on public network)
+- **Decision:** Ship with WS relay. Waku plugs in via same `ITransport` when network matures.
+- **Ultimate vision:** Fully serverless — chain + IPFS + static site. Relay is optional convenience.
