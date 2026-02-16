@@ -98,4 +98,5 @@ export interface TurnResult {
   nextAgentId?: string; // who goes next (if continue)
   outcome?: BattleOutcome; // if action is 'end'
   announcement?: string; // public message to the battle group
+  messageForNextAgent?: string; // DM relay: the message to forward to the next agent
 }
