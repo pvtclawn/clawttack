@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as BattlesRouteImport } from './routes/battles'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BattleIdRouteImport } from './routes/battle.$id'
 
 const LeaderboardRoute = LeaderboardRouteImport.update({
   id: '/leaderboard',
@@ -28,35 +29,44 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BattleIdRoute = BattleIdRouteImport.update({
+  id: '/battle/$id',
+  path: '/battle/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/battles': typeof BattlesRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/battle/$id': typeof BattleIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/battles': typeof BattlesRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/battle/$id': typeof BattleIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/battles': typeof BattlesRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/battle/$id': typeof BattleIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/battles' | '/leaderboard'
+  fullPaths: '/' | '/battles' | '/leaderboard' | '/battle/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/battles' | '/leaderboard'
-  id: '__root__' | '/' | '/battles' | '/leaderboard'
+  to: '/' | '/battles' | '/leaderboard' | '/battle/$id'
+  id: '__root__' | '/' | '/battles' | '/leaderboard' | '/battle/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BattlesRoute: typeof BattlesRoute
   LeaderboardRoute: typeof LeaderboardRoute
+  BattleIdRoute: typeof BattleIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/battle/$id': {
+      id: '/battle/$id'
+      path: '/battle/$id'
+      fullPath: '/battle/$id'
+      preLoaderRoute: typeof BattleIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BattlesRoute: BattlesRoute,
   LeaderboardRoute: LeaderboardRoute,
+  BattleIdRoute: BattleIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

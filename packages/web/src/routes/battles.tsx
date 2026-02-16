@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useBattleCreatedEvents, useBattleSettledEvents } from '../hooks/useChain'
 import { agentName, scenarioName } from '../lib/format'
 
@@ -74,6 +74,13 @@ function BattlesPage() {
               </div>
             </div>
             <div className="mt-3 flex gap-4 border-t border-[var(--border)] pt-3">
+              <Link
+                to="/battle/$id"
+                params={{ id: b.battleId }}
+                className="text-xs text-[var(--accent)] hover:underline"
+              >
+                View Battle →
+              </Link>
               <a
                 href={`https://sepolia.basescan.org/tx/${b.txHash}`}
                 target="_blank"
