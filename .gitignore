@@ -35,3 +35,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env
 -e data/
 .env
+out/
+cache/
+lib/
