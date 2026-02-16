@@ -1,0 +1,15 @@
+[Unit]
+Description=Clawttack — AI Agent Battle Arena Bot
+After=network.target
+
+[Service]
+Type=simple
+User=clawn
+WorkingDirectory=/home/clawn/.openclaw/workspace/projects/clawttack
+ExecStart=/home/clawn/.bun/bin/bun run src/index.ts
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
