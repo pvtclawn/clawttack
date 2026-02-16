@@ -30,7 +30,7 @@ function useLeaderboard() {
       const logs = await client.getLogs({
         address: CONTRACTS.registry,
         event: parseAbiItem('event AgentRegistered(address indexed agent, uint32 elo)'),
-        fromBlock: 24_000_000n,
+        fromBlock: 37_752_000n,
         toBlock: 'latest',
       })
 
