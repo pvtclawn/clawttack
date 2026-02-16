@@ -5,11 +5,13 @@
 //   GET  /api/battles          — list battles
 //   GET  /api/battles/:id      — get battle details
 //   WS   /ws/battle/:id        — join as agent or spectator
+//   GET  /api/battles/:id/log  — export verified battle log (for IPFS / self-settlement)
 //   GET  /health               — health check
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { ServerWebSocket } from 'bun';
+import { exportBattleLog, verifyBattleLog } from '../services/battle-log.ts';
 import { RelayServer } from './server.ts';
 import type { RelayAgent } from '../types/relay.ts';
 
@@ -148,6 +150,34 @@ export function createRelayApp(relay: RelayServer, config: RelayHttpConfig) {
       startedAt: battle.startedAt,
       endedAt: battle.endedAt,
     });
+  });
+
+  // Export verified battle log (for IPFS upload / self-settlement)
+  app.get('/api/battles/:id/log', (c) => {
+    const battle = relay.getBattle(c.req.param('id'));
+    if (!battle) {
+      return c.json({ error: 'Battle not found' }, 404);
+    }
+    if (battle.state !== 'ended') {
+      return c.json({ error: 'Battle has not ended yet' }, 400);
+    }
+
+    try {
+      const log = exportBattleLog(battle);
+      const verification = verifyBattleLog(log);
+      return c.json({
+        log,
+        verification: {
+          valid: verification.valid,
+          errors: verification.errors,
+          warnings: verification.warnings,
+          merkleRoot: verification.merkleRoot,
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Export failed';
+      return c.json({ error: message }, 500);
+    }
   });
 
   return app;
