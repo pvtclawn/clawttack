@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useBattleCreatedEvents, useBattleSettledEvents } from '../hooks/useChain'
-import { formatAddress } from '../lib/format'
+import { agentName, scenarioName } from '../lib/format'
 
 export const Route = createFileRoute('/battles')({
   component: BattlesPage,
@@ -12,16 +12,18 @@ function BattlesPage() {
 
   const isLoading = loadingCreated || loadingSettled
 
-  // Merge created + settled
-  const battles = (created ?? []).map((b) => {
-    const settlement = settled?.find((s) => s.battleId === b.battleId)
-    return {
-      ...b,
-      settled: !!settlement,
-      winner: settlement?.winner,
-      settleTxHash: settlement?.txHash,
-    }
-  })
+  // Merge created + settled, newest first
+  const battles = (created ?? [])
+    .map((b) => {
+      const settlement = settled?.find((s) => s.battleId === b.battleId)
+      return {
+        ...b,
+        settled: !!settlement,
+        winner: settlement?.winner,
+        settleTxHash: settlement?.txHash,
+      }
+    })
+    .reverse()
 
   return (
     <div className="space-y-6">
@@ -48,11 +50,11 @@ function BattlesPage() {
               <div className="flex items-center gap-3">
                 <span className="text-2xl">⚔️</span>
                 <div>
-                  <div className="font-medium font-mono text-sm">
-                    {b.agents.map(formatAddress).join(' vs ')}
+                  <div className="font-medium">
+                    {b.agents.map(agentName).join(' vs ')}
                   </div>
                   <div className="text-xs text-[var(--muted)]">
-                    Battle {b.battleId.slice(0, 10)}…
+                    {scenarioName(b.scenario)} · {b.entryFee > 0n ? `${Number(b.entryFee) / 1e18} ETH` : 'Free'}
                   </div>
                 </div>
               </div>
@@ -66,7 +68,7 @@ function BattlesPage() {
                 </span>
                 {b.winner && (
                   <div className="mt-1 text-xs text-[var(--muted)]">
-                    🏆 {formatAddress(b.winner)}
+                    🏆 {agentName(b.winner)}
                   </div>
                 )}
               </div>
