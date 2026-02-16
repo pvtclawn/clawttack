@@ -55,6 +55,10 @@ const REGISTRY_ABI = [
   'event BattleSettled(bytes32 indexed battleId, address indexed winner, bytes32 turnLogCid)',
 ];
 
+const SCENARIO_ABI = [
+  'function setups(bytes32) external view returns (bytes32 secretHash, address defender, address attacker, bool settled)',
+];
+
 async function main() {
   console.log('⚖️  Clawttack Settlement Pipeline');
   console.log(`   Battle: ${battleId}`);
@@ -152,35 +156,42 @@ async function main() {
   // Convert battle ID to bytes32 (use keccak256 of UUID for deterministic bytes32)
   const battleIdBytes = ethers.keccak256(ethers.toUtf8Bytes(battleId));
 
-  // Create the battle on-chain
-  console.log('   Creating battle on-chain...');
-  
-  const agentAddresses = battle.agents.map((a: any) => a.address);
-  const secretHash = ethers.keccak256(ethers.toUtf8Bytes(secret));
-  
-  // Find attacker and defender
-  const attacker = battle.agents.find((a: any) => a.role === 'attacker')?.address;
-  const defender = battle.agents.find((a: any) => a.role === 'defender')?.address;
-  
-  if (!attacker || !defender) {
-    console.error('❌ Cannot determine attacker/defender from battle data');
-    process.exit(1);
+  // Check if battle already exists on-chain via scenario setup
+  const scenario = new ethers.Contract(INJECTION_CTF_ADDR, SCENARIO_ABI, provider);
+  const setup = await scenario.setups(battleIdBytes);
+  const battleExists = setup.secretHash !== ethers.ZeroHash;
+
+  if (battleExists) {
+    console.log('   Battle already exists on-chain, skipping creation');
+  } else {
+    console.log('   Creating battle on-chain...');
+    
+    const agentAddresses = battle.agents.map((a: any) => a.address);
+    const secretHash = ethers.keccak256(ethers.toUtf8Bytes(secret));
+    
+    const attacker = battle.agents.find((a: any) => a.role === 'attacker')?.address;
+    const defender = battle.agents.find((a: any) => a.role === 'defender')?.address;
+    
+    if (!attacker || !defender) {
+      console.error('❌ Cannot determine attacker/defender from battle data');
+      process.exit(1);
+    }
+
+    const setupData = ethers.AbiCoder.defaultAbiCoder().encode(
+      ['bytes32', 'address', 'address'],
+      [secretHash, defender, attacker],
+    );
+
+    const createTx = await registry.createBattle(
+      battleIdBytes,
+      INJECTION_CTF_ADDR,
+      agentAddresses,
+      setupData,
+    );
+    console.log(`   Create tx: ${createTx.hash}`);
+    await createTx.wait();
+    console.log('   ✅ Battle created on-chain');
   }
-
-  const setupData = ethers.AbiCoder.defaultAbiCoder().encode(
-    ['bytes32', 'address', 'address'],
-    [secretHash, defender, attacker],
-  );
-
-  const createTx = await registry.createBattle(
-    battleIdBytes,
-    INJECTION_CTF_ADDR,
-    agentAddresses,
-    setupData,
-  );
-  console.log(`   Create tx: ${createTx.hash}`);
-  await createTx.wait();
-  console.log('   ✅ Battle created on-chain');
 
   // Settle
   console.log('   Settling...');
