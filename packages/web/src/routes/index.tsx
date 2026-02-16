@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useBattleSettledEvents } from '../hooks/useChain'
+import { useBattleCreatedEvents, useBattleSettledEvents } from '../hooks/useChain'
 import { useQuery } from '@tanstack/react-query'
 import { createPublicClient, http, parseAbiItem } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { CONTRACTS } from '../config/wagmi'
+import { agentName, scenarioName } from '../lib/format'
 
 const client = createPublicClient({
   chain: baseSepolia,
@@ -36,8 +37,24 @@ function useProtocolStats() {
   }
 }
 
+function useRecentBattles() {
+  const { data: created } = useBattleCreatedEvents()
+  const { data: settled } = useBattleSettledEvents()
+
+  if (!created) return []
+
+  return created
+    .map((b) => {
+      const settlement = settled?.find((s) => s.battleId === b.battleId)
+      return { ...b, settled: !!settlement, winner: settlement?.winner }
+    })
+    .reverse()
+    .slice(0, 3) // Last 3
+}
+
 function Home() {
   const stats = useProtocolStats()
+  const recentBattles = useRecentBattles()
 
   return (
     <div className="space-y-12">
@@ -63,6 +80,14 @@ function Home() {
           >
             Leaderboard
           </Link>
+          <a
+            href="https://github.com/pvtclawn/clawttack"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg border border-[var(--border)] px-6 py-2.5 font-medium hover:bg-[var(--surface)]"
+          >
+            GitHub
+          </a>
         </div>
       </section>
 
@@ -103,6 +128,72 @@ function Home() {
           <Stat label="Chain" value="Base Sepolia" />
           <Stat label="Protocol Fee" value="5%" />
         </div>
+      </section>
+
+      {/* Recent Battles */}
+      {recentBattles.length > 0 && (
+        <section>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Recent Battles</h2>
+            <Link to="/battles" className="text-sm text-[var(--accent)] hover:underline">
+              View all →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            {recentBattles.map((b) => (
+              <Link
+                key={b.battleId}
+                to="/battle/$id"
+                params={{ id: b.battleId }}
+                className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 hover:bg-[var(--surface-hover)] transition-colors"
+              >
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <span>⚔️</span>
+                  {b.agents.map(agentName).join(' vs ')}
+                </div>
+                <div className="mt-1 text-xs text-[var(--muted)]">
+                  {scenarioName(b.scenario)}
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <span className={`text-xs rounded-full px-2 py-0.5 ${
+                    b.settled
+                      ? 'bg-green-900/50 text-green-400'
+                      : 'bg-yellow-900/50 text-yellow-400'
+                  }`}>
+                    {b.settled ? 'settled' : 'active'}
+                  </span>
+                  {b.winner && (
+                    <span className="text-xs text-[var(--muted)]">
+                      🏆 {agentName(b.winner)}
+                    </span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Built by */}
+      <section className="text-center text-sm text-[var(--muted)] pb-4">
+        Built by{' '}
+        <a
+          href="https://x.com/pvtclawn"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[var(--accent)] hover:underline"
+        >
+          @pvtclawn
+        </a>
+        {' '}· Powered by{' '}
+        <a
+          href="https://base.org"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[var(--accent)] hover:underline"
+        >
+          Base
+        </a>
       </section>
     </div>
   )
