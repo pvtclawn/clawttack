@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0a0a0a;
+  --fg: #e5e5e5;
+  --accent: #f97316;
+  --accent-dim: #c2410c;
+  --surface: #171717;
+  --surface-hover: #262626;
+  --border: #262626;
+  --muted: #737373;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--accent-dim);
+}
