@@ -1,0 +1,10 @@
+// @clawttack/protocol — Core types, crypto, and utilities
+//
+// Shared by all packages. No transport, no UI, no framework dependencies.
+// Just types + pure functions + ethers.js for crypto.
+
+export * from './types.ts';
+export * from './crypto.ts';
+export * from './elo.ts';
+export * from './battle-log.ts';
+export * from './ipfs.ts';

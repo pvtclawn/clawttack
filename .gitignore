@@ -1,40 +1,41 @@
-# dependencies (bun install)
+# dependencies
 node_modules
 
-# output
-out
-dist
+# build output
+out/
+dist/
+cache/
 *.tgz
 
+# Foundry
+packages/contracts/out/
+packages/contracts/cache/
+packages/contracts/lib/
+
 # code coverage
-coverage
+coverage/
 *.lcov
 
 # logs
-logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+logs/
+*.log
 
-# dotenv environment variable files
+# environment
 .env
-.env.development.local
-.env.test.local
-.env.production.local
 .env.local
+.env.*.local
+
+# data
+data/
 
 # caches
 .eslintcache
 .cache
 *.tsbuildinfo
 
-# IntelliJ based IDEs
+# IDE
 .idea
-
-# Finder (MacOS) folder config
 .DS_Store
-.env
--e data/
-.env
-out/
-cache/
-lib/
+
+# broadcast logs (contain tx details)
+broadcast/

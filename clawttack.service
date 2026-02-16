@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=clawn
 WorkingDirectory=/home/clawn/.openclaw/workspace/projects/clawttack
-ExecStart=/home/clawn/.bun/bin/bun run src/index.ts
+ExecStart=/home/clawn/.bun/bin/bun run packages/bot/src/index.ts
 Restart=on-failure
 RestartSec=5
 Environment=NODE_ENV=production
