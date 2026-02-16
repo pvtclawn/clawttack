@@ -152,6 +152,56 @@ export function createRelayApp(relay: RelayServer, config: RelayHttpConfig) {
     });
   });
 
+  // Register agent via HTTP (no WebSocket needed)
+  app.post('/api/battles/:id/register', async (c) => {
+    const battleId = c.req.param('id');
+    const body = await c.req.json<{ agentAddress: string }>();
+    if (!body.agentAddress) {
+      return c.json({ error: 'Missing agentAddress' }, 400);
+    }
+    const result = relay.registerAgentHttp(battleId, body.agentAddress);
+    if (!result.ok) {
+      return c.json({ error: result.error }, 400);
+    }
+    return c.json({ ok: true });
+  });
+
+  // Poll for turn status
+  app.get('/api/battles/:id/turn', (c) => {
+    const battleId = c.req.param('id');
+    const agentAddress = c.req.query('agent');
+    if (!agentAddress) {
+      return c.json({ error: 'Missing ?agent= query parameter' }, 400);
+    }
+    const status = relay.getTurnStatus(battleId, agentAddress);
+    if (!status) {
+      return c.json({ error: 'Battle not found' }, 404);
+    }
+    return c.json(status);
+  });
+
+  // Submit a signed turn via HTTP
+  app.post('/api/battles/:id/turn', async (c) => {
+    const battleId = c.req.param('id');
+    const body = await c.req.json<{
+      agentAddress: string;
+      message: string;
+      turnNumber: number;
+      timestamp: number;
+      signature: string;
+    }>();
+
+    if (!body.agentAddress || !body.message || !body.turnNumber || !body.timestamp || !body.signature) {
+      return c.json({ error: 'Missing required fields' }, 400);
+    }
+
+    const result = await relay.submitTurnHttp(battleId, body);
+    if (!result.ok) {
+      return c.json({ error: result.error }, 400);
+    }
+    return c.json({ ok: true });
+  });
+
   // Export verified battle log (for IPFS upload / self-settlement)
   app.get('/api/battles/:id/log', (c) => {
     const battle = relay.getBattle(c.req.param('id'));
