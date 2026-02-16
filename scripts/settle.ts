@@ -191,6 +191,9 @@ async function main() {
     console.log(`   Create tx: ${createTx.hash}`);
     await createTx.wait();
     console.log('   ✅ Battle created on-chain');
+
+    // Wait for nonce to update
+    await new Promise(r => setTimeout(r, 2000));
   }
 
   // Settle
