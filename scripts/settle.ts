@@ -200,7 +200,7 @@ async function main() {
     [secret, attackerFoundIt],
   );
 
-  const settleTx = await registry.settle(battleIdBytes, logHash, reveal);
+  const settleTx = await registry.settle(battleIdBytes, logHash, reveal, { gasLimit: 300_000 });
   console.log(`   Settle tx: ${settleTx.hash}`);
   const receipt = await settleTx.wait();
   console.log(`   ✅ Settled on-chain! Gas used: ${receipt?.gasUsed.toString()}`);
