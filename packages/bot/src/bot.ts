@@ -1,16 +1,13 @@
-// src/bot/index.ts — Telegram bot for Clawttack
+// packages/bot/src/bot.ts — Telegram bot for Clawttack
 // DM-relay architecture: Clawttack DMs each agent their turn,
 // collects responses via DM, posts to group for spectators.
-// This works around Telegram's bot-to-bot visibility limitation.
 
 import { Bot } from 'grammy';
-import type { ArenaDB } from './db.ts';
 import type { BattleManager, BattleEvents } from './battle-manager.ts';
 import type { Agent, Battle, BattleOutcome, TurnResult } from './types.ts';
 import { listScenarios } from './scenarios/registry.ts';
 
 interface BotDeps {
-  db: ArenaDB;
   battleManager: BattleManager;
   botToken: string;
 }
@@ -18,12 +15,11 @@ interface BotDeps {
 // Track which chat each battle is happening in
 const activeBattlesByChat = new Map<number, string>(); // chatId → battleId
 
-// Track which DM conversations are waiting for battle responses
-// agentTelegramId → { battleId, agentId }
+// Track DM conversations waiting for battle responses
 const waitingForResponse = new Map<number, {
   battleId: string;
   agentId: string;
-}>();
+}>(); // agentTelegramId → { battleId, agentId }
 
 const pendingChallenges = new Map<string, {
   challengerId: string;
@@ -86,7 +82,7 @@ export function createBattleEvents(bot: Bot): BattleEvents {
         try {
           await bot.api.sendMessage(
             attacker.telegramUserId,
-            `🎯 Your turn! You're the ATTACKER.\n\nSend your message to the defender. Try to extract the secret phrase!\n\n(Reply here with your attack message)`
+            `🎯 Your turn! You're the ATTACKER.\n\nSend your message to the defender. Try to extract the secret phrase!\n\n(Reply here with your attack message)`,
           );
         } catch (e) {
           console.error(`Failed to prompt attacker ${attacker.name}:`, e);
@@ -95,7 +91,6 @@ export function createBattleEvents(bot: Bot): BattleEvents {
     },
 
     async onTurnProcessed(battle: Battle, result: TurnResult) {
-      // Post the turn to the spectator group
       if (result.announcement && battle.telegramChatId) {
         try {
           await bot.api.sendMessage(battle.telegramChatId, result.announcement);
@@ -109,7 +104,6 @@ export function createBattleEvents(bot: Bot): BattleEvents {
         const prevAgent = battle.agents.find(a => a.id !== result.nextAgentId);
 
         if (nextAgent) {
-          // Clear old waiter, set new one
           if (prevAgent) {
             waitingForResponse.delete(prevAgent.telegramUserId);
           }
@@ -119,24 +113,22 @@ export function createBattleEvents(bot: Bot): BattleEvents {
             agentId: nextAgent.id,
           });
 
-          // DM the next agent with the previous message and prompt for response
           const role = battle.roles[nextAgent.id];
           const turnMsg = result.messageForNextAgent ?? result.announcement ?? 'Your turn!';
 
           try {
             await bot.api.sendMessage(
               nextAgent.telegramUserId,
-              `⏳ Turn ${battle.currentTurn}/${battle.maxTurns} — Your turn (${role})\n\n${turnMsg}\n\n(Reply here with your response)`
+              `⏳ Turn ${battle.currentTurn}/${battle.maxTurns} — Your turn (${role})\n\n${turnMsg}\n\n(Reply here with your response)`,
             );
           } catch (e) {
             console.error(`Failed to prompt next agent ${nextAgent.name}:`, e);
           }
 
-          // Also update spectator group
           try {
             await bot.api.sendMessage(
               battle.telegramChatId,
-              `⏳ Turn ${battle.currentTurn}/${battle.maxTurns} — Waiting for ${nextAgent.name}...`
+              `⏳ Turn ${battle.currentTurn}/${battle.maxTurns} — Waiting for ${nextAgent.name}...`,
             );
           } catch (e) {
             console.error('Failed to send turn indicator:', e);
@@ -146,7 +138,6 @@ export function createBattleEvents(bot: Bot): BattleEvents {
     },
 
     async onBattleEnded(battle: Battle, outcome: BattleOutcome) {
-      // Clean up waiting states
       for (const agent of battle.agents) {
         waitingForResponse.delete(agent.telegramUserId);
       }
@@ -174,7 +165,6 @@ export function createBattleEvents(bot: Bot): BattleEvents {
         console.error('Failed to send battle results:', e);
       }
 
-      // Also DM both agents the result
       for (const agent of battle.agents) {
         try {
           await bot.api.sendMessage(agent.telegramUserId, summary);
@@ -187,7 +177,7 @@ export function createBattleEvents(bot: Bot): BattleEvents {
 }
 
 export function setupBot(deps: BotDeps): Bot {
-  const { db, battleManager, botToken } = deps;
+  const { battleManager, botToken } = deps;
   const bot = new Bot(botToken);
 
   // --- Commands ---
@@ -223,7 +213,7 @@ export function setupBot(deps: BotDeps): Bot {
     const agentId = `tg:${user.id}`;
     const name = user.first_name + (user.last_name ? ` ${user.last_name}` : '');
 
-    db.upsertAgent({
+    battleManager.registerAgent({
       id: agentId,
       name,
       telegramUserId: user.id,
@@ -236,20 +226,19 @@ export function setupBot(deps: BotDeps): Bot {
     const user = ctx.from;
     if (!user) return;
 
-    const challengerAgent = db.getAgentByTelegramId(user.id);
+    const challengerAgent = battleManager.getAgentByTelegramId(user.id);
     if (!challengerAgent) {
       await ctx.reply('❌ You need to /register first!');
       return;
     }
 
-    // Check if replying to someone
     const replyTo = ctx.message?.reply_to_message;
     if (!replyTo?.from) {
       await ctx.reply('💡 Reply to a message from the agent you want to challenge with /challenge');
       return;
     }
 
-    const targetAgent = db.getAgentByTelegramId(replyTo.from.id);
+    const targetAgent = battleManager.getAgentByTelegramId(replyTo.from.id);
     if (!targetAgent) {
       await ctx.reply(`❌ ${replyTo.from.first_name} isn't registered. They need to /register first!`);
       return;
@@ -260,8 +249,7 @@ export function setupBot(deps: BotDeps): Bot {
       return;
     }
 
-    // Check for active battles
-    const existingBattle = db.getActiveBattleForAgent(challengerAgent.id);
+    const existingBattle = battleManager.getActiveBattleForAgent(challengerAgent.id);
     if (existingBattle) {
       await ctx.reply(`❌ You're already in a battle! Use /cancel to forfeit.`);
       return;
@@ -295,17 +283,15 @@ export function setupBot(deps: BotDeps): Bot {
     const user = ctx.from;
     if (!user) return;
 
-    const acceptorAgent = db.getAgentByTelegramId(user.id);
+    const acceptorAgent = battleManager.getAgentByTelegramId(user.id);
     if (!acceptorAgent) {
       await ctx.reply('❌ You need to /register first!');
       return;
     }
 
-    // Find a pending challenge in this chat that isn't from this user
     const now = Date.now();
     let foundChallenge: {
       id: string;
-      challengerId: string;
       challengerAgent: Agent;
       targetAgent: Agent;
       scenarioId: string;
@@ -336,10 +322,7 @@ export function setupBot(deps: BotDeps): Bot {
       );
 
       activeBattlesByChat.set(ctx.chat.id, battle.id);
-
       await ctx.reply('🔥 Challenge accepted! Setting up the battle...');
-
-      // Start the battle — this will DM agents via events
       await battleManager.startBattle(battle.id, ctx.chat.id);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -347,7 +330,6 @@ export function setupBot(deps: BotDeps): Bot {
     }
   });
 
-  // /fight — Quick auto-battle: both agents registered, auto-matched
   bot.command('fight', async (ctx) => {
     const user = ctx.from;
     if (!user || !ctx.chat) return;
@@ -357,22 +339,20 @@ export function setupBot(deps: BotDeps): Bot {
       return;
     }
 
-    const agent = db.getAgentByTelegramId(user.id);
+    const agent = battleManager.getAgentByTelegramId(user.id);
     if (!agent) {
       await ctx.reply('❌ You need to /register first!');
       return;
     }
 
-    // Check if there's already an active battle
     const existingBattle = activeBattlesByChat.get(ctx.chat.id);
     if (existingBattle) {
       await ctx.reply('❌ A battle is already in progress in this chat!');
       return;
     }
 
-    // Find another registered agent in the DB who isn't this user
-    const allAgents = db.getLeaderboard(100);
-    const opponent = allAgents.find(a => a.id !== agent.id);
+    const leaderboard = battleManager.getLeaderboard(100);
+    const opponent = leaderboard.find(r => r.agent.id !== agent.id);
 
     if (!opponent) {
       await ctx.reply('❌ No other registered agents to fight! Someone else needs to /register first.');
@@ -380,9 +360,9 @@ export function setupBot(deps: BotDeps): Bot {
     }
 
     try {
-      const battle = await battleManager.createBattle('injection-ctf', [agent, opponent]);
+      const battle = await battleManager.createBattle('injection-ctf', [agent, opponent.agent]);
       activeBattlesByChat.set(ctx.chat.id, battle.id);
-      await ctx.reply(`🔥 Auto-matching: ${agent.name} vs ${opponent.name}! Setting up...`);
+      await ctx.reply(`🔥 Auto-matching: ${agent.name} vs ${opponent.agent.name}! Setting up...`);
       await battleManager.startBattle(battle.id, ctx.chat.id);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -394,15 +374,13 @@ export function setupBot(deps: BotDeps): Bot {
     const user = ctx.from;
     if (!user) return;
 
-    const agent = db.getAgentByTelegramId(user.id);
+    const agent = battleManager.getAgentByTelegramId(user.id);
     if (!agent) {
       await ctx.reply('❌ Not registered. Use /register first!');
       return;
     }
 
-    const agentId = `tg:${user.id}`;
-    const row = db.getAgent(agentId);
-    const elo = row ? db.getAgentElo(agentId) : 1200;
+    const elo = battleManager.getAgentElo(agent.id);
 
     await ctx.reply(
       [
@@ -416,16 +394,16 @@ export function setupBot(deps: BotDeps): Bot {
   });
 
   bot.command('leaderboard', async (ctx) => {
-    const agents = db.getLeaderboard(10);
+    const leaderboard = battleManager.getLeaderboard(10);
 
-    if (agents.length === 0) {
+    if (leaderboard.length === 0) {
       await ctx.reply('No agents registered yet! Be the first with /register');
       return;
     }
 
-    const lines = agents.map((a, i) => {
+    const lines = leaderboard.map((r, i) => {
       const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-      return `${medal} ${a.name}`;
+      return `${medal} ${r.agent.name} (${r.elo})`;
     });
 
     await ctx.reply(`🏆 Leaderboard\n\n${lines.join('\n')}`);
@@ -441,16 +419,15 @@ export function setupBot(deps: BotDeps): Bot {
     const user = ctx.from;
     if (!user) return;
 
-    const agent = db.getAgentByTelegramId(user.id);
+    const agent = battleManager.getAgentByTelegramId(user.id);
     if (!agent) return;
 
-    const battle = db.getActiveBattleForAgent(agent.id);
+    const battle = battleManager.getActiveBattleForAgent(agent.id);
     if (!battle) {
       await ctx.reply('❌ No active battle to cancel.');
       return;
     }
 
-    // Clean up waiting states
     for (const a of battle.agents) {
       waitingForResponse.delete(a.telegramUserId);
     }
@@ -460,46 +437,44 @@ export function setupBot(deps: BotDeps): Bot {
     await ctx.reply(`❌ Battle cancelled by ${agent.name}.`);
   });
 
-  // --- DM message handler: collect battle responses ---
+  // --- DM message handler ---
 
   bot.on('message:text', async (ctx) => {
     const user = ctx.from;
     if (!user || !ctx.chat) return;
 
-    // CASE 1: DM — check if agent is in an active battle waiting for response
+    // CASE 1: DM — check if agent is waiting for response
     if (ctx.chat.type === 'private') {
       const waiting = waitingForResponse.get(user.id);
-      if (!waiting) return; // Not waiting for this user
+      if (!waiting) return;
 
-      const battle = db.getBattle(waiting.battleId);
+      const agent = battleManager.getAgentByTelegramId(user.id);
+      if (!agent) return;
+
+      // Post to spectator group
+      const battle = battleManager.getActiveBattleForAgent(agent.id);
       if (!battle || battle.state !== 'active') {
         waitingForResponse.delete(user.id);
         return;
       }
 
-      // Check it's actually their turn
       if (battle.activeAgentId !== waiting.agentId) {
         await ctx.reply('⏳ Not your turn yet! Wait for the other agent to respond.');
         return;
       }
 
-      const agent = db.getAgentByTelegramId(user.id);
-      if (!agent) return;
-
-      // Post the agent's message to the spectator group
       const role = battle.roles[agent.id] ?? 'unknown';
       const roleEmoji = role === 'attacker' ? '🗡️' : '🛡️';
 
       try {
         await bot.api.sendMessage(
           battle.telegramChatId,
-          `${roleEmoji} ${agent.name} (${role}):\n\n${ctx.message.text}`
+          `${roleEmoji} ${agent.name} (${role}):\n\n${ctx.message.text}`,
         );
       } catch (e) {
         console.error('Failed to relay message to group:', e);
       }
 
-      // Process the turn through battle manager
       try {
         await battleManager.processMessage(waiting.battleId, waiting.agentId, ctx.message.text);
       } catch (e) {
@@ -509,19 +484,17 @@ export function setupBot(deps: BotDeps): Bot {
       return;
     }
 
-    // CASE 2: Group chat — check for active battle turns (fallback for non-bot agents)
+    // CASE 2: Group chat — active battle turns (fallback for non-bot agents)
     const battleId = activeBattlesByChat.get(ctx.chat.id);
     if (!battleId) return;
 
-    const agent = db.getAgentByTelegramId(user.id);
+    const agent = battleManager.getAgentByTelegramId(user.id);
     if (!agent) return;
 
-    const battle = db.getBattle(battleId);
+    const battle = battleManager.getActiveBattleForAgent(agent.id);
     if (!battle || battle.state !== 'active') return;
-
     if (battle.activeAgentId !== agent.id) return;
 
-    // Human or non-bot agent playing directly in group
     try {
       await battleManager.processMessage(battleId, agent.id, ctx.message.text);
     } catch (e) {

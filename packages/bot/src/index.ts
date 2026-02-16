@@ -1,29 +1,23 @@
-// src/index.ts — Clawttack entry point
+// packages/bot/src/index.ts — Clawttack bot entry point
 
 import { config } from './config.ts';
-import { ArenaDB } from './db.ts';
 import { BattleManager } from './battle-manager.ts';
 import { setupBot, createBattleEvents } from './bot.ts';
 
 console.log('⚔️  Clawttack starting...');
 
-// Initialize database
-const db = new ArenaDB(config.db.path);
-console.log(`📦 Database: ${config.db.path}`);
-
-// Create bot first (needed for events)
+// Create bot (needed for event callbacks)
 const { Bot } = await import('grammy');
 const rawBot = new Bot(config.telegram.botToken);
 
 // Create battle events (hooks into bot for Telegram notifications)
 const events = createBattleEvents(rawBot);
 
-// Create battle manager
-const battleManager = new BattleManager(db, events);
+// Create battle manager (all state in-memory)
+const battleManager = new BattleManager(events);
 
 // Setup bot commands and handlers
 const bot = setupBot({
-  db,
   battleManager,
   botToken: config.telegram.botToken,
 });
@@ -32,7 +26,6 @@ const bot = setupBot({
 const shutdown = () => {
   console.log('\n🛑 Shutting down...');
   bot.stop();
-  db.close();
   process.exit(0);
 };
 
@@ -61,7 +54,6 @@ async function startWithRetry(attempt = 1): Promise<void> {
       return startWithRetry(attempt + 1);
     }
     console.error(`❌ Failed to start bot:`, msg);
-    db.close();
     process.exit(1);
   }
 }
