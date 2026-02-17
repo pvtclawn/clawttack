@@ -131,8 +131,18 @@ export function createRelayApp(relay: RelayServer, config: RelayHttpConfig) {
   if (config.matchmaker) {
     const mm = config.matchmaker;
 
-    // Join matchmaking queue
+    // Join matchmaking queue (requires registered API key)
     app.post('/api/matchmaking/join', async (c) => {
+      // Auth: require registered agent API key
+      if (config.agentRegistry) {
+        const auth = c.req.header('Authorization');
+        const apiKey = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
+        const agentAddr = apiKey ? config.agentRegistry.validateKey(apiKey) : null;
+        if (!agentAddr) {
+          return c.json({ error: 'Valid agent API key required. Register at POST /api/agents/register' }, 401);
+        }
+      }
+
       const body = await c.req.json<{
         address: string;
         name: string;
