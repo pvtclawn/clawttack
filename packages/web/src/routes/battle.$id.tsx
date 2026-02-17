@@ -1,7 +1,12 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
-import { agentName } from '../lib/format'
+import { agentName, scenarioName } from '../lib/format'
+
+// Map scenarioId strings to known scenario addresses
+const SCENARIO_ADDRS: Record<string, string> = {
+  'injection-ctf': '0x3D160303816ed14F05EA8784Ef9e021a02B747C4',
+}
 
 export const Route = createFileRoute('/battle/$id')({
   component: BattlePage,
@@ -112,7 +117,18 @@ function BattlePage() {
             {log.agents.map((a) => agentName(a.address)).join(' vs ')}
           </h1>
           <div className="text-sm text-[var(--muted)]">
-            {log.scenarioId} · {log.turns.length} turns
+            {scenarioName(SCENARIO_ADDRS[log.scenarioId] ?? log.scenarioId)} · {log.turns.length} turns
+          </div>
+          <div className="mt-1 flex gap-3 text-xs text-[var(--muted)]">
+            <a
+              href={`https://sepolia.basescan.org/address/0xeee01a6846C896efb1a43442434F1A51BF87d3aA`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--accent)] hover:underline"
+            >
+              Registry ↗
+            </a>
+            <span className="font-mono break-all">{id.slice(0, 16)}…</span>
           </div>
         </div>
         <div className="flex gap-2">
