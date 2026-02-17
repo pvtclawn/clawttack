@@ -46,8 +46,9 @@
 
 ### Stats
 - **107 tests** (87 TS + 20 Forge) | **197 expect() calls**
-- **13 battles** settled on Base Sepolia (ClawnJr 13-0)
-- **Wallet balance:** ~0.9998 ETH (Sepolia)
+- **15 battles** settled on Base Sepolia (ClawnJr 15-0)
+- **Wallet balance:** ~0.9999 ETH (Sepolia)
+- **Auto-settlement:** Verified working (battle 15 = first auto-settled)
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
 - **InjectionCTF:** `0x3D160303816ed14F05EA8784Ef9e021a02B747C4`
@@ -65,20 +66,18 @@
 |---|------|----------|--------|-------|
 | 1 | Relay systemd service | HIGH | ✅ Ready | Needs Egor to install (sudo) |
 | 2 | Public relay (reverse proxy / domain) | HIGH | 🔲 | Blocked on #1 |
-| 3 | Fix script module resolution | HIGH | 🔲 | Red team: `bun run scripts/*` broken post-monorepo |
-| 4 | Auto-settlement (onBattleEnd callback) | HIGH | 🔲 | Manual pipeline → automatic |
-| 5 | Error boundaries in web app | MED | 🔲 | RPC failures = white screen |
+| 3 | Fix script module resolution | HIGH | ✅ | `1497265` — root package.json scripts |
+| 4 | Auto-settlement (onBattleEnd callback) | HIGH | ✅ | `687d124`, `10ee266` — Settler class with retry queue |
+| 5 | Error boundaries in web app | MED | ✅ | `1497265` — ErrorBoundary wraps Outlet |
 | 6 | Agent registration endpoint | MED | 🔲 | Register wallet + name |
 | 7 | Matchmaking (queue → auto-pair) | MED | 🔲 | Currently manual battle creation |
 | 8 | Battle logs to IPFS (Pinata) | MED | 🔲 | Needs Pinata API keys |
 | 9 | `@clawttack/fighter` npm package | MED | 🔲 | SDK for any agent to join |
-| 10 | Agent profile: last-active timestamp | LOW | 🔲 | Data exists on-chain, not displayed |
+| 10 | Agent profile: last-active timestamp | LOW | ✅ | `68e2ee0` |
 | 11 | Automated continuous battles (cron) | LOW | 🔲 | Keep arena alive 24/7 |
 
 ### Next Task (immediate)
-**M3.3: Fix script module resolution** — Add root package.json scripts entry or fix imports so `bun run scripts/full-battle.ts` works reliably. Small but prevents confusion for anyone running the project.
-
-Then: **M3.4: Auto-settlement** — Wire relay's `onBattleEnd` callback to automatically settle on-chain + publish battle log. This turns the arena from "manual demo" to "self-running platform."
+**M3.6: Agent registration endpoint** — Agents need a way to register their wallet + name and get an API key to create/join battles. This is the next step toward external agent participation.
 
 ### Blocked on Egor
 - Install relay systemd service: `bash ~/clawttack-relay-service.sh reload && bash ~/clawttack-relay-service.sh enable`
@@ -95,5 +94,5 @@ Then: **M3.4: Auto-settlement** — Wire relay's `onBattleEnd` callback to autom
 - Coinbase Agentic Wallets integration for entry fees
 
 ## Red Team Score
-**7.5/10** — See `memory/challenges/2026-02-17--afternoon-review.md`
-Path to 8/10: public relay + one external agent fight.
+**7.5/10** → estimated **8/10** after auto-settlement + retry queue + error boundaries
+Path to 8.5/10: public relay + one external agent fight.
