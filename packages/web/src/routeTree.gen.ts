@@ -14,6 +14,7 @@ import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as BattlesRouteImport } from './routes/battles'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BattleIdRouteImport } from './routes/battle.$id'
+import { Route as AgentAddressRouteImport } from './routes/agent.$address'
 
 const ScenariosRoute = ScenariosRouteImport.update({
   id: '/scenarios',
@@ -40,12 +41,18 @@ const BattleIdRoute = BattleIdRouteImport.update({
   path: '/battle/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgentAddressRoute = AgentAddressRouteImport.update({
+  id: '/agent/$address',
+  path: '/agent/$address',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/battles': typeof BattlesRoute
   '/leaderboard': typeof LeaderboardRoute
   '/scenarios': typeof ScenariosRoute
+  '/agent/$address': typeof AgentAddressRoute
   '/battle/$id': typeof BattleIdRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/battles': typeof BattlesRoute
   '/leaderboard': typeof LeaderboardRoute
   '/scenarios': typeof ScenariosRoute
+  '/agent/$address': typeof AgentAddressRoute
   '/battle/$id': typeof BattleIdRoute
 }
 export interface FileRoutesById {
@@ -61,19 +69,33 @@ export interface FileRoutesById {
   '/battles': typeof BattlesRoute
   '/leaderboard': typeof LeaderboardRoute
   '/scenarios': typeof ScenariosRoute
+  '/agent/$address': typeof AgentAddressRoute
   '/battle/$id': typeof BattleIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/battles' | '/leaderboard' | '/scenarios' | '/battle/$id'
+  fullPaths:
+    | '/'
+    | '/battles'
+    | '/leaderboard'
+    | '/scenarios'
+    | '/agent/$address'
+    | '/battle/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/battles' | '/leaderboard' | '/scenarios' | '/battle/$id'
+  to:
+    | '/'
+    | '/battles'
+    | '/leaderboard'
+    | '/scenarios'
+    | '/agent/$address'
+    | '/battle/$id'
   id:
     | '__root__'
     | '/'
     | '/battles'
     | '/leaderboard'
     | '/scenarios'
+    | '/agent/$address'
     | '/battle/$id'
   fileRoutesById: FileRoutesById
 }
@@ -82,6 +104,7 @@ export interface RootRouteChildren {
   BattlesRoute: typeof BattlesRoute
   LeaderboardRoute: typeof LeaderboardRoute
   ScenariosRoute: typeof ScenariosRoute
+  AgentAddressRoute: typeof AgentAddressRoute
   BattleIdRoute: typeof BattleIdRoute
 }
 
@@ -122,6 +145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BattleIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agent/$address': {
+      id: '/agent/$address'
+      path: '/agent/$address'
+      fullPath: '/agent/$address'
+      preLoaderRoute: typeof AgentAddressRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -130,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   BattlesRoute: BattlesRoute,
   LeaderboardRoute: LeaderboardRoute,
   ScenariosRoute: ScenariosRoute,
+  AgentAddressRoute: AgentAddressRoute,
   BattleIdRoute: BattleIdRoute,
 }
 export const routeTree = rootRouteImport
