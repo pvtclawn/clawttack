@@ -21,6 +21,7 @@ export function formatEth(wei: bigint): string {
 // Known scenario names
 const SCENARIOS: Record<string, string> = {
   '0x3d160303816ed14f05ea8784ef9e021a02b747c4': 'Injection CTF',
+  '0xa5313fb027ebd60de2856ba134a689bbd30a6cc9': "Prisoner's Dilemma",
 }
 
 export function scenarioName(address: string): string {
