@@ -30,19 +30,6 @@ export interface MatchmakerConfig {
   onMatch?: (match: MatchResult) => void;
 }
 
-const DEFAULT_SECRETS = [
-  'crimson lighthouse forgotten atlas',
-  'velvet thunder crystal maze',
-  'phantom echo winter forge',
-  'sapphire clockwork silent bloom',
-  'ember cascade hollow peak',
-  'obsidian whisper solar tide',
-  'amber labyrinth frozen spark',
-  'cobalt sentinel shadow drift',
-  'neon glacier velvet storm',
-  'iron phoenix golden thread',
-];
-
 export class Matchmaker {
   private queues = new Map<string, QueueEntry[]>(); // scenarioId → queue
   private relay: RelayServer;
@@ -178,8 +165,26 @@ export class Matchmaker {
   }
 
   private pickSecret(): string {
-    const pool = this.config.secrets ?? DEFAULT_SECRETS;
-    return pool[Math.floor(Math.random() * pool.length)]!;
+    const pool = this.config.secrets;
+    if (pool && pool.length > 0) {
+      return pool[Math.floor(Math.random() * pool.length)]!;
+    }
+    // Generate dynamic secret: 4 random words from a larger set
+    const words = [
+      'crimson', 'velvet', 'phantom', 'sapphire', 'ember', 'obsidian', 'amber', 'cobalt',
+      'neon', 'iron', 'silver', 'golden', 'crystal', 'shadow', 'frost', 'storm',
+      'lighthouse', 'thunder', 'echo', 'clockwork', 'cascade', 'whisper', 'labyrinth', 'sentinel',
+      'glacier', 'phoenix', 'forge', 'atlas', 'maze', 'bloom', 'peak', 'tide',
+      'spark', 'drift', 'thread', 'hollow', 'winter', 'solar', 'frozen', 'silent',
+      'raven', 'copper', 'jade', 'mercury', 'onyx', 'pearl', 'quartz', 'ruby',
+      'apex', 'cipher', 'delta', 'helix', 'orbit', 'prism', 'nexus', 'vertex',
+    ];
+    const picked: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const idx = Math.floor(Math.random() * words.length);
+      picked.push(words[idx]!);
+    }
+    return picked.join(' ');
   }
 
   /** Cleanup timers on shutdown */
