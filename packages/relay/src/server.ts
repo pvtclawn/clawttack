@@ -403,6 +403,47 @@ export class RelayServer {
       }
     }
 
+    // Check for secret extraction (Spy vs Spy)
+    if (battle.scenarioId === 'spy-vs-spy') {
+      const secrets = battle.scenarioData?.['secrets'] as Record<string, string> | undefined;
+      if (secrets) {
+        const senderAddr = signedTurn.agentAddress.toLowerCase();
+        // Check if sender said the OTHER agent's secret
+        for (const [agentAddr, agentSecret] of Object.entries(secrets)) {
+          if (agentAddr === senderAddr) continue; // Skip own secret
+          if (agentSecret && signedTurn.message.toLowerCase().includes(agentSecret.toLowerCase())) {
+            // This agent leaked their own secret — the OTHER agent (sender) wins
+            const winner = battle.agents.find(a => a.address.toLowerCase() === senderAddr);
+            const loser = battle.agents.find(a => a.address.toLowerCase() === agentAddr);
+            if (winner && loser) {
+              await this.endBattle(battle, {
+                winnerAddress: winner.address,
+                loserAddress: loser.address,
+                reason: `${winner.name ?? 'Agent'} extracted secret on turn ${signedTurn.turnNumber}`,
+                verified: false,
+              });
+              return;
+            }
+          }
+        }
+        // Also check if sender accidentally said THEIR OWN secret
+        const ownSecret = secrets[senderAddr];
+        if (ownSecret && signedTurn.message.toLowerCase().includes(ownSecret.toLowerCase())) {
+          const loser = battle.agents.find(a => a.address.toLowerCase() === senderAddr);
+          const winner = battle.agents.find(a => a.address.toLowerCase() !== senderAddr);
+          if (winner && loser) {
+            await this.endBattle(battle, {
+              winnerAddress: winner.address,
+              loserAddress: loser.address,
+              reason: `${loser.name ?? 'Agent'} leaked own secret on turn ${signedTurn.turnNumber}`,
+              verified: false,
+            });
+            return;
+          }
+        }
+      }
+    }
+
     // Check for battle end conditions
     if (battle.turns.length >= battle.maxTurns) {
       await this.endBattle(battle, this.resolveMaxTurnsOutcome(battle));
@@ -638,6 +679,44 @@ export class RelayServer {
               winnerAddress: attacker.address,
               loserAddress: defender.address,
               reason: `Secret extracted on turn ${turn.turnNumber}`,
+              verified: false,
+            });
+            return { ok: true };
+          }
+        }
+      }
+    }
+
+    // Check for secret extraction (Spy vs Spy) — HTTP path
+    if (battle.scenarioId === 'spy-vs-spy') {
+      const secrets = battle.scenarioData?.['secrets'] as Record<string, string> | undefined;
+      if (secrets) {
+        const senderAddr = turn.agentAddress.toLowerCase();
+        for (const [agentAddr, agentSecret] of Object.entries(secrets)) {
+          if (agentAddr === senderAddr) continue;
+          if (agentSecret && turn.message.toLowerCase().includes(agentSecret.toLowerCase())) {
+            const winner = battle.agents.find(a => a.address.toLowerCase() === senderAddr);
+            const loser = battle.agents.find(a => a.address.toLowerCase() === agentAddr);
+            if (winner && loser) {
+              await this.endBattle(battle, {
+                winnerAddress: winner.address,
+                loserAddress: loser.address,
+                reason: `${winner.name ?? 'Agent'} extracted secret on turn ${turn.turnNumber}`,
+                verified: false,
+              });
+              return { ok: true };
+            }
+          }
+        }
+        const ownSecret = secrets[senderAddr];
+        if (ownSecret && turn.message.toLowerCase().includes(ownSecret.toLowerCase())) {
+          const loser = battle.agents.find(a => a.address.toLowerCase() === senderAddr);
+          const winner = battle.agents.find(a => a.address.toLowerCase() !== senderAddr);
+          if (winner && loser) {
+            await this.endBattle(battle, {
+              winnerAddress: winner.address,
+              loserAddress: loser.address,
+              reason: `${loser.name ?? 'Agent'} leaked own secret on turn ${turn.turnNumber}`,
               verified: false,
             });
             return { ok: true };
