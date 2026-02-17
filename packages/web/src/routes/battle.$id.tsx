@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { agentName, scenarioName } from '../lib/format'
 import { SignatureVerifier } from '../components/SignatureVerifier'
+import { useBattleSettledEvents } from '../hooks/useChain'
 
 // Map scenarioId strings to known scenario addresses
 const SCENARIO_ADDRS: Record<string, string> = {
@@ -51,8 +52,27 @@ function useBattleLog(battleIdHash: string) {
 function BattlePage() {
   const { id } = Route.useParams()
   const { data: log, isLoading } = useBattleLog(id)
+  const { data: settlements } = useBattleSettledEvents()
   const [visibleTurns, setVisibleTurns] = useState(0)
   const [isReplaying, setIsReplaying] = useState(false)
+
+  // On-chain settlement overrides relay outcome
+  const onChainSettlement = settlements?.find((s) => s.battleId === id)
+  const resolvedOutcome = (() => {
+    if (onChainSettlement) {
+      const isZeroAddr = onChainSettlement.winner === '0x0000000000000000000000000000000000000000'
+      return {
+        winnerAddress: isZeroAddr ? null : onChainSettlement.winner,
+        reason: isZeroAddr ? 'Draw (on-chain)' : 'Settled on-chain',
+        settled: true,
+        settleTxHash: onChainSettlement.txHash,
+      }
+    }
+    if (log?.outcome) {
+      return { ...log.outcome, settled: false, settleTxHash: null }
+    }
+    return null
+  })()
 
   const startReplay = () => {
     setVisibleTurns(0)
@@ -150,17 +170,32 @@ function BattlePage() {
       </div>
 
       {/* Outcome */}
-      {log.outcome && (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+      {resolvedOutcome && (
+        <div className={`rounded-xl border p-4 ${resolvedOutcome.settled ? 'border-green-900/50 bg-green-950/20' : 'border-[var(--border)] bg-[var(--surface)]'}`}>
           <div className="flex items-center gap-2">
             <span className="text-xl">🏆</span>
             <div>
               <div className="font-medium">
-                {log.outcome.winnerAddress
-                  ? `Winner: ${agentName(log.outcome.winnerAddress)}`
+                {resolvedOutcome.winnerAddress
+                  ? `Winner: ${agentName(resolvedOutcome.winnerAddress)}`
                   : 'Draw'}
               </div>
-              <div className="text-xs text-[var(--muted)]">{log.outcome.reason}</div>
+              <div className="text-xs text-[var(--muted)]">
+                {resolvedOutcome.reason}
+                {resolvedOutcome.settled && resolvedOutcome.settleTxHash && (
+                  <>
+                    {' · '}
+                    <a
+                      href={`https://sepolia.basescan.org/tx/${resolvedOutcome.settleTxHash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[var(--accent)] hover:underline"
+                    >
+                      View tx ↗
+                    </a>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
