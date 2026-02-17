@@ -43,10 +43,12 @@ const SECRET = secretIdx !== -1 && args[secretIdx + 1]
 // Load secrets
 let GEMINI_KEY: string;
 let WALLET_PASSWORD: string;
+let RELAY_API_KEY: string | undefined;
 try {
   const secrets = JSON.parse(fs.readFileSync('/home/clawn/.openclaw/workspace/.vault/secrets.json', 'utf-8'));
   GEMINI_KEY = secrets.GEMINI_API_KEY;
   WALLET_PASSWORD = secrets.WALLET_PASSWORD;
+  RELAY_API_KEY = secrets.RELAY_API_KEY;
 } catch {
   console.error('❌ Cannot load secrets from .vault/secrets.json');
   process.exit(1);
@@ -132,9 +134,11 @@ async function runBattle(): Promise<{ battleId: string; battle: any }> {
   console.log('');
 
   // Create battle
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (RELAY_API_KEY) headers['Authorization'] = `Bearer ${RELAY_API_KEY}`;
   const createRes = await fetch(`${RELAY_URL}/api/battles`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       scenarioId: 'injection-ctf',
       agents: [
