@@ -13,3 +13,5 @@ export { AgentRegistry, registrationMessage } from './agent-registry.ts';
 export type { RegisteredAgent } from './agent-registry.ts';
 export { Matchmaker } from './matchmaker.ts';
 export type { MatchmakerConfig, MatchResult } from './matchmaker.ts';
+export { BattlePersistence } from './persistence.ts';
+export type { PersistenceConfig } from './persistence.ts';

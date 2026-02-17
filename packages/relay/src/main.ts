@@ -20,6 +20,7 @@ import { startRelayServer } from './http.ts';
 import { Settler } from './settler.ts';
 import { AgentRegistry } from './agent-registry.ts';
 import { Matchmaker } from './matchmaker.ts';
+import { BattlePersistence } from './persistence.ts';
 
 const PORT = Number(process.env['RELAY_PORT'] ?? '8787');
 const HOST = process.env['RELAY_HOST'] ?? '0.0.0.0';
@@ -80,6 +81,11 @@ async function initSettler(): Promise<Settler | null> {
 async function main() {
   const settler = await initSettler();
 
+  const persistence = new BattlePersistence({
+    dataDir: process.env['BATTLE_LOG_DIR'] ?? DEFAULT_BATTLE_LOG_DIR,
+    webPublicDir: process.env['WEB_PUBLIC_DIR'] ?? DEFAULT_WEB_PUBLIC_DIR,
+  });
+
   const relay = new RelayServer({
     turnTimeoutMs: TURN_TIMEOUT_SEC * 1000,
     onBattleEnd: async (battle) => {
@@ -87,6 +93,14 @@ async function main() {
         turns: battle.turns.length,
         outcome: battle.outcome,
       });
+
+      // Persist battle log to disk
+      try {
+        const filePath = persistence.save(battle);
+        console.log(`  💾 Saved: ${filePath}`);
+      } catch (err) {
+        console.error(`  ⚠️ Failed to save battle log:`, err);
+      }
 
       if (settler) {
         const txHash = await settler.settle(battle);
@@ -116,6 +130,7 @@ async function main() {
   console.log(`   API key: ${API_KEY ? 'configured' : 'none (open access)'}`);
   console.log(`   Turn timeout: ${TURN_TIMEOUT_SEC}s`);
   console.log(`   Agent registration: enabled`);
+  console.log(`   Battle persistence: ${persistence.count} saved battles`);
   if (!settler) console.log(`   Auto-settle: disabled`);
 
   // Periodic cleanup of ended battles
