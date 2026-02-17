@@ -47,8 +47,24 @@ export function createRelayApp(relay: RelayServer, config: RelayHttpConfig) {
 
   // Health check
   app.get('/health', (c) =>
-    c.json({ status: 'ok', version: '0.2.0', uptime: process.uptime() }),
+    c.json({ status: 'ok', version: '0.3.0', uptime: process.uptime() }),
   );
+
+  // Relay stats (public, no auth needed)
+  app.get('/api/stats', (c) => {
+    const battles = relay.listBattles();
+    const active = battles.filter(b => b.state === 'active').length;
+    const waiting = battles.filter(b => b.state === 'waiting').length;
+    const ended = battles.filter(b => b.state === 'ended').length;
+    const totalTurns = battles.reduce((sum, b) => sum + b.turns.length, 0);
+
+    return c.json({
+      uptime: process.uptime(),
+      battles: { active, waiting, ended, total: battles.length },
+      totalTurns,
+      version: '0.3.0',
+    });
+  });
 
   // Create a battle
   app.post('/api/battles', async (c) => {
