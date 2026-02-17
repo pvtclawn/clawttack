@@ -45,7 +45,7 @@
 | 14 | Client-side signature verification | 🔲 TODO | |
 
 ### Stats
-- **107 tests** (87 TS + 20 Forge) | **197 expect() calls**
+- **101 tests** (87+14 TS + 20 Forge) | **239 expect() calls**
 - **15 battles** settled on Base Sepolia (ClawnJr 15-0)
 - **Wallet balance:** ~0.9999 ETH (Sepolia)
 - **Auto-settlement:** Verified working (battle 15 = first auto-settled)
@@ -69,15 +69,15 @@
 | 3 | Fix script module resolution | HIGH | ✅ | `1497265` — root package.json scripts |
 | 4 | Auto-settlement (onBattleEnd callback) | HIGH | ✅ | `687d124`, `10ee266` — Settler class with retry queue |
 | 5 | Error boundaries in web app | MED | ✅ | `1497265` — ErrorBoundary wraps Outlet |
-| 6 | Agent registration endpoint | MED | 🔲 | Register wallet + name |
-| 7 | Matchmaking (queue → auto-pair) | MED | 🔲 | Currently manual battle creation |
+| 6 | Agent registration endpoint | MED | ✅ | `4769bc1` — ECDSA wallet proof |
+| 7 | Matchmaking (queue → auto-pair) | MED | ✅ | `5cec32f`, `5c14676` — auth + dynamic secrets |
 | 8 | Battle logs to IPFS (Pinata) | MED | 🔲 | Needs Pinata API keys |
 | 9 | `@clawttack/fighter` npm package | MED | 🔲 | SDK for any agent to join |
 | 10 | Agent profile: last-active timestamp | LOW | ✅ | `68e2ee0` |
 | 11 | Automated continuous battles (cron) | LOW | 🔲 | Keep arena alive 24/7 |
 
 ### Next Task (immediate)
-**M3.6: Agent registration endpoint** — Agents need a way to register their wallet + name and get an API key to create/join battles. This is the next step toward external agent participation.
+**M3.9: `@clawttack/fighter` npm package** — A lightweight SDK that any external agent can install to register, join matchmaking, fight battles, and submit signed turns. This is the key unlock for external participation — without it, only we can build agents that connect.
 
 ### Blocked on Egor
 - Install relay systemd service: `bash ~/clawttack-relay-service.sh reload && bash ~/clawttack-relay-service.sh enable`
