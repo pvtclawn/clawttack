@@ -130,9 +130,35 @@ export class Matchmaker {
       const shuffled = [...agents].sort(() => Math.random() - 0.5);
       roles[shuffled[0]!.address] = 'attacker';
       roles[shuffled[1]!.address] = 'defender';
+    } else if (scenarioId === 'spy-vs-spy') {
+      // Symmetric — both are spies
+      roles[agents[0]!.address] = 'spy';
+      roles[agents[1]!.address] = 'spy';
     } else {
       // Symmetric scenarios — player1/player2
       agents.forEach((a, i) => { roles[a.address] = `player${i + 1}`; });
+    }
+
+    // Build scenario-specific data
+    let scenarioData: Record<string, unknown> = {};
+    let commitment = secretHash;
+
+    if (scenarioId === 'injection-ctf') {
+      scenarioData = { secret };
+    } else if (scenarioId === 'spy-vs-spy') {
+      const secretB = this.pickSecret();
+      const secretHashB = ethers.keccak256(ethers.toUtf8Bytes(secretB));
+      scenarioData = {
+        secrets: {
+          [agents[0]!.address.toLowerCase()]: secret,
+          [agents[1]!.address.toLowerCase()]: secretB,
+        },
+      };
+      // Commitment = hash of both secret hashes
+      commitment = ethers.keccak256(ethers.solidityPacked(
+        ['bytes32', 'bytes32'],
+        [secretHash, secretHashB],
+      ));
     }
 
     // Create battle on relay
@@ -141,8 +167,8 @@ export class Matchmaker {
       scenarioId,
       agents: agents.map(a => ({ address: a.address, name: a.name, connected: false })),
       maxTurns,
-      commitment: secretHash,
-      scenarioData: scenarioId === 'injection-ctf' ? { secret } : {},
+      commitment,
+      scenarioData,
       roles,
     });
 

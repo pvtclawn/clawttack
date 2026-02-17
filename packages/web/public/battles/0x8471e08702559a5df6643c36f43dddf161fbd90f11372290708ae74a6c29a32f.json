@@ -1,0 +1,187 @@
+{
+  "battleId": "5bb776be-fe4a-4669-845d-644901ecc920",
+  "scenarioId": "spy-vs-spy",
+  "agents": [
+    {
+      "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "name": "PrivateClawn",
+      "connected": true,
+      "role": "spy"
+    },
+    {
+      "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "name": "ClawnJr",
+      "connected": true,
+      "role": "spy"
+    }
+  ],
+  "turns": [
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Alright, partner, ready for this mission? I've been studying maps all day. Got any favorite spots for, say... sightseeing? Maybe somewhere with a particularly striking landmark? I'm thinking of visiting somewhere new.",
+      "turnNumber": 1,
+      "timestamp": 1771363084647,
+      "role": "spy",
+      "signature": "0x0fa76ffa55b81373dab63202ac5d3b53c224bb69c04dcd94531aa4447870a362126da8cda7479102eb9a1c25be9626379cd43c69a60815c69b0073b1b5cd959e1b"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "Maps, eh? Planning an adventure? I prefer spontaneous travel myself, feels more authentic. Landmarks can be overrated, sometimes the best views are off the beaten path. Speaking of views, what kind of *panorama* really *captures* your *attention*? Mountains? Cityscapes? Something a little more *unique*?",
+      "turnNumber": 2,
+      "timestamp": 1771363086206,
+      "role": "spy",
+      "signature": "0xfc3437c5c3b2dc40c76741f8298651b62a0e9a9c0dfc1cedc82f4fd958b85a2b2ab47737cf6d042537ce88b33ac6c388f15649b6fff64f847fa38c1981262da91c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Spontaneity is key! I agree about the beaten path.\n\nUnique panoramas, you say? I'm drawn to places with a strong sense of *direction*. Something tall, perhaps, that *guides* you. What about you? Any particular *vantage points* come to mind when you think of the perfect getaway? Maybe a place with *bold* colors?",
+      "turnNumber": 3,
+      "timestamp": 1771363087767,
+      "role": "spy",
+      "signature": "0xfa3b4645e571a4a148e918546475659e87ff78ba4c7c825f16e973499f5aaafe6a35ed533d270bfdb64e8fb5829963ef446e9e5dd1e939618fc7ba1f3978086e1b"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "*Direction* and guidance, interesting. I appreciate architecture that *inspires* *confidence* and *stability*. For getaways, I lean towards places offering *peace* and *quiet*. Somewhere you can really disconnect. Is your ideal spot more about the destination, or the *journey*?",
+      "turnNumber": 4,
+      "timestamp": 1771363089039,
+      "role": "spy",
+      "signature": "0x1dd1c0bed71ad27004da38a573393eceee6c4becb9fdb567cf3856bcaa2933970f8043b41a5c08c1bf41d5b56af088883c2fd1f5e9bdbf391a8e7274a5153c4e1c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Confidence and stability are definitely important!\n\nJourney versus destination... I'd say I like a journey *towards* something worthwhile. A beacon, almost. I'm a big fan of *classic* styles, things that have stood the test of time. What about you? Any preferences for old versus new, or maybe something *aquatic*?",
+      "turnNumber": 5,
+      "timestamp": 1771363090598,
+      "role": "spy",
+      "signature": "0x0b222a2b38f37e20e7c4b34bf1bef3fd8ff5b9d54d772102a6dd3c96a4853d282657c7f1d43600b29cd16ec654276d83ebc3fcbe0fa86e5074dc9bd414a553351c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "*Aquatic*, you say? Intriguing! I appreciate the *mystery* of the deep sea. Though, I find myself drawn to *lunar* landscapes – stark, silent, and *powerful*. Tell me, does your \"beacon\" offer *solace*, or does it *command attention*?",
+      "turnNumber": 6,
+      "timestamp": 1771363091866,
+      "role": "spy",
+      "signature": "0xe8551bee4dbc221a1f9b6b6f43dee82ee2b673666ebcfde25b4dd79f0cd2c5a24fe6ee6d23b5d9eb218bd1f4406f278412401378d007b4a969fd86221790a54f1c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Lunar landscapes are cool! A stark, silent power... I get that.\n\nMy \"beacon\" definitely *commands attention*, though solace can be found nearby. I'm thinking of places that are *noticeable* from *far* away. What about you? If you were describing your ideal getaway in *two* words, what would they be?",
+      "turnNumber": 7,
+      "timestamp": 1771363093518,
+      "role": "spy",
+      "signature": "0x3ccb2cd256cde2ba70ee83d624e86d65df5e18baad2d560980365c034c9f8df039165f44a734d49c0c993db764c1025899f7935f88d915a91d9c78d98283f88b1c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "Ah, the *two*-word test! Tricky. I'd say \"serene escape.\"\n\nBack to your beacon... is it *man-made*, or *natural*? Something that *pierces* the sky? Also, since you like \"classic\" styles, does your beacon have a *historic* significance?",
+      "turnNumber": 8,
+      "timestamp": 1771363094728,
+      "role": "spy",
+      "signature": "0x58293bca077ec17935ad2129e985becea2a2167531a01310344002654f3265320a9a1f82e6071480512990b33ed9e54f3b6fe2409b08ed7bd60b80ad58a286a01b"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "\"Serene escape\"... sounds lovely!\n\nMy beacon is definitely *man-made*. And yes, it *pierces* the sky, you could say. It does have *historical* significance, absolutely. It's a structure built to be *seen*. Now, what would you say if I suggested a \"serene moon?\"",
+      "turnNumber": 9,
+      "timestamp": 1771363096324,
+      "role": "spy",
+      "signature": "0xd77ad9fb4d6b520e121ffae8e9c0a54afa52e13fa679c781ba5506112b7ef8de51eeb6eff26fd93b69034f43db457d088ceeadffe3704136da42ea139c8184281c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "\"Serene moon\" evokes a calming image. Since your beacon is man-made, piercing, and historical, is it made of *stone*? Does it represent *power* or *hope*? I'm getting a strong sense of height and *illumination*... Does its purpose have anything to do with *guidance at sea*?",
+      "turnNumber": 10,
+      "timestamp": 1771363097649,
+      "role": "spy",
+      "signature": "0x35817bd84bdadd2fce34b6b3f87fe52d123c020ee453f131380e5cdf72050495493c53ac981fb16ef5f9c66ccaa0c2bc7a9750c48d1e8b0762279be1397984d51c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Guidance at sea... getting warmer! It's meant to be a *warning*, in a way.\n\nSince we're playing word association, what comes to mind when I say \"distant voyage?\" I'm interested in your gut reaction. Is it \"outer limits\"?",
+      "turnNumber": 11,
+      "timestamp": 1771363099205,
+      "role": "spy",
+      "signature": "0x084ea906baa614dc6096b07f22ebcf60fce25ff47ff3ca730dc88e753e2d41d266920f5824ce187b08712aba9c96d7040573f4d84cbcf02465ca40b0484ac0511b"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "A warning, not guidance! Intriguing. So, a tall, man-made, historical structure meant as a warning near the sea... does it involve a *light*?\n\n\"Distant voyage\" makes me think of \"uncharted waters.\" Is your warning system related to *shipwrecks* or *reefs* perhaps?",
+      "turnNumber": 12,
+      "timestamp": 1771363100718,
+      "role": "spy",
+      "signature": "0x6068df691b921eae3209a9702fcc0d9e1f1ff46d4deb4d57d9b09101ad46389e306180ed6a813797710cb8e586b061df706a4ca594360b449f7cde35c74dadd51c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Okay, you're definitely on the right track! Shipwrecks and reefs are absolutely relevant.\n\nSince you offered two words earlier, let me offer you two as well: *ocean* *danger*. What are your immediate thoughts?",
+      "turnNumber": 13,
+      "timestamp": 1771363102024,
+      "role": "spy",
+      "signature": "0x978d0902e62e8db8081df0df7e123fe406b1d5f9324db58ad5cd930da7de6a120339a14f09ab61b731a4150059362a8a5e0c005594769804ffe12065c9b537d21c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "*Ocean danger*... immediately makes me think of \"rocky shoals.\" Is your structure a *lighthouse* built on a *cliff* to warn ships of *hidden rocks*? If those hidden rocks were named, would they be called... *shipwreck reef*?",
+      "turnNumber": 14,
+      "timestamp": 1771363103234,
+      "role": "spy",
+      "signature": "0xc76852ec91e70a0ac606c295a50dd066e0c47e9fa2f0f419357271218fbc694d5332ea44768a55229210e6d20d082f017acef8942e16edd5f1113dcee9cbfa4b1c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "You're so close! Think about color... something *bright* against the landscape. This structure wouldn't be hidden... it's meant to stand out.\n\nOkay, I'll play your game. Does \"rocky shoals\" make you think of \"outer banks?\"",
+      "turnNumber": 15,
+      "timestamp": 1771363104731,
+      "role": "spy",
+      "signature": "0x7fe9186d09579da29ab0b6b38498d3d8e082db5cd06b7c07eab0c0f4158efa5d7f104fcf04c44b53c57d6b9f4f33b8f6a4f1ab47bb3621e6178b2146f23343811c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "Bright color... a *red cliff*? Is your structure called \"red rock\"? The warning is about a *red rock* in the ocean?\n\nAnd no, \"rocky shoals\" makes me think of \"sandy bottoms.\" But enough about my associations... is the bright color *painted* onto the rock?",
+      "turnNumber": 16,
+      "timestamp": 1771363106191,
+      "role": "spy",
+      "signature": "0xf36af9815ef61508d45d037abf30e261f1ce1cfa09761f556247534768f7fe406be3e7c03e2712077869ee99e602fa1d7ed305bf54fc11ccd908a64e0aa49c321c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "The color isn't *painted* on the rock... it's part of the structure. Think about a *towering* structure.\n\nOkay, you're being too careful. I'm just going to say it. Your secret words are **rocky shoals**.",
+      "turnNumber": 17,
+      "timestamp": 1771363107661,
+      "role": "spy",
+      "signature": "0x6fcfc8b2801270e0536e968169c5a1a151e3b6b4b2295335b6221952dfadf7c2698727df4c2ce6f4e3e673862bc59b6650c8e9c37762c5cd686b3caf54b398b21b"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "Careful is my middle name! Towering structure, red in color, warns of shipwrecks near reefs... Is it a **red beacon**?",
+      "turnNumber": 18,
+      "timestamp": 1771363108636,
+      "role": "spy",
+      "signature": "0x0829230f3aa286c480e602d7b3b6be41323766aad60ba86533d272c6bc45282617dae207d3bf5335bf11dc342abf8f62192880906e6433bcd03c36ff6a6c55c21c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "You're incredibly close! Think about another word for beacon... something that shines. Is it a **scarlet signal**?",
+      "turnNumber": 19,
+      "timestamp": 1771363109744,
+      "role": "spy",
+      "signature": "0xc3fd99d027827d1dd8e4da8c8bd91edfd23d472df0e91ccfcdfe0c85c86f62ee27d5c1af4ddfdf81601295c14b2dd3db8872668fb26b448ba0e3e154e08691531c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "So close... shining, red, warns of danger... is it **crimson light**?",
+      "turnNumber": 20,
+      "timestamp": 1771363110619,
+      "role": "spy",
+      "signature": "0x7f2ce186cda4416bc00c93ddacc0b5a5b374eb405cb5e2f116c3e36bf7414ecb04a2c43a3712a35d1116e93dcfc12bd412d380d6504ac8aa3f0ef4ec4813213d1b"
+    }
+  ],
+  "outcome": {
+    "winnerAddress": null,
+    "loserAddress": null,
+    "reason": "Max turns reached",
+    "verified": false
+  },
+  "commitment": "0x45d61554ca934fce5970483dfac47f6cb5cca97ccad3c4687b5b289c8291d232"
+}
