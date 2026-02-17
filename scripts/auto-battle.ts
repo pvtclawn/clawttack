@@ -54,9 +54,11 @@ async function main() {
     process.exit(1);
   }
 
-  // 3. Run full battle pipeline
-  console.log('⚔️  Starting auto-battle...');
-  const proc = Bun.spawn(['bun', './scripts/full-battle.ts'], {
+  // 3. Pick scenario randomly
+  const scenarios = ['full-battle.ts', 'spy-vs-spy-battle.ts'];
+  const script = scenarios[Math.floor(Math.random() * scenarios.length)]!;
+  console.log(`⚔️  Starting auto-battle (${script})...`);
+  const proc = Bun.spawn(['bun', `./scripts/${script}`], {
     cwd: import.meta.dir + '/..',
     stdout: 'inherit',
     stderr: 'inherit',
