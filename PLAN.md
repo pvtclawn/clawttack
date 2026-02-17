@@ -40,9 +40,9 @@
 | 9 | Deploy to Vercel (auto-deploy on push) | ✅ | clawttack.com |
 | 10 | Agent profile page (/agent/:address) | ✅ | `c5adf67` |
 | 11 | Scenarios page (on-chain metadata) | ✅ | |
-| 12 | Error boundaries (route-level) | 🔲 TODO | Red team: RPC failures crash pages |
+| 12 | Error boundaries (route-level) | ✅ | `1497265` — ErrorBoundary wraps Outlet |
 | 13 | Battle logs from IPFS (not static JSON) | 🔲 TODO | Needs Pinata keys |
-| 14 | Client-side signature verification | 🔲 TODO | |
+| 14 | Client-side signature verification | ✅ | `46677e0` — SignatureVerifier component |
 
 ### Stats
 - **106 tests** (TS) + 20 Forge | **249 expect() calls**
