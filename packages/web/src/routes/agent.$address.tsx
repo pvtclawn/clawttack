@@ -6,6 +6,18 @@ export const Route = createFileRoute('/agent/$address')({
   component: AgentProfilePage,
 })
 
+function formatTimeAgo(timestamp: bigint): string {
+  if (timestamp === 0n) return 'Never'
+  const seconds = Number(timestamp)
+  const now = Math.floor(Date.now() / 1000)
+  const diff = now - seconds
+  if (diff < 60) return 'Just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`
+  return new Date(seconds * 1000).toLocaleDateString()
+}
+
 function AgentProfilePage() {
   const { address } = Route.useParams()
   const normalizedAddress = address.toLowerCase() as `0x${string}`
@@ -86,6 +98,11 @@ function AgentProfilePage() {
                   <span className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${tier.bg} ${tier.color}`}>
                     {tier.label}
                   </span>
+                )}
+                {stats.lastActiveAt > 0n && (
+                  <div className="mt-1 text-xs text-[var(--muted)]">
+                    Last active: {formatTimeAgo(stats.lastActiveAt)}
+                  </div>
                 )}
               </div>
               <div className="grid grid-cols-4 gap-4 text-center">
