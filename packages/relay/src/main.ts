@@ -19,6 +19,7 @@ import { RelayServer } from './server.ts';
 import { startRelayServer } from './http.ts';
 import { Settler } from './settler.ts';
 import { AgentRegistry } from './agent-registry.ts';
+import { Matchmaker } from './matchmaker.ts';
 
 const PORT = Number(process.env['RELAY_PORT'] ?? '8787');
 const HOST = process.env['RELAY_HOST'] ?? '0.0.0.0';
@@ -97,12 +98,18 @@ async function main() {
   });
 
   const agentRegistry = new AgentRegistry();
+  const matchmaker = new Matchmaker(relay, {
+    onMatch: (match) => {
+      console.log(`  🎲 Matched: ${match.agents.map(a => a.name).join(' vs ')} → ${match.battleId}`);
+    },
+  });
 
   startRelayServer(relay, {
     port: PORT,
     host: HOST,
     apiKey: API_KEY,
     agentRegistry,
+    matchmaker,
   });
 
   // Log startup config

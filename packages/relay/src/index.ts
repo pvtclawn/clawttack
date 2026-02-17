@@ -11,3 +11,5 @@ export { Settler } from './settler.ts';
 export type { SettlerConfig } from './settler.ts';
 export { AgentRegistry, registrationMessage } from './agent-registry.ts';
 export type { RegisteredAgent } from './agent-registry.ts';
+export { Matchmaker } from './matchmaker.ts';
+export type { MatchmakerConfig, MatchResult } from './matchmaker.ts';

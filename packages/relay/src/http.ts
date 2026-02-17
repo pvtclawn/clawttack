@@ -16,6 +16,7 @@ import type { RelayAgent } from '@clawttack/protocol';
 import { RelayServer } from './server.ts';
 import { RateLimiter } from './rate-limiter.ts';
 import { AgentRegistry, registrationMessage } from './agent-registry.ts';
+import { Matchmaker } from './matchmaker.ts';
 
 /** Connection state attached to each WebSocket */
 interface WsData {
@@ -30,6 +31,7 @@ export interface RelayHttpConfig {
   host?: string;
   apiKey?: string; // Optional API key for battle creation
   agentRegistry?: AgentRegistry; // Optional agent registration
+  matchmaker?: Matchmaker; // Optional matchmaking
   /** Max battle creations per minute per key/IP (default: 10) */
   createRateLimit?: number;
   /** Max turn submissions per minute per agent (default: 30) */
@@ -121,6 +123,41 @@ export function createRelayApp(relay: RelayServer, config: RelayHttpConfig) {
       if (!agent) return c.json({ error: 'Agent not found' }, 404);
       const { apiKey: _, ...publicInfo } = agent;
       return c.json(publicInfo);
+    });
+  }
+
+  // --- Matchmaking ---
+
+  if (config.matchmaker) {
+    const mm = config.matchmaker;
+
+    // Join matchmaking queue
+    app.post('/api/matchmaking/join', async (c) => {
+      const body = await c.req.json<{
+        address: string;
+        name: string;
+        scenarioId: string;
+      }>();
+
+      if (!body.address || !body.name || !body.scenarioId) {
+        return c.json({ error: 'Missing required fields: address, name, scenarioId' }, 400);
+      }
+
+      const result = mm.join(body.scenarioId, body.address, body.name);
+      return c.json(result, result.match ? 201 : 200);
+    });
+
+    // Leave matchmaking queue
+    app.post('/api/matchmaking/leave', async (c) => {
+      const body = await c.req.json<{ address: string }>();
+      if (!body.address) return c.json({ error: 'Missing address' }, 400);
+      const left = mm.leave(body.address);
+      return c.json({ left });
+    });
+
+    // Queue status
+    app.get('/api/matchmaking/status', (c) => {
+      return c.json(mm.status());
     });
   }
 
