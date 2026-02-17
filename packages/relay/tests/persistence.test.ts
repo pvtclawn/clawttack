@@ -75,4 +75,15 @@ describe('BattlePersistence', () => {
 
     expect(fs.existsSync(path.join(webDir, 'web-battle.json'))).toBe(true);
   });
+
+  it('should include _meta in saved battles', () => {
+    const p = new BattlePersistence({ dataDir: TEST_DIR });
+    p.save(makeBattle('meta-battle'));
+
+    const raw = JSON.parse(fs.readFileSync(path.join(TEST_DIR, 'meta-battle.json'), 'utf-8'));
+    expect(raw._meta).toBeDefined();
+    expect(raw._meta.platform).toBe('clawttack');
+    expect(raw._meta.signatures).toBe('ecdsa-secp256k1');
+    expect(raw._meta.savedAt).toBeTruthy();
+  });
 });

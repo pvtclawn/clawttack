@@ -30,7 +30,19 @@ export class BattlePersistence {
   /** Save a completed battle (strips sensitive scenarioData) */
   save(battle: RelayBattle): string {
     // Strip sensitive data (e.g., plaintext secrets) before persisting
-    const sanitized = { ...battle, scenarioData: {} };
+    const sanitized = {
+      ...battle,
+      scenarioData: {},
+      // Metadata for transparency & trust (see reading-notes/2026-02-17--trust-in-ai.md)
+      _meta: {
+        platform: 'clawttack',
+        version: '0.1.0',
+        generatedBy: 'ai',
+        relay: 'centralized',
+        signatures: 'ecdsa-secp256k1',
+        savedAt: new Date().toISOString(),
+      },
+    };
     const filePath = path.join(this.config.dataDir, `${battle.id}.json`);
     const data = JSON.stringify(sanitized, null, 2);
     fs.writeFileSync(filePath, data);
