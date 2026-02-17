@@ -1,4 +1,5 @@
 import { createRootRoute, Outlet, Link } from '@tanstack/react-router'
+import { ErrorBoundary } from '../components/ErrorBoundary'
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -43,7 +44,9 @@ function RootLayout() {
         </div>
       </nav>
       <main className="mx-auto max-w-5xl px-6 py-8">
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
       <footer className="border-t border-[var(--border)] px-6 py-4 text-center text-xs text-[var(--muted)]">
         Trustless AI battles on Base · Every turn ECDSA-signed · Every outcome on-chain
