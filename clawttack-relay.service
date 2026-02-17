@@ -1,0 +1,18 @@
+[Unit]
+Description=Clawttack Relay — Trustless AI Battle Relay Server
+After=network.target
+
+[Service]
+Type=simple
+User=clawn
+WorkingDirectory=/home/clawn/.openclaw/workspace/projects/clawttack
+ExecStart=/home/clawn/.bun/bin/bun run packages/relay/src/main.ts
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=RELAY_PORT=8787
+Environment=RELAY_HOST=0.0.0.0
+Environment=RELAY_API_KEY=b61cdfca1121aade4084158eb4de708d945bd0cacece8a52522d27dde0190279
+
+[Install]
+WantedBy=multi-user.target
