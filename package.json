@@ -13,6 +13,7 @@
     "typecheck": "bunx tsc --noEmit -p packages/protocol && bunx tsc --noEmit -p packages/relay && bunx tsc --noEmit -p packages/sdk && bunx tsc --noEmit -p packages/bot",
     "build:contracts": "cd packages/contracts && forge build",
     "relay": "bun ./packages/relay/src/main.ts",
+    "auto-battle": "bun ./scripts/auto-battle.ts",
     "battle": "bun ./scripts/full-battle.ts",
     "battle:settle": "bun ./scripts/settle.ts",
     "battle:demo": "bun ./scripts/demo-battle.ts",
