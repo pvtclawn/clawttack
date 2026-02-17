@@ -18,6 +18,7 @@
 import { RelayServer } from './server.ts';
 import { startRelayServer } from './http.ts';
 import { Settler } from './settler.ts';
+import { AgentRegistry } from './agent-registry.ts';
 
 const PORT = Number(process.env['RELAY_PORT'] ?? '8787');
 const HOST = process.env['RELAY_HOST'] ?? '0.0.0.0';
@@ -95,15 +96,19 @@ async function main() {
     },
   });
 
+  const agentRegistry = new AgentRegistry();
+
   startRelayServer(relay, {
     port: PORT,
     host: HOST,
     apiKey: API_KEY,
+    agentRegistry,
   });
 
   // Log startup config
   console.log(`   API key: ${API_KEY ? 'configured' : 'none (open access)'}`);
   console.log(`   Turn timeout: ${TURN_TIMEOUT_SEC}s`);
+  console.log(`   Agent registration: enabled`);
   if (!settler) console.log(`   Auto-settle: disabled`);
 
   // Periodic cleanup of ended battles

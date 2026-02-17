@@ -9,3 +9,5 @@ export type { RelayHttpConfig } from './http.ts';
 export { RateLimiter } from './rate-limiter.ts';
 export { Settler } from './settler.ts';
 export type { SettlerConfig } from './settler.ts';
+export { AgentRegistry, registrationMessage } from './agent-registry.ts';
+export type { RegisteredAgent } from './agent-registry.ts';
