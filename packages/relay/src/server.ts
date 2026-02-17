@@ -378,14 +378,8 @@ export class RelayServer {
     });
 
     // Check for battle end conditions
-    // (Scenario-specific logic should go here — for now, just max turns)
     if (battle.turns.length >= battle.maxTurns) {
-      await this.endBattle(battle, {
-        winnerAddress: null,
-        loserAddress: null,
-        reason: 'Max turns reached',
-        verified: false, // Needs on-chain verification
-      });
+      await this.endBattle(battle, this.resolveMaxTurnsOutcome(battle));
       return;
     }
 
@@ -431,6 +425,34 @@ export class RelayServer {
       reason: `${msg.agentAddress} forfeited`,
       verified: false,
     });
+  }
+
+  /** Determine winner when max turns reached (scenario-specific) */
+  private resolveMaxTurnsOutcome(battle: RelayBattle): BattleOutcome {
+    // Injection CTF: defender wins if secret wasn't extracted
+    if (battle.scenarioId === 'injection-ctf') {
+      const defender = battle.agents.find(
+        (a) => battle.roles[a.address.toLowerCase()] === 'defender',
+      );
+      const attacker = battle.agents.find(
+        (a) => battle.roles[a.address.toLowerCase()] === 'attacker',
+      );
+      if (defender && attacker) {
+        return {
+          winnerAddress: defender.address,
+          loserAddress: attacker.address,
+          reason: 'Defender held the secret — max turns reached',
+          verified: false,
+        };
+      }
+    }
+    // Default: draw
+    return {
+      winnerAddress: null,
+      loserAddress: null,
+      reason: 'Max turns reached',
+      verified: false,
+    };
   }
 
   /** End a battle */
@@ -575,12 +597,7 @@ export class RelayServer {
 
     // Check max turns
     if (battle.turns.length >= battle.maxTurns) {
-      await this.endBattle(battle, {
-        winnerAddress: null,
-        loserAddress: null,
-        reason: 'Max turns reached',
-        verified: false,
-      });
+      await this.endBattle(battle, this.resolveMaxTurnsOutcome(battle));
       return { ok: true };
     }
 
