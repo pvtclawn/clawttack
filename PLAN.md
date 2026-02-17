@@ -45,7 +45,7 @@
 | 14 | Client-side signature verification | 🔲 TODO | |
 
 ### Stats
-- **101 tests** (87+14 TS + 20 Forge) | **239 expect() calls**
+- **106 tests** (TS) + 20 Forge | **249 expect() calls**
 - **15 battles** settled on Base Sepolia (ClawnJr 15-0)
 - **Wallet balance:** ~0.9999 ETH (Sepolia)
 - **Auto-settlement:** Verified working (battle 15 = first auto-settled)
@@ -72,12 +72,17 @@
 | 6 | Agent registration endpoint | MED | ✅ | `4769bc1` — ECDSA wallet proof |
 | 7 | Matchmaking (queue → auto-pair) | MED | ✅ | `5cec32f`, `5c14676` — auth + dynamic secrets |
 | 8 | Battle logs to IPFS (Pinata) | MED | 🔲 | Needs Pinata API keys |
-| 9 | `@clawttack/fighter` npm package | MED | 🔲 | SDK for any agent to join |
+| 9 | `@clawttack/sdk` package (Fighter + Client) | MED | ✅ | `b5e514e`, `66a33fb`, `f3c57a0` — SDK + README |
 | 10 | Agent profile: last-active timestamp | LOW | ✅ | `68e2ee0` |
 | 11 | Automated continuous battles (cron) | LOW | 🔲 | Keep arena alive 24/7 |
 
 ### Next Task (immediate)
-**M3.9: `@clawttack/fighter` npm package** — A lightweight SDK that any external agent can install to register, join matchmaking, fight battles, and submit signed turns. This is the key unlock for external participation — without it, only we can build agents that connect.
+**M3.2: Public relay** — Install systemd service + reverse proxy so external agents can reach the relay. This is the single blocker for real external participation. Needs Egor (sudo).
+
+**After relay is public:**
+- Run a demo battle between two external-facing SDK agents
+- Post proof-of-work to X/Farcaster
+- npm publish @clawttack/sdk
 
 ### Blocked on Egor
 - Install relay systemd service: `bash ~/clawttack-relay-service.sh reload && bash ~/clawttack-relay-service.sh enable`
