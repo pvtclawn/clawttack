@@ -27,6 +27,10 @@ export class Settler {
   private provider: ethers.JsonRpcProvider;
   private config: SettlerConfig;
   private settling = new Set<string>(); // Prevent double-settlement
+  private retryQueue = new Map<string, { battle: RelayBattle; attempts: number; nextRetryAt: number }>();
+  private retryTimer: Timer | null = null;
+  private static readonly MAX_RETRIES = 3;
+  private static readonly BASE_DELAY_MS = 5_000; // 5s, 10s, 20s backoff
 
   constructor(config: SettlerConfig) {
     this.config = config;
@@ -163,9 +167,58 @@ export class Settler {
       const error = err instanceof Error ? err : new Error(String(err));
       console.error(`  ❌ Settlement failed for ${battle.id}:`, error.message);
       this.config.onError?.(battle.id, error);
+      this.enqueueRetry(battle);
       return null;
     } finally {
       this.settling.delete(battle.id);
     }
+  }
+
+  /** Enqueue a failed battle for retry */
+  private enqueueRetry(battle: RelayBattle): void {
+    const existing = this.retryQueue.get(battle.id);
+    const attempts = existing ? existing.attempts + 1 : 1;
+
+    if (attempts > Settler.MAX_RETRIES) {
+      console.error(`  ⛔ Battle ${battle.id} failed ${Settler.MAX_RETRIES} retries, giving up`);
+      this.retryQueue.delete(battle.id);
+      return;
+    }
+
+    const delay = Settler.BASE_DELAY_MS * Math.pow(2, attempts - 1);
+    const nextRetryAt = Date.now() + delay;
+    this.retryQueue.set(battle.id, { battle, attempts, nextRetryAt });
+    console.log(`  🔄 Battle ${battle.id} queued for retry #${attempts} in ${delay / 1000}s`);
+
+    this.scheduleRetryCheck();
+  }
+
+  /** Schedule the retry timer if not already running */
+  private scheduleRetryCheck(): void {
+    if (this.retryTimer) return;
+    this.retryTimer = setInterval(() => this.processRetryQueue(), 5_000);
+  }
+
+  /** Process any due retries */
+  private async processRetryQueue(): Promise<void> {
+    const now = Date.now();
+    for (const [battleId, entry] of this.retryQueue) {
+      if (entry.nextRetryAt <= now) {
+        console.log(`  🔄 Retrying settlement for ${battleId} (attempt ${entry.attempts})`);
+        this.retryQueue.delete(battleId);
+        await this.settle(entry.battle);
+      }
+    }
+
+    // Stop timer if queue is empty
+    if (this.retryQueue.size === 0 && this.retryTimer) {
+      clearInterval(this.retryTimer);
+      this.retryTimer = null;
+    }
+  }
+
+  /** Get retry queue status (for monitoring) */
+  get pendingRetries(): number {
+    return this.retryQueue.size;
   }
 }
