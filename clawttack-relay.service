@@ -13,6 +13,7 @@ Environment=NODE_ENV=production
 Environment=RELAY_PORT=8787
 Environment=RELAY_HOST=0.0.0.0
 Environment=RELAY_API_KEY=b61cdfca1121aade4084158eb4de708d945bd0cacece8a52522d27dde0190279
+Environment=TURN_TIMEOUT_SEC=60
 
 [Install]
 WantedBy=multi-user.target
