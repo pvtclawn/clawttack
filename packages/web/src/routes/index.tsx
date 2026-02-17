@@ -1,15 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useBattleCreatedEvents, useBattleSettledEvents } from '../hooks/useChain'
+import { agentName, scenarioName } from '../lib/format'
 import { useQuery } from '@tanstack/react-query'
 import { createPublicClient, http, parseAbiItem } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { CONTRACTS } from '../config/wagmi'
-import { agentName, scenarioName } from '../lib/format'
-
-const client = createPublicClient({
-  chain: baseSepolia,
-  transport: http('https://sepolia.base.org'),
-})
 
 export const Route = createFileRoute('/')(  {
   component: Home,
@@ -17,23 +12,19 @@ export const Route = createFileRoute('/')(  {
 
 function useProtocolStats() {
   const { data: battles } = useBattleSettledEvents()
-  const agents = useQuery({
-    queryKey: ['agents', 'count'],
-    queryFn: async () => {
-      const logs = await client.getLogs({
-        address: CONTRACTS.registry,
-        event: parseAbiItem('event AgentRegistered(address indexed agent, uint32 elo)'),
-        fromBlock: 37_752_000n,
-        toBlock: 'latest',
-      })
-      return new Set(logs.map((l) => l.args.agent!)).size
-    },
-    staleTime: 60_000,
-  })
+  const { data: created } = useBattleCreatedEvents()
+
+  // Derive agent count from battle participants (no separate getLogs call)
+  const agentAddresses = new Set<string>()
+  for (const b of created ?? []) {
+    for (const a of b.agents) {
+      agentAddresses.add(a.toLowerCase())
+    }
+  }
 
   return {
     battlesSettled: battles?.length ?? 0,
-    agentsRegistered: agents.data ?? 0,
+    agentsRegistered: agentAddresses.size,
   }
 }
 

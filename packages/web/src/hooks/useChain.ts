@@ -5,11 +5,55 @@ import { CONTRACTS } from '../config/wagmi'
 
 const client = createPublicClient({
   chain: baseSepolia,
-  transport: http('https://sepolia.base.org'),
+  transport: http('https://sepolia.base.org', {
+    retryCount: 3,
+    retryDelay: 1000,
+  }),
 })
 
 // Contract deploy block (ClawttackRegistry on Base Sepolia)
 const DEPLOY_BLOCK = 37_752_000n
+
+// Max block range per getLogs request (public RPCs reject large ranges)
+const CHUNK_SIZE = 10_000n
+
+/** Fetch logs in chunks to avoid 413 errors from public RPCs */
+async function getLogsChunked<T>(params: {
+  address: `0x${string}`
+  event: ReturnType<typeof parseAbiItem>
+  fromBlock: bigint
+  mapFn: (log: any) => T
+}): Promise<T[]> {
+  const latestBlock = await client.getBlockNumber()
+  const results: T[] = []
+
+  let from = params.fromBlock
+  while (from <= latestBlock) {
+    const to = from + CHUNK_SIZE > latestBlock ? latestBlock : from + CHUNK_SIZE
+
+    try {
+      const logs = await client.getLogs({
+        address: params.address,
+        event: params.event as any,
+        fromBlock: from,
+        toBlock: to,
+      })
+      results.push(...logs.map(params.mapFn))
+    } catch (err) {
+      // If chunk is still too big, halve it and retry
+      console.warn(`getLogs failed for range ${from}-${to}, retrying smaller`, err)
+      const mid = from + (to - from) / 2n
+      if (mid === from) throw err // Can't split further
+
+      const firstHalf = await getLogsChunked({ ...params, fromBlock: from })
+      results.push(...firstHalf)
+    }
+
+    from = to + 1n
+  }
+
+  return results
+}
 
 export interface BattleCreatedEvent {
   battleId: `0x${string}`
@@ -42,24 +86,23 @@ export function useBattleCreatedEvents() {
   return useQuery({
     queryKey: ['battles', 'created'],
     queryFn: async (): Promise<BattleCreatedEvent[]> => {
-      const logs = await client.getLogs({
+      return getLogsChunked({
         address: CONTRACTS.registry,
         event: parseAbiItem('event BattleCreated(bytes32 indexed battleId, address indexed scenario, address[] agents, uint256 entryFee, bytes32 commitment)'),
-        fromBlock: DEPLOY_BLOCK, // Approximate deploy block
-        toBlock: 'latest',
+        fromBlock: DEPLOY_BLOCK,
+        mapFn: (log) => ({
+          battleId: log.args.battleId!,
+          scenario: log.args.scenario!,
+          agents: log.args.agents!,
+          entryFee: log.args.entryFee!,
+          commitment: log.args.commitment!,
+          blockNumber: log.blockNumber,
+          txHash: log.transactionHash!,
+        }),
       })
-
-      return logs.map((log) => ({
-        battleId: log.args.battleId!,
-        scenario: log.args.scenario!,
-        agents: log.args.agents!,
-        entryFee: log.args.entryFee!,
-        commitment: log.args.commitment!,
-        blockNumber: log.blockNumber,
-        txHash: log.transactionHash!,
-      }))
     },
-    staleTime: 30_000, // 30s
+    staleTime: 60_000,
+    retry: 2,
   })
 }
 
@@ -67,22 +110,21 @@ export function useBattleSettledEvents() {
   return useQuery({
     queryKey: ['battles', 'settled'],
     queryFn: async (): Promise<BattleSettledEvent[]> => {
-      const logs = await client.getLogs({
+      return getLogsChunked({
         address: CONTRACTS.registry,
         event: parseAbiItem('event BattleSettled(bytes32 indexed battleId, address indexed winner, bytes32 turnLogCid, uint256 payout)'),
         fromBlock: DEPLOY_BLOCK,
-        toBlock: 'latest',
+        mapFn: (log) => ({
+          battleId: log.args.battleId!,
+          winner: log.args.winner!,
+          turnLogCid: log.args.turnLogCid!,
+          blockNumber: log.blockNumber,
+          txHash: log.transactionHash!,
+        }),
       })
-
-      return logs.map((log) => ({
-        battleId: log.args.battleId!,
-        winner: log.args.winner!,
-        turnLogCid: log.args.turnLogCid!,
-        blockNumber: log.blockNumber,
-        txHash: log.transactionHash!,
-      }))
     },
-    staleTime: 30_000,
+    staleTime: 60_000,
+    retry: 2,
   })
 }
 
