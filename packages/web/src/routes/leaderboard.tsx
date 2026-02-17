@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { createPublicClient, http, parseAbiItem } from 'viem'
 import { baseSepolia } from 'viem/chains'
@@ -102,7 +102,7 @@ function LeaderboardPage() {
       {agents && agents.length > 0 && (
         <>
           {/* Top agent highlight */}
-          <div className="rounded-xl border-2 border-[var(--accent)] bg-[var(--surface)] p-6 text-center">
+          <Link to="/agent/$address" params={{ address: agents[0]!.address }} className="block rounded-xl border-2 border-[var(--accent)] bg-[var(--surface)] p-6 text-center hover:bg-[var(--surface-hover)] transition-colors">
             <div className="text-3xl mb-2">👑</div>
             <div className="text-xl font-bold">{agentName(agents[0]!.address)}</div>
             <div className="text-xs text-[var(--muted)] font-mono mt-1">{formatAddress(agents[0]!.address)}</div>
@@ -124,9 +124,7 @@ function LeaderboardPage() {
                 <div className="text-xs text-[var(--muted)]">Win Rate</div>
               </div>
             </div>
-          </div>
-
-          {/* Full table */}
+          </Link>
           <div className="overflow-hidden rounded-xl border border-[var(--border)]">
             <table className="w-full">
               <thead>
@@ -148,8 +146,10 @@ function LeaderboardPage() {
                       {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-medium">{agentName(agent.address)}</div>
-                      <div className="text-xs text-[var(--muted)] font-mono">{formatAddress(agent.address)}</div>
+                      <Link to="/agent/$address" params={{ address: agent.address }}>
+                        <div className="font-medium hover:text-[var(--accent)] transition-colors">{agentName(agent.address)}</div>
+                        <div className="text-xs text-[var(--muted)] font-mono">{formatAddress(agent.address)}</div>
+                      </Link>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="font-bold text-[var(--accent)]">{agent.elo}</span>
