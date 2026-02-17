@@ -1,13 +1,14 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { createPublicClient, http, parseAbiItem } from 'viem'
+import { createPublicClient, http } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { CONTRACTS } from '../config/wagmi'
 import { formatAddress, agentName } from '../lib/format'
+import { useBattleCreatedEvents } from '../hooks/useChain'
 
 const client = createPublicClient({
   chain: baseSepolia,
-  transport: http('https://sepolia.base.org'),
+  transport: http('https://sepolia.base.org', { retryCount: 3, retryDelay: 1000 }),
 })
 
 export const Route = createFileRoute('/leaderboard')({
@@ -25,17 +26,17 @@ interface AgentRow {
 }
 
 function useLeaderboard() {
-  return useQuery({
-    queryKey: ['leaderboard'],
-    queryFn: async (): Promise<AgentRow[]> => {
-      const logs = await client.getLogs({
-        address: CONTRACTS.registry,
-        event: parseAbiItem('event AgentRegistered(address indexed agent, uint32 elo)'),
-        fromBlock: 37_752_000n,
-        toBlock: 'latest',
-      })
+  const { data: battles } = useBattleCreatedEvents()
 
-      const addresses = [...new Set(logs.map((l) => l.args.agent!))]
+  // Derive unique agent addresses from battles (avoids separate getLogs)
+  const addresses = battles
+    ? [...new Set(battles.flatMap((b) => b.agents.map((a) => a.toLowerCase() as `0x${string}`)))]
+    : []
+
+  return useQuery({
+    queryKey: ['leaderboard', addresses.join(',')],
+    queryFn: async (): Promise<AgentRow[]> => {
+      if (addresses.length === 0) return []
 
       const stats = await Promise.all(
         addresses.map(async (address) => {
@@ -77,7 +78,9 @@ function useLeaderboard() {
 
       return stats.sort((a, b) => b.elo - a.elo)
     },
+    enabled: addresses.length > 0,
     staleTime: 60_000,
+    retry: 2,
   })
 }
 
