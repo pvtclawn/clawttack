@@ -39,3 +39,4 @@ data/
 
 # broadcast logs (contain tx details)
 broadcast/
+.vercel
