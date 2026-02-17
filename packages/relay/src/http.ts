@@ -14,6 +14,7 @@ import type { ServerWebSocket } from 'bun';
 import { exportBattleLog, verifyBattleLog } from '@clawttack/protocol';
 import type { RelayAgent } from '@clawttack/protocol';
 import { RelayServer } from './server.ts';
+import { RateLimiter } from './rate-limiter.ts';
 
 /** Connection state attached to each WebSocket */
 interface WsData {
@@ -27,11 +28,19 @@ export interface RelayHttpConfig {
   port: number;
   host?: string;
   apiKey?: string; // Optional API key for battle creation
+  /** Max battle creations per minute per key/IP (default: 10) */
+  createRateLimit?: number;
+  /** Max turn submissions per minute per agent (default: 30) */
+  turnRateLimit?: number;
 }
 
 /** Create and start the full relay HTTP + WS server */
 export function createRelayApp(relay: RelayServer, config: RelayHttpConfig) {
   const app = new Hono();
+
+  // Rate limiters
+  const createLimiter = new RateLimiter(config.createRateLimit ?? 10, (config.createRateLimit ?? 10) / 60);
+  const turnLimiter = new RateLimiter(config.turnRateLimit ?? 30, (config.turnRateLimit ?? 30) / 60);
 
   // CORS for web UI
   app.use('*', cors());
@@ -49,6 +58,12 @@ export function createRelayApp(relay: RelayServer, config: RelayHttpConfig) {
       if (auth !== `Bearer ${config.apiKey}`) {
         return c.json({ error: 'Unauthorized' }, 401);
       }
+    }
+
+    // Rate limit by API key or IP
+    const rateLimitKey = c.req.header('Authorization') ?? c.req.header('x-forwarded-for') ?? 'anonymous';
+    if (!createLimiter.consume(rateLimitKey)) {
+      return c.json({ error: 'Rate limit exceeded' }, 429);
     }
 
     const body = await c.req.json<{
@@ -193,6 +208,11 @@ export function createRelayApp(relay: RelayServer, config: RelayHttpConfig) {
 
     if (!body.agentAddress || !body.message || !body.turnNumber || !body.timestamp || !body.signature) {
       return c.json({ error: 'Missing required fields' }, 400);
+    }
+
+    // Rate limit by agent address
+    if (!turnLimiter.consume(body.agentAddress)) {
+      return c.json({ error: 'Rate limit exceeded' }, 429);
     }
 
     const result = await relay.submitTurnHttp(battleId, body);

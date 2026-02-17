@@ -192,4 +192,35 @@ describe('HTTP API', () => {
       expect(res.status).toBe(404);
     });
   });
+
+  describe('Rate limiting', () => {
+    test('should reject battle creation after exceeding rate limit', async () => {
+      const relay = new RelayServer();
+      const app = createRelayApp(relay, { port: 0, createRateLimit: 2 });
+
+      // First 2 should succeed
+      for (let i = 0; i < 2; i++) {
+        const res = await app.request('/api/battles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...validBody,
+            id: `rate-test-${i}`,
+          }),
+        });
+        expect(res.status).toBe(201);
+      }
+
+      // Third should be rate limited
+      const res = await app.request('/api/battles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...validBody,
+          id: 'rate-test-blocked',
+        }),
+      });
+      expect(res.status).toBe(429);
+    });
+  });
 });
