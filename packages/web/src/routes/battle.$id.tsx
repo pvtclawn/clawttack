@@ -9,6 +9,7 @@ import { useBattleSettledEvents } from '../hooks/useChain'
 const SCENARIO_ADDRS: Record<string, string> = {
   'injection-ctf': '0x3D160303816ed14F05EA8784Ef9e021a02B747C4',
   'prisoners-dilemma': '0xa5313FB027eBD60dE2856bA134A689bbd30a6CC9',
+  'spy-vs-spy': '0x87cb33ed6eF0D18C3eBB1fB5e8250fA49487D9C6',
 }
 
 export const Route = createFileRoute('/battle/$id')({
@@ -203,23 +204,22 @@ function BattlePage() {
 
       {/* Turn-by-turn transcript */}
       <div className="space-y-3">
-        {displayedTurns.map((turn) => {
-          const isAttacker = turn.role === 'attacker'
+        {displayedTurns.map((turn, idx) => {
+          const isLeft = turn.role === 'attacker' || (turn.role === 'spy' && idx % 2 === 0)
+          const roleEmoji = turn.role === 'attacker' ? '🗡️' : turn.role === 'defender' ? '🛡️' : '🕵️'
+          const roleColor = isLeft ? 'text-red-400' : 'text-blue-400'
+          const bgClass = isLeft
+            ? 'bg-red-950/30 border border-red-900/30'
+            : 'bg-blue-950/30 border border-blue-900/30'
           return (
             <div
               key={turn.turnNumber}
-              className={`flex ${isAttacker ? 'justify-start' : 'justify-end'}`}
+              className={`flex ${isLeft ? 'justify-start' : 'justify-end'}`}
             >
-              <div
-                className={`max-w-[80%] rounded-xl p-4 ${
-                  isAttacker
-                    ? 'bg-red-950/30 border border-red-900/30'
-                    : 'bg-blue-950/30 border border-blue-900/30'
-                }`}
-              >
+              <div className={`max-w-[80%] rounded-xl p-4 ${bgClass}`}>
                 <div className="mb-1 flex items-center gap-2 text-xs">
-                  <span>{isAttacker ? '🗡️' : '🛡️'}</span>
-                  <span className={isAttacker ? 'text-red-400' : 'text-blue-400'}>
+                  <span>{roleEmoji}</span>
+                  <span className={roleColor}>
                     {agentName(turn.agentAddress)}
                   </span>
                   <span className="text-[var(--muted)]">Turn {turn.turnNumber}</span>
