@@ -119,7 +119,7 @@ export class Matchmaker {
   /** Create a match from queued agents */
   private createMatch(scenarioId: string, agents: QueueEntry[]): MatchResult {
     const maxTurns = this.config.maxTurns ?? 8;
-    const secret = this.pickSecret();
+    const secret = scenarioId === 'spy-vs-spy' ? this.pickSecret(2) : this.pickSecret();
     const secretHash = ethers.keccak256(ethers.toUtf8Bytes(secret));
     const battleId = crypto.randomUUID();
 
@@ -146,7 +146,7 @@ export class Matchmaker {
     if (scenarioId === 'injection-ctf') {
       scenarioData = { secret };
     } else if (scenarioId === 'spy-vs-spy') {
-      const secretB = this.pickSecret();
+      const secretB = this.pickSecret(2);
       const secretHashB = ethers.keccak256(ethers.toUtf8Bytes(secretB));
       scenarioData = {
         secrets: {
@@ -190,12 +190,12 @@ export class Matchmaker {
     return 2;
   }
 
-  private pickSecret(): string {
+  private pickSecret(wordCount: number = 4): string {
     const pool = this.config.secrets;
     if (pool && pool.length > 0) {
       return pool[Math.floor(Math.random() * pool.length)]!;
     }
-    // Generate dynamic secret: 4 random words from a larger set
+    // Generate dynamic secret from a large word set
     const words = [
       'crimson', 'velvet', 'phantom', 'sapphire', 'ember', 'obsidian', 'amber', 'cobalt',
       'neon', 'iron', 'silver', 'golden', 'crystal', 'shadow', 'frost', 'storm',
@@ -204,10 +204,17 @@ export class Matchmaker {
       'spark', 'drift', 'thread', 'hollow', 'winter', 'solar', 'frozen', 'silent',
       'raven', 'copper', 'jade', 'mercury', 'onyx', 'pearl', 'quartz', 'ruby',
       'apex', 'cipher', 'delta', 'helix', 'orbit', 'prism', 'nexus', 'vertex',
+      'ancient', 'mirage', 'scarlet', 'indigo', 'aurora', 'tempest', 'enigma', 'vortex',
+      'marble', 'mosaic', 'lantern', 'anchor', 'compass', 'eclipse', 'harbor', 'beacon',
+      'summit', 'canyon', 'meadow', 'tundra', 'volcano', 'oasis', 'cavern', 'ravine',
+      'falcon', 'serpent', 'mantis', 'panther', 'condor', 'osprey', 'badger', 'wolverine',
     ];
     const picked: string[] = [];
-    for (let i = 0; i < 4; i++) {
-      const idx = Math.floor(Math.random() * words.length);
+    const used = new Set<number>();
+    for (let i = 0; i < wordCount; i++) {
+      let idx: number;
+      do { idx = Math.floor(Math.random() * words.length); } while (used.has(idx));
+      used.add(idx);
       picked.push(words[idx]!);
     }
     return picked.join(' ');
