@@ -7,3 +7,5 @@ export { RelayServer } from './server.ts';
 export { createRelayApp, startRelayServer } from './http.ts';
 export type { RelayHttpConfig } from './http.ts';
 export { RateLimiter } from './rate-limiter.ts';
+export { Settler } from './settler.ts';
+export type { SettlerConfig } from './settler.ts';

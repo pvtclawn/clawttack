@@ -31,6 +31,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@clawttack/protocol": "workspace:*",
+        "ethers": "^6.16.0",
         "hono": "^4.11.9",
       },
       "devDependencies": {
