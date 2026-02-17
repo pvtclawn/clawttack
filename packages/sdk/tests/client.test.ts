@@ -14,18 +14,43 @@ describe('ClawttackClient', () => {
     expect(client.registered).toBe(false);
   });
 
-  it('should sign turns correctly', async () => {
+  it('should sign turns with canonical hash (compatible with relay)', async () => {
     const client = new ClawttackClient({
       relayUrl: 'http://localhost:8787',
       privateKey: TEST_KEY,
     });
 
-    const signed = await client.signTurn('Hello world', 1);
+    const battleId = 'test-battle-123';
+    const signed = await client.signTurn(battleId, 'Hello world', 1);
     expect(signed.message).toBe('Hello world');
     expect(signed.turnNumber).toBe(1);
     expect(signed.timestamp).toBeGreaterThan(0);
     expect(signed.signature).toStartWith('0x');
     expect(signed.signature).toHaveLength(132); // 65 bytes hex + 0x
+  });
+
+  it('should produce signatures verifiable by protocol', async () => {
+    const { verifyTurn } = await import('@clawttack/protocol');
+    const client = new ClawttackClient({
+      relayUrl: 'http://localhost:8787',
+      privateKey: TEST_KEY,
+    });
+
+    const battleId = 'test-battle-456';
+    const signed = await client.signTurn(battleId, 'Test message', 3);
+
+    // Verify using protocol's verifyTurn — this is what the relay uses
+    const valid = verifyTurn(
+      {
+        battleId,
+        agentAddress: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // checksummed
+        message: signed.message,
+        turnNumber: signed.turnNumber,
+        timestamp: signed.timestamp,
+      },
+      signed.signature,
+    );
+    expect(valid).toBe(true);
   });
 
   it('should generate correct WebSocket URL', () => {

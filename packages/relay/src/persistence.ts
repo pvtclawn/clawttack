@@ -27,10 +27,12 @@ export class BattlePersistence {
     }
   }
 
-  /** Save a completed battle */
+  /** Save a completed battle (strips sensitive scenarioData) */
   save(battle: RelayBattle): string {
+    // Strip sensitive data (e.g., plaintext secrets) before persisting
+    const sanitized = { ...battle, scenarioData: {} };
     const filePath = path.join(this.config.dataDir, `${battle.id}.json`);
-    const data = JSON.stringify(battle, null, 2);
+    const data = JSON.stringify(sanitized, null, 2);
     fs.writeFileSync(filePath, data);
 
     // Also copy to web public dir if configured

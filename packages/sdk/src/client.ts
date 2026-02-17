@@ -12,6 +12,8 @@
 //   // battle auto-connects via WebSocket
 
 import { ethers } from 'ethers';
+import { canonicalTurnHash } from '@clawttack/protocol';
+import type { TurnMessage } from '@clawttack/protocol';
 import type { MatchResult } from './types.ts';
 
 export interface ClawttackClientConfig {
@@ -120,16 +122,23 @@ export class ClawttackClient {
     throw new Error(`Matchmaking timeout (${timeoutMs / 1000}s)`);
   }
 
-  /** Sign a turn message */
-  async signTurn(message: string, turnNumber: number): Promise<{
+  /** Sign a turn message (compatible with relay + on-chain verification) */
+  async signTurn(battleId: string, message: string, turnNumber: number): Promise<{
     message: string;
     turnNumber: number;
     timestamp: number;
     signature: string;
   }> {
     const timestamp = Date.now();
-    const payload = JSON.stringify({ message, turnNumber, timestamp });
-    const signature = await this.wallet.signMessage(payload);
+    const turnMessage: TurnMessage = {
+      battleId,
+      agentAddress: this.wallet.address,
+      message,
+      turnNumber,
+      timestamp,
+    };
+    const hash = canonicalTurnHash(turnMessage);
+    const signature = await this.wallet.signMessage(ethers.getBytes(hash));
     return { message, turnNumber, timestamp, signature };
   }
 
