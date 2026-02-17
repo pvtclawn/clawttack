@@ -18,7 +18,22 @@ interface VerificationResult {
   expectedAddress: string
 }
 
-export function SignatureVerifier({ turns }: { turns: Turn[] }) {
+/** Canonical turn hash — matches protocol + Solidity ecrecover */
+function canonicalTurnHash(battleId: string, agentAddress: string, message: string, turnNumber: number, timestamp: number): string {
+  const messageHash = ethers.keccak256(ethers.toUtf8Bytes(message))
+  return ethers.solidityPackedKeccak256(
+    ['bytes32', 'address', 'uint16', 'uint64', 'bytes32'],
+    [
+      ethers.zeroPadValue(ethers.toUtf8Bytes(battleId.slice(0, 32).padEnd(32, '\0')), 32),
+      agentAddress,
+      turnNumber,
+      timestamp,
+      messageHash,
+    ],
+  )
+}
+
+export function SignatureVerifier({ turns, battleId }: { turns: Turn[]; battleId: string }) {
   const [results, setResults] = useState<VerificationResult[] | null>(null)
   const [verifying, setVerifying] = useState(false)
 
@@ -28,12 +43,8 @@ export function SignatureVerifier({ turns }: { turns: Turn[] }) {
 
     for (const turn of turns) {
       try {
-        const payload = JSON.stringify({
-          message: turn.message,
-          turnNumber: turn.turnNumber,
-          timestamp: turn.timestamp,
-        })
-        const recovered = ethers.verifyMessage(payload, turn.signature).toLowerCase()
+        const hash = canonicalTurnHash(battleId, turn.agentAddress, turn.message, turn.turnNumber, turn.timestamp)
+        const recovered = ethers.verifyMessage(ethers.getBytes(hash), turn.signature).toLowerCase()
         verified.push({
           turnNumber: turn.turnNumber,
           valid: recovered === turn.agentAddress.toLowerCase(),

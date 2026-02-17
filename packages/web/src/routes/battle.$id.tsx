@@ -207,7 +207,7 @@ function BattlePage() {
       </div>
 
       {/* Signature Verification */}
-      {log.turns.length > 0 && <SignatureVerifier turns={log.turns} />}
+      {log.turns.length > 0 && <SignatureVerifier turns={log.turns} battleId={log.battleId} />}
 
       {/* Verification */}
       {log.merkleRoot && (

@@ -169,7 +169,7 @@ export class Fighter {
             new Promise<never>((_, rej) => setTimeout(() => rej(new Error('Strategy timeout')), timeoutMs)),
           ]);
 
-          const signed = await this.client.signTurn(message, turnNumber);
+          const signed = await this.client.signTurn(match.battleId, message, turnNumber);
           await conn.sendTurn(signed);
 
           if (verbose) console.log(`  ✅ Sent: "${message.slice(0, 60)}${message.length > 60 ? '...' : ''}"`);
