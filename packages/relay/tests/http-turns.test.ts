@@ -8,8 +8,8 @@ import { ethers } from 'ethers';
 const walletA = new ethers.Wallet('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
 const walletB = new ethers.Wallet('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d');
 
-function createTestApp() {
-  const relay = new RelayServer();
+function createTestApp(opts?: { turnTimeoutMs?: number }) {
+  const relay = new RelayServer({ turnTimeoutMs: opts?.turnTimeoutMs });
   const app = createRelayApp(relay, { port: 0 });
   return { relay, app };
 }
@@ -170,5 +170,38 @@ describe('HTTP Turn API', () => {
     expect(res.status).toBe(400);
     const data = await res.json() as { error: string };
     expect(data.error).toBe('Not your turn');
+  });
+
+  it('should auto-forfeit on turn timeout', async () => {
+    // Use a very short timeout for testing
+    const { app } = createTestApp({ turnTimeoutMs: 200 });
+    const battleId = await createBattle(app);
+
+    // Register both agents
+    await app.request(`/api/battles/${battleId}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentAddress: walletA.address }),
+    });
+    await app.request(`/api/battles/${battleId}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentAddress: walletB.address }),
+    });
+
+    // Battle should be active, Agent A's turn
+    let res = await app.request(`/api/battles/${battleId}`);
+    let battle = await res.json() as { state: string };
+    expect(battle.state).toBe('active');
+
+    // Wait for timeout to expire (200ms + buffer)
+    await new Promise(r => setTimeout(r, 350));
+
+    // Battle should now be ended — Agent A timed out, Agent B wins
+    res = await app.request(`/api/battles/${battleId}`);
+    battle = await res.json() as any;
+    expect(battle.state).toBe('ended');
+    expect((battle as any).outcome.winnerAddress).toBe(walletB.address);
+    expect((battle as any).outcome.reason).toContain('timed out');
   });
 });

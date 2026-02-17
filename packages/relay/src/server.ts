@@ -25,14 +25,63 @@ interface ConnectionState {
   agentAddress?: string; // Only for agent connections
 }
 
+/** Default turn timeout: 60 seconds */
+const DEFAULT_TURN_TIMEOUT_MS = 60_000;
+
 /** Relay server state */
 export class RelayServer {
   private battles = new Map<string, RelayBattle>();
   private connections = new Map<ServerWebSocket<ConnectionState>, ConnectionState>();
   private onBattleEnd?: (battle: RelayBattle) => Promise<void>;
+  private turnTimers = new Map<string, Timer>(); // battleId → timeout handle
+  private turnTimeoutMs: number;
 
-  constructor(opts?: { onBattleEnd?: (battle: RelayBattle) => Promise<void> }) {
+  constructor(opts?: {
+    onBattleEnd?: (battle: RelayBattle) => Promise<void>;
+    turnTimeoutMs?: number;
+  }) {
     this.onBattleEnd = opts?.onBattleEnd;
+    this.turnTimeoutMs = opts?.turnTimeoutMs ?? DEFAULT_TURN_TIMEOUT_MS;
+  }
+
+  /** Start a turn timer — auto-forfeit if active agent doesn't respond */
+  private startTurnTimer(battle: RelayBattle): void {
+    this.clearTurnTimer(battle.id);
+    if (battle.state !== 'active' || this.turnTimeoutMs <= 0) return;
+
+    const activeAgent = battle.agents[battle.activeAgentIndex];
+    if (!activeAgent) return;
+
+    const timer = setTimeout(async () => {
+      // Double-check battle is still active and same agent's turn
+      const current = this.battles.get(battle.id);
+      if (!current || current.state !== 'active') return;
+      if (current.agents[current.activeAgentIndex]?.address !== activeAgent.address) return;
+
+      // Auto-forfeit the stalling agent
+      const opponentIndex = current.agents.findIndex(
+        a => a.address.toLowerCase() !== activeAgent.address.toLowerCase(),
+      );
+      const winner = current.agents[opponentIndex];
+
+      await this.endBattle(current, {
+        winnerAddress: winner?.address ?? null,
+        loserAddress: activeAgent.address,
+        reason: `${activeAgent.name ?? activeAgent.address} timed out (${this.turnTimeoutMs / 1000}s)`,
+        verified: false,
+      });
+    }, this.turnTimeoutMs);
+
+    this.turnTimers.set(battle.id, timer);
+  }
+
+  /** Clear a turn timer */
+  private clearTurnTimer(battleId: string): void {
+    const existing = this.turnTimers.get(battleId);
+    if (existing) {
+      clearTimeout(existing);
+      this.turnTimers.delete(battleId);
+    }
   }
 
   /** Create a new battle (called by HTTP API, not WS) */
@@ -226,6 +275,9 @@ export class RelayServer {
         commitment: battle.commitment,
       },
     });
+
+    // Start turn timer for the first player
+    this.startTurnTimer(battle);
   }
 
   /** Process a signed turn from an agent */
@@ -357,6 +409,9 @@ export class RelayServer {
         });
       }
     }
+
+    // Start turn timer for the next agent
+    this.startTurnTimer(battle);
   }
 
   /** Handle forfeit */
@@ -380,6 +435,7 @@ export class RelayServer {
 
   /** End a battle */
   private async endBattle(battle: RelayBattle, outcome: BattleOutcome): Promise<void> {
+    this.clearTurnTimer(battle.id);
     battle.state = 'ended';
     battle.endedAt = Date.now();
     battle.outcome = outcome;
@@ -549,6 +605,9 @@ export class RelayServer {
       }
     }
 
+    // Start turn timer for the next agent
+    this.startTurnTimer(battle);
+
     return { ok: true };
   }
 
@@ -567,6 +626,7 @@ export class RelayServer {
       battle.state = 'active';
       battle.startedAt = Date.now();
       battle.activeAgentIndex = 0;
+      this.startTurnTimer(battle);
     }
 
     return { ok: true };
@@ -583,6 +643,7 @@ export class RelayServer {
     let cleaned = 0;
     for (const [id, battle] of this.battles) {
       if (battle.state === 'ended' && battle.endedAt && now - battle.endedAt > maxAgeMs) {
+        this.clearTurnTimer(id);
         this.battles.delete(id);
         cleaned++;
       }
