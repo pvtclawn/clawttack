@@ -20,6 +20,12 @@ function RootLayout() {
               Battles
             </Link>
             <Link
+              to="/scenarios"
+              className="text-[var(--muted)] hover:text-[var(--fg)] [&.active]:text-[var(--fg)]"
+            >
+              Scenarios
+            </Link>
+            <Link
               to="/leaderboard"
               className="text-[var(--muted)] hover:text-[var(--fg)] [&.active]:text-[var(--fg)]"
             >
