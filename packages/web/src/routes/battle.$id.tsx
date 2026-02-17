@@ -6,6 +6,7 @@ import { agentName, scenarioName } from '../lib/format'
 // Map scenarioId strings to known scenario addresses
 const SCENARIO_ADDRS: Record<string, string> = {
   'injection-ctf': '0x3D160303816ed14F05EA8784Ef9e021a02B747C4',
+  'prisoners-dilemma': '0xa5313FB027eBD60dE2856bA134A689bbd30a6CC9',
 }
 
 export const Route = createFileRoute('/battle/$id')({
