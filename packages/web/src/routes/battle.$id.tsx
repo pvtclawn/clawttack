@@ -2,6 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { agentName, scenarioName } from '../lib/format'
+import { SignatureVerifier } from '../components/SignatureVerifier'
 
 // Map scenarioId strings to known scenario addresses
 const SCENARIO_ADDRS: Record<string, string> = {
@@ -204,6 +205,9 @@ function BattlePage() {
           </div>
         )}
       </div>
+
+      {/* Signature Verification */}
+      {log.turns.length > 0 && <SignatureVerifier turns={log.turns} />}
 
       {/* Verification */}
       {log.merkleRoot && (
