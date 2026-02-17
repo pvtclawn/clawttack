@@ -29,6 +29,8 @@ export interface FighterConfig {
   strategy: Strategy;
   /** Turn timeout in ms (default: 30s) */
   turnTimeoutMs?: number;
+  /** Overall battle timeout in ms (default: 5 min) */
+  battleTimeoutMs?: number;
   /** Log to console (default: true) */
   verbose?: boolean;
 }
@@ -82,13 +84,25 @@ export class Fighter {
     await conn.register(this.client.address);
     if (verbose) console.log(`🔌 Connected to battle`);
 
-    // 4. Fight (event-driven loop)
-    const result = await new Promise<FightResult>((resolve, reject) => {
-      let role = '';
-      let maxTurns = 0;
-      const timeoutMs = this.config.turnTimeoutMs ?? 30_000;
+    // 4. Fight (event-driven loop with battle timeout)
+    const battleTimeoutMs = this.config.battleTimeoutMs ?? 300_000; // 5 min default
 
-      const opponent = match.agents.find(a => a.address !== this.client.address) ?? { address: 'unknown', name: 'unknown' };
+    const result = await Promise.race([
+      new Promise<FightResult>((resolve, reject) => {
+        let role = '';
+        let maxTurns = 0;
+        const timeoutMs = this.config.turnTimeoutMs ?? 30_000;
+
+        const opponent = match.agents.find(a => a.address !== this.client.address) ?? { address: 'unknown', name: 'unknown' };
+
+        conn.on('connectionChanged', (connected: boolean) => {
+          if (!connected) {
+            if (verbose) console.error('🔌 WebSocket disconnected mid-battle');
+            conn.close();
+            transport.dispose();
+            reject(new Error('WebSocket disconnected during battle'));
+          }
+        });
 
       conn.on('battleStarted', (data: BattleStartData) => {
         role = data.role;
@@ -164,7 +178,15 @@ export class Fighter {
           await conn.forfeit();
         }
       };
-    });
+    }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => {
+          conn.close();
+          transport.dispose();
+          reject(new Error(`Battle timeout (${battleTimeoutMs / 1000}s)`));
+        }, battleTimeoutMs),
+      ),
+    ]);
 
     return result;
   }
