@@ -140,8 +140,9 @@ export class Settler {
 
       // Create battle on-chain
       console.log(`  ⛓️  Creating battle ${battle.id} on-chain...`);
-      const createTx = await (registry.getFunction('createBattle'))(battleIdBytes, scenarioAddr, agentAddresses, setupData);
-      await createTx.wait();
+      const createFunc = registry.getFunction('createBattle');
+      const createTx = await createFunc(battleIdBytes, scenarioAddr, agentAddresses, setupData);
+      await (createTx as ethers.TransactionResponse).wait();
 
       // Wait for nonce sync
       await new Promise(r => setTimeout(r, 2000));
@@ -149,9 +150,10 @@ export class Settler {
       // Settle
       console.log(`  ⛓️  Settling battle ${battle.id}...`);
       const nonce = await this.provider.getTransactionCount(this.signerAddress);
-      const settleTx = await (registry.getFunction('settle'))(battleIdBytes, logHash, reveal, { gasLimit: 300_000, nonce });
-      const receipt = await settleTx.wait();
-      const txHash = settleTx.hash;
+      const settleFunc = registry.getFunction('settle');
+      const settleTx = await settleFunc(battleIdBytes, logHash, reveal, { gasLimit: 300_000n, nonce });
+      const receipt = await (settleTx as ethers.TransactionResponse).wait();
+      const txHash = (settleTx as ethers.TransactionResponse).hash;
 
       console.log(`  ✅ Battle ${battle.id} settled! Gas: ${receipt?.gasUsed.toString()} tx: ${txHash}`);
 

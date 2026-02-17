@@ -147,6 +147,7 @@ async function runBattle(): Promise<{ battleId: string; battle: any }> {
       ],
       maxTurns: 8,
       commitment: SECRET_HASH,
+      scenarioData: { secret: SECRET },
       roles: {
         [attackerWallet.address]: 'attacker',
         [defenderWallet.address]: 'defender',
