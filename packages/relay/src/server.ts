@@ -98,12 +98,16 @@ export class RelayServer {
       throw new Error(`Battle ${opts.id} already exists`);
     }
 
+    // Randomize first mover for symmetric scenarios (Spy vs Spy)
+    const isSymmetric = opts.scenarioId === 'spy-vs-spy' || opts.scenarioId === 'prisoners-dilemma';
+    const startingIndex = isSymmetric ? (Math.random() < 0.5 ? 0 : 1) : 0;
+
     const battle: RelayBattle = {
       id: opts.id,
       scenarioId: opts.scenarioId,
       agents: opts.agents,
       state: 'waiting',
-      activeAgentIndex: 0,
+      activeAgentIndex: startingIndex,
       turns: [],
       maxTurns: opts.maxTurns,
       commitment: opts.commitment,
