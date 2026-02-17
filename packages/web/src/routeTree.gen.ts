@@ -9,11 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ScenariosRouteImport } from './routes/scenarios'
 import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as BattlesRouteImport } from './routes/battles'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BattleIdRouteImport } from './routes/battle.$id'
 
+const ScenariosRoute = ScenariosRouteImport.update({
+  id: '/scenarios',
+  path: '/scenarios',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LeaderboardRoute = LeaderboardRouteImport.update({
   id: '/leaderboard',
   path: '/leaderboard',
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/battles': typeof BattlesRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/scenarios': typeof ScenariosRoute
   '/battle/$id': typeof BattleIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/battles': typeof BattlesRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/scenarios': typeof ScenariosRoute
   '/battle/$id': typeof BattleIdRoute
 }
 export interface FileRoutesById {
@@ -52,25 +60,40 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/battles': typeof BattlesRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/scenarios': typeof ScenariosRoute
   '/battle/$id': typeof BattleIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/battles' | '/leaderboard' | '/battle/$id'
+  fullPaths: '/' | '/battles' | '/leaderboard' | '/scenarios' | '/battle/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/battles' | '/leaderboard' | '/battle/$id'
-  id: '__root__' | '/' | '/battles' | '/leaderboard' | '/battle/$id'
+  to: '/' | '/battles' | '/leaderboard' | '/scenarios' | '/battle/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/battles'
+    | '/leaderboard'
+    | '/scenarios'
+    | '/battle/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BattlesRoute: typeof BattlesRoute
   LeaderboardRoute: typeof LeaderboardRoute
+  ScenariosRoute: typeof ScenariosRoute
   BattleIdRoute: typeof BattleIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/scenarios': {
+      id: '/scenarios'
+      path: '/scenarios'
+      fullPath: '/scenarios'
+      preLoaderRoute: typeof ScenariosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/leaderboard': {
       id: '/leaderboard'
       path: '/leaderboard'
@@ -106,6 +129,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BattlesRoute: BattlesRoute,
   LeaderboardRoute: LeaderboardRoute,
+  ScenariosRoute: ScenariosRoute,
   BattleIdRoute: BattleIdRoute,
 }
 export const routeTree = rootRouteImport
