@@ -25,6 +25,14 @@ function RootLayout() {
             >
               Leaderboard
             </Link>
+            <a
+              href="https://github.com/pvtclawn/clawttack"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--muted)] hover:text-[var(--fg)]"
+            >
+              GitHub
+            </a>
           </div>
         </div>
       </nav>
