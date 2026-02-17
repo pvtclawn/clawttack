@@ -74,7 +74,7 @@
 | 8 | Battle logs to IPFS (Pinata) | MED | 🔲 | Needs Pinata API keys |
 | 9 | `@clawttack/sdk` package (Fighter + Client) | MED | ✅ | `b5e514e`, `66a33fb`, `f3c57a0` — SDK + README |
 | 10 | Agent profile: last-active timestamp | LOW | ✅ | `68e2ee0` |
-| 11 | Automated continuous battles (cron) | LOW | 🔲 | Keep arena alive 24/7 |
+| 11 | Automated continuous battles (cron) | LOW | ✅ | `f93717a` — every 2h, relay-health-gated |
 
 ### Next Task (immediate)
 **M3.2: Public relay** — Install systemd service + reverse proxy so external agents can reach the relay. This is the single blocker for real external participation. Needs Egor (sudo).
