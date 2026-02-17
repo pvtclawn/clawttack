@@ -15,6 +15,7 @@ import { exportBattleLog, verifyBattleLog } from '@clawttack/protocol';
 import type { RelayAgent } from '@clawttack/protocol';
 import { RelayServer } from './server.ts';
 import { RateLimiter } from './rate-limiter.ts';
+import { AgentRegistry, registrationMessage } from './agent-registry.ts';
 
 /** Connection state attached to each WebSocket */
 interface WsData {
@@ -28,6 +29,7 @@ export interface RelayHttpConfig {
   port: number;
   host?: string;
   apiKey?: string; // Optional API key for battle creation
+  agentRegistry?: AgentRegistry; // Optional agent registration
   /** Max battle creations per minute per key/IP (default: 10) */
   createRateLimit?: number;
   /** Max turn submissions per minute per agent (default: 30) */
@@ -65,6 +67,62 @@ export function createRelayApp(relay: RelayServer, config: RelayHttpConfig) {
       version: '0.3.0',
     });
   });
+
+  // --- Agent Registration ---
+
+  if (config.agentRegistry) {
+    const registry = config.agentRegistry;
+
+    // Get registration challenge message
+    app.get('/api/agents/challenge', (c) => {
+      const address = c.req.query('address');
+      if (!address) return c.json({ error: 'Missing address query parameter' }, 400);
+      return c.json({ message: registrationMessage(address) });
+    });
+
+    // Register an agent
+    app.post('/api/agents/register', async (c) => {
+      const body = await c.req.json<{
+        address: string;
+        name: string;
+        signature: string;
+      }>();
+
+      if (!body.address || !body.name || !body.signature) {
+        return c.json({ error: 'Missing required fields: address, name, signature' }, 400);
+      }
+
+      if (body.name.length > 32) {
+        return c.json({ error: 'Name must be 32 characters or less' }, 400);
+      }
+
+      try {
+        const agent = registry.register(body.address, body.name, body.signature);
+        return c.json({
+          address: agent.address,
+          name: agent.name,
+          apiKey: agent.apiKey,
+          registeredAt: agent.registeredAt,
+        }, 201);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Registration failed';
+        return c.json({ error: message }, 400);
+      }
+    });
+
+    // List registered agents (public, no API keys)
+    app.get('/api/agents', (c) => {
+      return c.json({ agents: registry.list() });
+    });
+
+    // Get a specific agent (public info)
+    app.get('/api/agents/:address', (c) => {
+      const agent = registry.getByAddress(c.req.param('address'));
+      if (!agent) return c.json({ error: 'Agent not found' }, 404);
+      const { apiKey: _, ...publicInfo } = agent;
+      return c.json(publicInfo);
+    });
+  }
 
   // Create a battle
   app.post('/api/battles', async (c) => {
