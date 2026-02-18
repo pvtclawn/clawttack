@@ -28,3 +28,13 @@ const SCENARIOS: Record<string, string> = {
 export function scenarioName(address: string): string {
   return SCENARIOS[address.toLowerCase()] ?? formatAddress(address)
 }
+
+const SCENARIO_EMOJI: Record<string, string> = {
+  '0x3d160303816ed14f05ea8784ef9e021a02b747c4': '🗡️',
+  '0xa5313fb027ebd60de2856ba134a689bbd30a6cc9': '🎲',
+  '0x87cb33ed6ef0d18c3ebb1fb5e8250fa49487d9c6': '🕵️',
+}
+
+export function scenarioEmoji(address: string): string {
+  return SCENARIO_EMOJI[address.toLowerCase()] ?? '⚔️'
+}
