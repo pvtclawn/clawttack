@@ -18,5 +18,8 @@
     "battle:settle": "bun ./scripts/settle.ts",
     "battle:demo": "bun ./scripts/demo-battle.ts",
     "battle:ai": "bun ./scripts/ai-battle.ts"
+  },
+  "dependencies": {
+    "@waku/sdk": "^0.0.36"
   }
 }
