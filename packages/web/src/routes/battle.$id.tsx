@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState, useEffect } from 'react'
 import { agentName, scenarioName } from '../lib/format'
 import { SignatureVerifier } from '../components/SignatureVerifier'
+import { ChallengeWordTurnBadge, ChallengeWordHeader, TimerCountdown } from '../components/ChallengeWord'
 import { useBattleSettledEvents } from '../hooks/useChain'
 
 // Map scenarioId strings to known scenario addresses
@@ -10,6 +11,7 @@ const SCENARIO_ADDRS: Record<string, string> = {
   'injection-ctf': '0x3D160303816ed14F05EA8784Ef9e021a02B747C4',
   'prisoners-dilemma': '0xa5313FB027eBD60dE2856bA134A689bbd30a6CC9',
   'spy-vs-spy': '0x87cb33ed6eF0D18C3eBB1fB5e8250fA49487D9C6',
+  'challenge-word-battle': '0xa2dF845c10cBE9DA434991a91A3f0c3DBC39AAEd',
 }
 
 export const Route = createFileRoute('/battle/$id')({
@@ -55,6 +57,10 @@ interface BattleLog {
   commitment: string
   merkleRoot?: string
   _analysis?: BattleAnalysis
+  challengeWord?: {
+    commitA: `0x${string}`
+    commitB: `0x${string}`
+  }
 }
 
 function useBattleLog(battleIdHash: string) {
@@ -224,6 +230,15 @@ function BattlePage() {
         </div>
       )}
 
+      {/* Challenge Word Battle header */}
+      {log.challengeWord && (
+        <ChallengeWordHeader
+          config={log.challengeWord}
+          totalTurns={log.turns.length}
+          turns={log.turns}
+        />
+      )}
+
       {/* Turn-by-turn transcript */}
       <div className="space-y-3">
         {displayedTurns.map((turn, idx) => {
@@ -247,6 +262,9 @@ function BattlePage() {
                   <span className="text-[var(--muted)]">Turn {turn.turnNumber}</span>
                 </div>
                 <div className="text-sm leading-relaxed">{turn.message}</div>
+                {log.challengeWord && (
+                  <ChallengeWordTurnBadge turn={turn} config={log.challengeWord} />
+                )}
                 <div className="mt-2 text-[10px] text-[var(--muted)] font-mono truncate">
                   sig: {turn.signature.slice(0, 20)}…
                 </div>
@@ -256,8 +274,14 @@ function BattlePage() {
         })}
         {isReplaying && visibleTurns < log.turns.length && (
           <div className="flex justify-center py-4">
-            <div className="flex items-center gap-2 text-sm text-[var(--muted)]">
+            <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
               <span className="animate-pulse">●</span> Next turn...
+              {log.challengeWord && (
+                <TimerCountdown
+                  turnNumber={visibleTurns + 1}
+                  isActive={isReplaying}
+                />
+              )}
             </div>
           </div>
         )}

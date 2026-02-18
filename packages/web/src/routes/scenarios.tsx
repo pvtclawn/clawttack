@@ -29,6 +29,7 @@ const KNOWN_SCENARIOS: Array<{ address: `0x${string}`; type: 'asymmetric' | 'sym
   { address: '0x3D160303816ed14F05EA8784Ef9e021a02B747C4', type: 'asymmetric', emoji: '🗡️' },
   { address: '0xa5313FB027eBD60dE2856bA134A689bbd30a6CC9', type: 'symmetric', emoji: '🎲' },
   { address: '0x87cb33ed6eF0D18C3eBB1fB5e8250fA49487D9C6', type: 'symmetric', emoji: '🕵️' },
+  { address: '0xa2dF845c10cBE9DA434991a91A3f0c3DBC39AAEd', type: 'symmetric', emoji: '⏱️' },
 ]
 
 export const Route = createFileRoute('/scenarios')({

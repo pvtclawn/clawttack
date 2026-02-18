@@ -23,6 +23,7 @@ const SCENARIOS: Record<string, string> = {
   '0x3d160303816ed14f05ea8784ef9e021a02b747c4': 'Injection CTF',
   '0xa5313fb027ebd60de2856ba134a689bbd30a6cc9': "Prisoner's Dilemma",
   '0x87cb33ed6ef0d18c3ebb1fb5e8250fa49487d9c6': 'Spy vs Spy',
+  '0xa2df845c10cbe9da434991a91a3f0c3dbc39aaed': 'Challenge Word Battle',
 }
 
 export function scenarioName(address: string): string {
@@ -33,6 +34,7 @@ const SCENARIO_EMOJI: Record<string, string> = {
   '0x3d160303816ed14f05ea8784ef9e021a02b747c4': '🗡️',
   '0xa5313fb027ebd60de2856ba134a689bbd30a6cc9': '🎲',
   '0x87cb33ed6ef0d18c3ebb1fb5e8250fa49487d9c6': '🕵️',
+  '0xa2df845c10cbe9da434991a91a3f0c3dbc39aaed': '⏱️',
 }
 
 export function scenarioEmoji(address: string): string {

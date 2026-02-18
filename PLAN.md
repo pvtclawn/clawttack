@@ -1,4 +1,4 @@
-# Clawttack — Build Plan (Updated 2026-02-18 04:36)
+# Clawttack — Build Plan (Updated 2026-02-18 09:30)
 
 ## Current Status
 
@@ -78,8 +78,8 @@
 | 2 | JS light node → nwaku peering | HIGH | ✅ | Filter subscribe + REST publish |
 | 3 | Two-agent battle simulation over Waku | HIGH | ✅ | `5e2b55e` — both agents receive all turns |
 | 4 | WakuTransport class (ITransport) | HIGH | ✅ | `5b4de08` — auto-discovers nwaku multiaddr |
-| 5 | Waku battle with real ECDSA signing | HIGH | 🔲 | Wire WakuTransport + Fighter class |
-| 6 | Waku battle with real LLM strategies | HIGH | 🔲 | End-to-end: 2 agents play via Waku |
+| 5 | Waku battle with real ECDSA signing | HIGH | ✅ | WakuFighter class + `waku-battle-v2.ts` |
+| 6 | Waku battle with real LLM strategies | HIGH | ✅ | `waku-llm-battle.ts` — 10-turn battle, secret protected |
 | 7 | Spectator chat on same topic | MED | 🔲 | WakuConnection.sendSpectatorMessage ready |
 | 8 | Web UI: live Waku spectator view | MED | 🔲 | Connect browser to nwaku via WS |
 | 9 | nwaku exposed via reverse proxy | LOW | 🔲 | When ready for external agents |
@@ -104,6 +104,24 @@ Agent B ──REST──→ nwaku (Docker) ──filter──→ Agent A
 - Content topic per battle: `/clawttack/1/battle-{id}/proto`
 - nwaku image: `harbor.status.im/wakuorg/nwaku:v0.34.0`
 
+### Key Fixes (2026-02-18)
+- **5 race conditions** in shared transport (initNode guard, subscription reservation, listener-before-register, turn buffering, unconditional re-broadcast)
+- **CRITICAL security fix:** handleTurn now validates sender is registered participant
+- **battleStarted dedup:** single emission per connection lifetime
+- **Waku security score:** 8/10
+
+---
+
+## NEXT TASK: Update clawttack-fighter skill for Waku P2P
+
+**Acceptance criteria:**
+1. Skill uses WakuFighter instead of WebSocket relay
+2. `fight.ts` script accepts battle ID, connects via Waku, plays with LLM strategy
+3. Skill description updated — no more "WebSocket relay" references
+4. Tested: agent can fight a battle by being given a battle ID
+
+**Why now:** The WakuFighter is proven (10-turn LLM battle succeeded). The skill is the interface between OpenClaw agents and Clawttack. Updating it makes the agent actually capable of P2P battles.
+
 ---
 
 ## M4.5: Waku Hardening (RED TEAM FIXES — DONE ✅)
@@ -123,7 +141,7 @@ From red team review `2026-02-18--waku-p2p-red-team.md` (score: 4/10 → 7/10):
 
 ---
 
-## M5: ChallengeWordBattle — Trustless Verifiable Outcome (NEXT)
+## M5: ChallengeWordBattle — Trustless Verifiable Outcome (CURRENT)
 
 **Egor's design from 03:21 session + decreasing timer idea (04:14):**
 
@@ -138,13 +156,13 @@ Three failure modes (all verifiable, no judge needed):
 - ❌ Leak your secret → lose
 - ⏱️ Timeout (inference too slow) → lose
 
-| # | Task | Priority | Status |
-|---|------|----------|--------|
-| 1 | ChallengeWordBattle.sol (commit-reveal + word check) | HIGH | 🔲 |
-| 2 | Decreasing timer in transport layer | HIGH | 🔲 |
-| 3 | Challenge word generation (deterministic from commits) | HIGH | 🔲 |
-| 4 | SDK support for challenge word inclusion | MED | 🔲 |
-| 5 | Web UI: show challenge words + timer countdown | MED | 🔲 |
+| # | Task | Priority | Status | Notes |
+|---|------|----------|--------|-------|
+| 1 | ChallengeWordBattle.sol (commit-reveal + word check) | HIGH | ✅ | `676b9545` — 19 Forge tests |
+| 2 | Decreasing timer in transport layer | HIGH | ✅ | `ea97110b` — turnTimeoutFn in WakuTransport |
+| 3 | Challenge word generation (deterministic from commits) | HIGH | ✅ | `0e5765e0` — generateChallengeWord() mirrors Solidity |
+| 4 | SDK support for challenge word inclusion | MED | ✅ | `0e5765e0` — WakuFighter auto-validates + forfeits |
+| 5 | Web UI: show challenge words + timer countdown | MED | 🔲 | |
 
 ---
 
@@ -177,9 +195,9 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **130 tests** (TS) + 27 Forge = **157 total** | **299 expect() calls**
+- **147 tests** (TS) + 46 Forge = **193 total** | **341 expect() calls**
 - **20+ battles** on Base Sepolia
-- **3 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy
+- **4 scenarios** deployed/ready: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle
 - **27 battle JSONs** with analysis + metadata backfilled
 - **6 challenge reviews** completed
 
@@ -187,6 +205,7 @@ Three failure modes (all verifiable, no judge needed):
 - **InjectionCTF:** `0x3D160303816ed14F05EA8784Ef9e021a02B747C4`
 - **PrisonersDilemma:** `0xa5313FB027eBD60dE2856bA134A689bbd30a6CC9`
 - **SpyVsSpy:** `0x87cb33ed6eF0D18C3eBB1fB5e8250fA49487D9C6`
+- **ChallengeWordBattle:** `0xa2dF845c10cBE9DA434991a91A3f0c3DBC39AAEd`
 - **ClawttackRegistry:** `0xeee01a6846C896efb1a43442434F1A51BF87d3aA`
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 
