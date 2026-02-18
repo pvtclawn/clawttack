@@ -19,7 +19,7 @@ for (const file of files) {
   const filePath = path.join(BATTLES_DIR, file);
   const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 
-  if (raw._analysis) {
+  if (raw._analysis && raw._analysis.agents?.[0]?.role !== 'unknown') {
     skipped++;
     continue;
   }
@@ -27,6 +27,16 @@ for (const file of files) {
   if (!raw.turns || raw.turns.length === 0) {
     skipped++;
     continue;
+  }
+
+  // Build roles map from agents array (battle JSONs store role per agent)
+  const roles: Record<string, string> = raw.roles ?? {};
+  if (Object.keys(roles).length === 0 && raw.agents) {
+    for (const agent of raw.agents) {
+      if (agent.address && agent.role) {
+        roles[agent.address] = agent.role;
+      }
+    }
   }
 
   // Build a minimal RelayBattle for analysis
@@ -40,7 +50,7 @@ for (const file of files) {
     activeAgentIndex: 0,
     commitment: raw.commitment ?? '',
     scenarioData: {},
-    roles: raw.roles ?? {},
+    roles,
     createdAt: raw.createdAt ?? 0,
   };
 

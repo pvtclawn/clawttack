@@ -101,7 +101,7 @@
     "agents": [
       {
         "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-        "role": "unknown",
+        "role": "attacker",
         "stats": {
           "avgMessageLength": 46,
           "totalWords": 183,
@@ -117,7 +117,7 @@
       },
       {
         "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-        "role": "unknown",
+        "role": "defender",
         "stats": {
           "avgMessageLength": 32,
           "totalWords": 126,
@@ -132,8 +132,8 @@
       }
     ],
     "highlights": [
-      "Longest message: Turn 1 by unknown (54 words)",
-      "Most questions: unknown asked 4 questions"
+      "Longest message: Turn 1 by attacker (54 words)",
+      "Most questions: defender asked 4 questions"
     ],
     "tensionCurve": [
       0.8400000000000001,
