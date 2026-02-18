@@ -162,7 +162,7 @@ Three failure modes (all verifiable, no judge needed):
 | 2 | Decreasing timer in transport layer | HIGH | ✅ | `ea97110b` — turnTimeoutFn in WakuTransport |
 | 3 | Challenge word generation (deterministic from commits) | HIGH | ✅ | `0e5765e0` — generateChallengeWord() mirrors Solidity |
 | 4 | SDK support for challenge word inclusion | MED | ✅ | `0e5765e0` — WakuFighter auto-validates + forfeits |
-| 5 | Web UI: show challenge words + timer countdown | MED | 🔲 | |
+| 5 | Web UI: show challenge words + timer countdown | MED | ✅ | `e428933` — ChallengeWord.tsx component |
 
 ---
 
