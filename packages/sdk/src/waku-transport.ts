@@ -4,6 +4,12 @@
 // Waku content topic per battle. Signed turns are validated client-side.
 // Spectator messages are unsigned and visually separated.
 //
+// Architecture:
+//   - nwaku relay node (Docker) handles message routing
+//   - JS light nodes subscribe via Filter protocol
+//   - Publishing via nwaku REST API (JS lightPush peer selection is buggy)
+//   - Cluster 42, shard 0 — private, no RLN required
+//
 // Content topic: /clawttack/1/battle-{battleId}/proto
 //
 // Message types:
@@ -33,19 +39,84 @@ export interface WakuBattleMessage {
 
 /** Waku transport configuration */
 export interface WakuTransportConfig {
-  /** Custom bootstrap nodes (optional — uses default Waku network if empty) */
-  bootstrapNodes?: string[];
-  /** Cluster ID (default: 1 for mainnet, 42 for test) */
+  /** nwaku REST API URL (required) */
+  nwakuRestUrl: string;
+  /** nwaku WebSocket multiaddr — auto-discovered from REST if omitted */
+  nwakuMultiaddr?: string;
+  /** Cluster ID (default: 42 — private, no RLN) */
   clusterId?: number;
+  /** Shard index (default: 0) */
+  shardId?: number;
   /** Content topic prefix (default: /clawttack/1) */
   topicPrefix?: string;
 }
 
 type EventHandler = (...args: any[]) => void;
 
+const DEFAULT_CLUSTER_ID = 42;
+const DEFAULT_SHARD_ID = 0;
+const DEFAULT_TOPIC_PREFIX = '/clawttack/1';
+const PEER_CONNECT_TIMEOUT_MS = 8_000;
+
 /** Build content topic for a battle */
 function battleTopic(prefix: string, battleId: string): string {
   return `${prefix}/battle-${battleId}/proto`;
+}
+
+/** Build the pubsub topic string */
+function pubsubTopic(clusterId: number, shardId: number): string {
+  return `/waku/2/rs/${clusterId}/${shardId}`;
+}
+
+/**
+ * Discover nwaku WebSocket multiaddr from its REST API.
+ * Replaces Docker-internal IP with localhost.
+ */
+async function discoverMultiaddr(restUrl: string): Promise<string> {
+  const res = await fetch(`${restUrl}/debug/v1/info`, {
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!res.ok) throw new Error(`nwaku REST returned ${res.status}`);
+
+  const info = (await res.json()) as { listenAddresses: string[] };
+  const wsAddr = info.listenAddresses?.find((a) => a.includes('/ws/'));
+  if (!wsAddr) throw new Error('nwaku has no WebSocket listener');
+
+  const peerId = wsAddr.split('/p2p/')[1];
+  if (!peerId) throw new Error('Could not extract peer ID from multiaddr');
+
+  // Extract port from REST URL to determine host
+  const url = new URL(restUrl);
+  const host = url.hostname;
+
+  // Map Docker-internal IPs to the REST API host
+  return `/ip4/${host}/tcp/8645/ws/p2p/${peerId}`;
+}
+
+/**
+ * Publish a message via nwaku REST API.
+ * Uses explicit pubsub topic to avoid auto-sharding mismatch.
+ */
+async function publishViaREST(
+  restUrl: string,
+  topic: string,
+  contentTopic: string,
+  data: WakuBattleMessage,
+): Promise<void> {
+  const payload = Buffer.from(JSON.stringify(data)).toString('base64');
+  const encodedTopic = encodeURIComponent(topic);
+
+  const res = await fetch(`${restUrl}/relay/v1/messages/${encodedTopic}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payload, contentTopic }),
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`nwaku REST publish failed: ${res.status} ${body}`);
+  }
 }
 
 /**
@@ -59,6 +130,9 @@ class WakuConnection implements ITransportConnection {
   private _connected = false;
   private node: any; // Waku LightNode
   private contentTopic: string;
+  private pubsubTopic: string;
+  private restUrl: string;
+  private shardId: number;
   private subscription: any;
   private agentAddress?: string;
   private battleId: string;
@@ -68,10 +142,16 @@ class WakuConnection implements ITransportConnection {
     node: any,
     battleId: string,
     contentTopic: string,
+    pubsubTopic: string,
+    restUrl: string,
+    shardId: number,
   ) {
     this.node = node;
     this.battleId = battleId;
     this.contentTopic = contentTopic;
+    this.pubsubTopic = pubsubTopic;
+    this.restUrl = restUrl;
+    this.shardId = shardId;
   }
 
   get connected(): boolean {
@@ -83,15 +163,20 @@ class WakuConnection implements ITransportConnection {
 
     try {
       // Subscribe to the battle topic via Waku Filter
-      const { createDecoder } = await import('@waku/sdk');
-      const decoder = createDecoder(this.contentTopic);
+      const decoder = this.node.createDecoder({
+        contentTopic: this.contentTopic,
+        shardId: this.shardId,
+      });
 
       this.subscription = await this.node.filter.subscribe(
         [decoder],
         (message: any) => this.handleMessage(message),
       );
 
-      // Announce presence via Light Push
+      // Allow filter subscription to register on nwaku
+      await new Promise((r) => setTimeout(r, 1_000));
+
+      // Announce presence via REST API
       await this.broadcast({
         type: 'register',
         battleId: this.battleId,
@@ -130,7 +215,10 @@ class WakuConnection implements ITransportConnection {
   }
 
   /** Send a spectator chat message (no signature required) */
-  async sendSpectatorMessage(message: string, sender: string): Promise<void> {
+  async sendSpectatorMessage(
+    message: string,
+    sender: string,
+  ): Promise<void> {
     await this.broadcast({
       type: 'spectator',
       battleId: this.battleId,
@@ -152,14 +240,20 @@ class WakuConnection implements ITransportConnection {
     });
   }
 
-  on<K extends keyof TransportEvents>(event: K, handler: TransportEvents[K]): void {
+  on<K extends keyof TransportEvents>(
+    event: K,
+    handler: TransportEvents[K],
+  ): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
     this.listeners.get(event)!.add(handler as EventHandler);
   }
 
-  off<K extends keyof TransportEvents>(event: K, handler: TransportEvents[K]): void {
+  off<K extends keyof TransportEvents>(
+    event: K,
+    handler: TransportEvents[K],
+  ): void {
     this.listeners.get(event)?.delete(handler as EventHandler);
   }
 
@@ -167,7 +261,9 @@ class WakuConnection implements ITransportConnection {
     if (this.subscription) {
       try {
         await this.subscription.unsubscribe();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     this._connected = false;
     this.emit('connectionChanged', false);
@@ -177,20 +273,21 @@ class WakuConnection implements ITransportConnection {
 
   private emit(event: string, ...args: unknown[]): void {
     for (const handler of this.listeners.get(event) ?? []) {
-      try { handler(...args); } catch { /* don't crash on handler errors */ }
+      try {
+        handler(...args);
+      } catch {
+        /* don't crash on handler errors */
+      }
     }
   }
 
   private async broadcast(msg: WakuBattleMessage): Promise<void> {
-    const { createEncoder } = await import('@waku/sdk');
-    const encoder = createEncoder({ contentTopic: this.contentTopic });
-    const payload = new TextEncoder().encode(JSON.stringify(msg));
-
-    const result = await this.node.lightPush.send(encoder, { payload });
-
-    if (result.failures && result.failures.length > 0 && result.successes?.length === 0) {
-      throw new Error(`Waku send failed: ${JSON.stringify(result.failures)}`);
-    }
+    await publishViaREST(
+      this.restUrl,
+      this.pubsubTopic,
+      this.contentTopic,
+      msg,
+    );
   }
 
   private handleMessage(wakuMessage: any): void {
@@ -214,7 +311,6 @@ class WakuConnection implements ITransportConnection {
           this.handleSystem(msg);
           break;
         case 'spectator':
-          // Spectator messages — emit as a custom event
           this.emit('spectatorMessage', {
             sender: msg.sender,
             message: msg.payload.message,
@@ -244,7 +340,7 @@ class WakuConnection implements ITransportConnection {
         maxTurns: 20,
         yourTurn,
         commitment: '', // No relay to provide commitment
-        agents: sorted.map(a => ({ address: a, name: a.slice(0, 10) })),
+        agents: sorted.map((a) => ({ address: a, name: a.slice(0, 10) })),
       } satisfies BattleStartData);
     }
   }
@@ -284,19 +380,34 @@ class WakuConnection implements ITransportConnection {
 /**
  * Waku P2P Transport — serverless battle communication.
  *
- * Uses the Waku decentralized messaging network. No relay server needed.
- * Agents find each other via shared content topics derived from battle IDs.
+ * Uses a local nwaku relay node for message routing.
+ * JS light nodes subscribe via Filter, publish via nwaku REST API.
+ *
+ * Setup:
+ *   docker run -d --name nwaku \
+ *     -p 127.0.0.1:8645:8645 -p 127.0.0.1:8003:8003 \
+ *     harbor.status.im/wakuorg/nwaku:v0.34.0 \
+ *     --cluster-id=42 --shard=0 --rln-relay=false \
+ *     --websocket-support=true --websocket-port=8645 \
+ *     --rest=true --rest-address=0.0.0.0 --rest-port=8003 \
+ *     --relay=true --filter=true --lightpush=true --store=false
  */
 export class WakuTransport implements ITransport {
   readonly name = 'waku';
   private node: any;
-  private config: WakuTransportConfig;
+  private config: Required<
+    Pick<WakuTransportConfig, 'nwakuRestUrl' | 'clusterId' | 'shardId' | 'topicPrefix'>
+  > & { nwakuMultiaddr?: string };
   private connections = new Map<string, WakuConnection>();
-  private topicPrefix: string;
 
-  constructor(config: WakuTransportConfig = {}) {
-    this.config = config;
-    this.topicPrefix = config.topicPrefix ?? '/clawttack/1';
+  constructor(config: WakuTransportConfig) {
+    this.config = {
+      nwakuRestUrl: config.nwakuRestUrl,
+      nwakuMultiaddr: config.nwakuMultiaddr,
+      clusterId: config.clusterId ?? DEFAULT_CLUSTER_ID,
+      shardId: config.shardId ?? DEFAULT_SHARD_ID,
+      topicPrefix: config.topicPrefix ?? DEFAULT_TOPIC_PREFIX,
+    };
   }
 
   async connect(battleId: string): Promise<ITransportConnection> {
@@ -305,8 +416,17 @@ export class WakuTransport implements ITransport {
       await this.initNode();
     }
 
-    const topic = battleTopic(this.topicPrefix, battleId);
-    const connection = new WakuConnection(this.node, battleId, topic);
+    const contentTopic = battleTopic(this.config.topicPrefix, battleId);
+    const psTopic = pubsubTopic(this.config.clusterId, this.config.shardId);
+
+    const connection = new WakuConnection(
+      this.node,
+      battleId,
+      contentTopic,
+      psTopic,
+      this.config.nwakuRestUrl,
+      this.config.shardId,
+    );
     this.connections.set(battleId, connection);
     return connection;
   }
@@ -318,23 +438,44 @@ export class WakuTransport implements ITransport {
     this.connections.clear();
 
     if (this.node) {
-      try { await this.node.stop(); } catch { /* ignore */ }
+      try {
+        await this.node.stop();
+      } catch {
+        /* ignore */
+      }
       this.node = null;
     }
   }
 
   private async initNode(): Promise<void> {
-    const { createLightNode, waitForRemotePeer } = await import('@waku/sdk');
+    const { createLightNode } = await import('@waku/sdk');
 
-    const opts: Record<string, unknown> = {};
-    if (this.config.bootstrapNodes && this.config.bootstrapNodes.length > 0) {
-      opts.bootstrapPeers = this.config.bootstrapNodes;
-    } else {
-      opts.defaultBootstrap = true;
-    }
+    // Discover nwaku multiaddr if not provided
+    const multiaddr =
+      this.config.nwakuMultiaddr ??
+      (await discoverMultiaddr(this.config.nwakuRestUrl));
 
-    this.node = await createLightNode(opts);
+    this.node = await createLightNode({
+      bootstrapPeers: [multiaddr],
+      networkConfig: {
+        clusterId: this.config.clusterId,
+        shards: [this.config.shardId],
+      },
+      libp2p: {
+        filterMultiaddrs: false,
+        hideWebSocketInfo: true,
+      },
+    });
     await this.node.start();
-    await waitForRemotePeer(this.node);
+
+    // Wait for peer connection (no waitForRemotePeer — unreliable)
+    await new Promise((r) => setTimeout(r, PEER_CONNECT_TIMEOUT_MS));
+
+    const peers = this.node.libp2p?.getPeers?.() ?? [];
+    if (peers.length === 0) {
+      throw new Error(
+        `WakuTransport: no peers after ${PEER_CONNECT_TIMEOUT_MS}ms. Is nwaku running at ${this.config.nwakuRestUrl}?`,
+      );
+    }
   }
 }
