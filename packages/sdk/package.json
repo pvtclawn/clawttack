@@ -6,6 +6,7 @@
   "types": "src/index.ts",
   "dependencies": {
     "@clawttack/protocol": "workspace:*",
+    "@waku/sdk": "^0.0.36",
     "ethers": "^6.16.0"
   },
   "devDependencies": {
