@@ -1,4 +1,4 @@
-# Clawttack — Build Plan (Updated 2026-02-18 03:06)
+# Clawttack — Build Plan (Updated 2026-02-18 04:36)
 
 ## Current Status
 
@@ -106,7 +106,67 @@ Agent B ──REST──→ nwaku (Docker) ──filter──→ Agent A
 
 ---
 
-## M5: Growth (future)
+## M4.5: Waku Hardening (RED TEAM FIXES — DONE ✅)
+
+From red team review `2026-02-18--waku-p2p-red-team.md` (score: 4/10 → 7/10):
+
+| # | Task | Priority | Status | Commit |
+|---|------|----------|--------|--------|
+| 1 | ECDSA signature verification on incoming turns | 🔴 CRITICAL | ✅ | `9f6fd956` |
+| 2 | Signed registration messages (prove address ownership) | 🔴 CRITICAL | ✅ | `9f6fd956` |
+| 3 | Turn ordering + duplicate rejection | 🟡 HIGH | ✅ | `9f6fd956` |
+| 4 | Turn timeout (forfeit on stall, 60s default) | 🟡 HIGH | ✅ | `9f6fd956` |
+| 5 | nwaku Docker restart policy (unless-stopped) | 🟢 LOW | ✅ | `9f6fd956` |
+| 6 | Peer connection polling (replace 8s sleep) | 🟢 LOW | 🔲 | deferred |
+
+**Game theory rationale (Ch.8):** Without sig verification, Waku battles are one-shot games with anonymous strangers → zero reputation → zero cooperation incentive. Identity continuity is the prerequisite for the entire Elo/reputation system to function.
+
+---
+
+## M5: ChallengeWordBattle — Trustless Verifiable Outcome (NEXT)
+
+**Egor's design from 03:21 session + decreasing timer idea (04:14):**
+
+Core mechanic:
+1. Both agents commit `hash(strategy_seed)` on-chain pre-battle
+2. Each turn generates deterministic challenge word: `keccak256(turnNumber + commitA + commitB)[0:4]`
+3. Response MUST contain the challenge word — binary, on-chain verifiable
+4. **Decreasing timer** — each turn gets less time (e.g. 60s → 55s → 50s → ...)
+
+Three failure modes (all verifiable, no judge needed):
+- ❌ Miss the challenge word → lose
+- ❌ Leak your secret → lose
+- ⏱️ Timeout (inference too slow) → lose
+
+| # | Task | Priority | Status |
+|---|------|----------|--------|
+| 1 | ChallengeWordBattle.sol (commit-reveal + word check) | HIGH | 🔲 |
+| 2 | Decreasing timer in transport layer | HIGH | 🔲 |
+| 3 | Challenge word generation (deterministic from commits) | HIGH | 🔲 |
+| 4 | SDK support for challenge word inclusion | MED | 🔲 |
+| 5 | Web UI: show challenge words + timer countdown | MED | 🔲 |
+
+---
+
+## M6: Product Tracks (Egor's Vision)
+
+**Two audiences, same protocol:**
+
+### Arena Mode — Entertainment 🐓
+- Spectator stakes (bet on contestants)
+- Decreasing timer pressure (bullet chess for AI)
+- Live spectator view (Waku topic subscription)
+- Leaderboard + seasons + tournaments
+
+### Pentest Mode — Utility 🔐
+- Submit your system prompt → attacker agents stress-test it
+- Pay-per-test (x402 or direct escrow)
+- Report generation (which tactics worked, vulnerability score)
+- Practical red-teaming as a service
+
+---
+
+## M7: Growth (future)
 - Entry fees + prize pools (real ETH on Base mainnet)
 - Community scenario deployment (ERC-8021 revenue share)
 - Mainnet deployment
@@ -117,7 +177,7 @@ Agent B ──REST──→ nwaku (Docker) ──filter──→ Agent A
 ---
 
 ### Stats
-- **120 tests** (TS) + 27 Forge = **147 total** | **283 expect() calls**
+- **130 tests** (TS) + 27 Forge = **157 total** | **299 expect() calls**
 - **20+ battles** on Base Sepolia
 - **3 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy
 - **27 battle JSONs** with analysis + metadata backfilled
@@ -131,4 +191,4 @@ Agent B ──REST──→ nwaku (Docker) ──filter──→ Agent A
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 
 ### Red Team Score
-**8/10** — solid MVP with working P2P transport. Remaining risks: nwaku single point (mitigated: protocol is decentralized, node is replaceable), secret pool predictability (88-word pool + no-repeat), IPFS immutability (blocked on Pinata).
+**Waku P2P: 7/10** (M4.5 hardening complete — sig verification, turn ordering, timeout all implemented). **Overall: 8/10**. Remaining: peer connection polling (minor), IPFS (blocked on Pinata).
