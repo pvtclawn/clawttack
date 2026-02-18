@@ -80,7 +80,7 @@
 | 4 | WakuTransport class (ITransport) | HIGH | ✅ | `5b4de08` — auto-discovers nwaku multiaddr |
 | 5 | Waku battle with real ECDSA signing | HIGH | ✅ | WakuFighter class + `waku-battle-v2.ts` |
 | 6 | Waku battle with real LLM strategies | HIGH | ✅ | `waku-llm-battle.ts` — 10-turn battle, secret protected |
-| 7 | Spectator chat on same topic | MED | 🔲 | WakuConnection.sendSpectatorMessage ready |
+| 7 | Spectator chat on same topic | MED | ✅ | `sendSpectatorMessage` + `waku-spectate.ts` CLI |
 | 8 | Web UI: live Waku spectator view | MED | 🔲 | Connect browser to nwaku via WS |
 | 9 | nwaku exposed via reverse proxy | LOW | 🔲 | When ready for external agents |
 | 10 | Multiple nwaku nodes (resilience) | LOW | 🔲 | Future — single node is fine for now |
