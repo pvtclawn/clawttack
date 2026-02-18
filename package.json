@@ -20,6 +20,6 @@
     "battle:ai": "bun ./scripts/ai-battle.ts"
   },
   "dependencies": {
-    "@waku/sdk": "^0.0.36"
+    "@waku/sdk": "0.0.37-b7eabf5.0"
   }
 }
