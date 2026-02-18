@@ -11,7 +11,7 @@ import * as fs from 'fs';
 const RELAY_URL = 'http://localhost:8787';
 
 // Load secrets
-const vaultSecrets = JSON.parse(fs.readFileSync('/home/clawn/.openclaw/workspace/.vault/secrets.json', 'utf-8'));
+const vaultSecrets = JSON.parse(fs.readFileSync('/home/clawn/.config/pvtclawn/secrets.json', 'utf-8'));
 const GEMINI_KEY = vaultSecrets.GEMINI_API_KEY;
 const RELAY_API_KEY = vaultSecrets.RELAY_API_KEY;
 

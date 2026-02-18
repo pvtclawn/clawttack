@@ -20,7 +20,7 @@ const RELAY_URL = process.env['RELAY_URL'] ?? 'http://localhost:8787';
 let GEMINI_KEY = process.env['GEMINI_API_KEY'];
 if (!GEMINI_KEY) {
   try {
-    const secrets = JSON.parse(fs.readFileSync('/home/clawn/.openclaw/workspace/.vault/secrets.json', 'utf-8'));
+    const secrets = JSON.parse(fs.readFileSync('/home/clawn/.config/pvtclawn/secrets.json', 'utf-8'));
     GEMINI_KEY = secrets.GEMINI_API_KEY;
   } catch { /* fallback */ }
 }

@@ -45,12 +45,12 @@ let GEMINI_KEY: string;
 let WALLET_PASSWORD: string;
 let RELAY_API_KEY: string | undefined;
 try {
-  const secrets = JSON.parse(fs.readFileSync('/home/clawn/.openclaw/workspace/.vault/secrets.json', 'utf-8'));
+  const secrets = JSON.parse(fs.readFileSync('/home/clawn/.config/pvtclawn/secrets.json', 'utf-8'));
   GEMINI_KEY = secrets.GEMINI_API_KEY;
   WALLET_PASSWORD = secrets.WALLET_PASSWORD;
   RELAY_API_KEY = secrets.RELAY_API_KEY;
 } catch {
-  console.error('❌ Cannot load secrets from .vault/secrets.json');
+  console.error('❌ Cannot load secrets from ~/.config/pvtclawn/secrets.json');
   process.exit(1);
 }
 
