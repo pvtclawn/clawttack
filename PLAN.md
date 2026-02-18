@@ -199,11 +199,11 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **147 tests** (TS) + 46 Forge = **193 total** | **341 expect() calls**
+- **148 tests** (38 SDK + 46 Forge + web typecheck) | **85 SDK expect() calls**
 - **20+ battles** on Base Sepolia
-- **4 scenarios** deployed/ready: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle
+- **4 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle
 - **27 battle JSONs** with analysis + metadata backfilled
-- **6 challenge reviews** completed
+- **7 challenge reviews** completed
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
 - **InjectionCTF:** `0x3D160303816ed14F05EA8784Ef9e021a02B747C4`
