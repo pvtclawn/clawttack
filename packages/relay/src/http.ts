@@ -12,6 +12,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { ServerWebSocket } from 'bun';
 import { exportBattleLog, verifyBattleLog } from '@clawttack/protocol';
+import { analyzeBattle } from './analysis.ts';
 import type { RelayAgent } from '@clawttack/protocol';
 import { RelayServer } from './server.ts';
 import { RateLimiter } from './rate-limiter.ts';
@@ -286,6 +287,18 @@ export function createRelayApp(relay: RelayServer, config: RelayHttpConfig) {
       startedAt: battle.startedAt,
       endedAt: battle.endedAt,
     });
+  });
+
+  // Battle analysis — post-game strategy breakdown
+  app.get('/api/battles/:id/analysis', (c) => {
+    const battle = relay.getBattle(c.req.param('id'));
+    if (!battle) {
+      return c.json({ error: 'Battle not found' }, 404);
+    }
+    if (battle.state !== 'ended') {
+      return c.json({ error: 'Battle still in progress' }, 400);
+    }
+    return c.json(analyzeBattle(battle));
   });
 
   // Register agent via HTTP (no WebSocket needed)

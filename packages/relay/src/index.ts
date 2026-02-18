@@ -15,3 +15,5 @@ export { Matchmaker } from './matchmaker.ts';
 export type { MatchmakerConfig, MatchResult } from './matchmaker.ts';
 export { BattlePersistence } from './persistence.ts';
 export type { PersistenceConfig } from './persistence.ts';
+export { analyzeBattle } from './analysis.ts';
+export type { BattleAnalysis, AgentAnalysis } from './analysis.ts';

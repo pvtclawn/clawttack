@@ -7,6 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { RelayBattle } from '@clawttack/protocol';
+import { analyzeBattle } from './analysis.ts';
 
 export interface PersistenceConfig {
   /** Directory to store battle logs */
@@ -42,6 +43,8 @@ export class BattlePersistence {
         signatures: 'ecdsa-secp256k1',
         savedAt: new Date().toISOString(),
       },
+      // Post-game analysis
+      _analysis: battle.state === 'ended' ? analyzeBattle(battle) : undefined,
     };
     const filePath = path.join(this.config.dataDir, `${battle.id}.json`);
     const data = JSON.stringify(sanitized, null, 2);
