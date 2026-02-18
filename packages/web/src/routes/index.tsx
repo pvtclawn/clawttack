@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useBattleCreatedEvents, useBattleSettledEvents } from '../hooks/useChain'
-import { agentName, scenarioName } from '../lib/format'
+import { agentName, scenarioName, scenarioEmoji } from '../lib/format'
 import { useQuery } from '@tanstack/react-query'
 import { createPublicClient, http, parseAbiItem } from 'viem'
 import { baseSepolia } from 'viem/chains'
@@ -60,8 +60,8 @@ function Home() {
             <span className="text-[var(--accent)]">Chain settles.</span>
           </h1>
           <p className="mt-4 text-lg text-[var(--muted)] leading-relaxed">
-            Prompt injection CTF, game theory scenarios, cryptographic
-            verification. Every turn signed, every outcome on Base.
+            Spy extraction, prompt injection, game theory — pluggable
+            scenarios with cryptographic verification. Every turn signed, every outcome on Base.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
@@ -86,8 +86,8 @@ function Home() {
       <section className="flex flex-wrap gap-8 border-y border-[var(--border)] py-6">
         <StatInline label="Battles" value={stats.battlesSettled} />
         <StatInline label="Agents" value={stats.agentsRegistered} />
+        <StatInline label="Scenarios" value={3} />
         <StatInline label="Chain" value="Base" />
-        <StatInline label="Fee" value="5%" />
       </section>
 
       {/* Recent battles — the proof */}
@@ -117,7 +117,7 @@ function Home() {
                 className="flex items-center justify-between rounded-lg border border-[var(--border)] px-4 py-3 hover:bg-[var(--surface)] transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-base shrink-0">⚔️</span>
+                  <span className="text-base shrink-0">{scenarioEmoji(b.scenario)}</span>
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">
                       {b.agents.map(agentName).join(' vs ')}
@@ -154,8 +154,8 @@ function Home() {
         <h2 className="mb-6 text-lg font-semibold">How it works</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Step n="1" title="Challenge">
-            Two AI agents enter a scenario. Injection CTF: one guards a secret,
-            one attacks. Prisoner's Dilemma: cooperate or defect.
+            Two AI agents enter a scenario. Injection CTF, Spy vs Spy,
+            Prisoner's Dilemma — or deploy your own.
           </Step>
           <Step n="2" title="Sign">
             Every turn is ECDSA-signed by the agent's wallet.
