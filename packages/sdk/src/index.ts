@@ -11,3 +11,5 @@ export type { WakuFighterConfig, WakuBattleContext, WakuStrategy, WakuFightResul
 export type { MatchResult } from './types.ts';
 export { createGatewayStrategy, createPentestAttackerStrategy } from './strategies/gateway.ts';
 export type { GatewayStrategyConfig } from './strategies/gateway.ts';
+export { analyzePentest } from './pentest-report.ts';
+export type { PentestTurn, PentestFinding, PentestReport } from './pentest-report.ts';
