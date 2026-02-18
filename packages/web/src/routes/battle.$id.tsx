@@ -25,6 +25,27 @@ interface Turn {
   role: string
 }
 
+interface AgentAnalysis {
+  address: string
+  role: string
+  stats: {
+    avgMessageLength: number
+    totalWords: number
+    questionCount: number
+    exclamationCount: number
+    longestMessage: number
+    shortestMessage: number
+  }
+  tactics: string[]
+}
+
+interface BattleAnalysis {
+  totalTurns: number
+  agents: AgentAnalysis[]
+  highlights: string[]
+  tensionCurve: number[]
+}
+
 interface BattleLog {
   battleId: string
   scenarioId: string
@@ -33,6 +54,7 @@ interface BattleLog {
   outcome: { winnerAddress: string | null; reason: string } | null
   commitment: string
   merkleRoot?: string
+  _analysis?: BattleAnalysis
 }
 
 function useBattleLog(battleIdHash: string) {
@@ -243,6 +265,97 @@ function BattlePage() {
 
       {/* Signature Verification */}
       {log.turns.length > 0 && <SignatureVerifier turns={log.turns} battleId={log.battleId} />}
+
+      {/* Battle Analysis */}
+      {log._analysis && (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-4">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            📊 Battle Analysis
+          </h3>
+
+          {/* Agent Strategy Cards */}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {log._analysis.agents.map((agent) => {
+              const name = log.agents.find(a => a.address === agent.address)?.name ?? agent.address.slice(0, 10)
+              const isLeft = agent.role === 'attacker' || agent.role === 'spy'
+              return (
+                <div
+                  key={agent.address}
+                  className={`rounded-lg p-4 space-y-2 ${
+                    isLeft
+                      ? 'bg-red-950/20 border border-red-900/20'
+                      : 'bg-blue-950/20 border border-blue-900/20'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{name}</span>
+                    <span className="text-xs text-[var(--muted)]">{agent.role}</span>
+                  </div>
+                  {/* Tactics */}
+                  <div className="flex flex-wrap gap-1">
+                    {agent.tactics.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-block rounded-full bg-[var(--bg)] px-2 py-0.5 text-xs text-[var(--accent)]"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                  {/* Stats */}
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <div className="text-sm font-bold text-[var(--accent)]">{agent.stats.totalWords}</div>
+                      <div className="text-[10px] text-[var(--muted)]">Words</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-[var(--accent)]">{agent.stats.avgMessageLength}</div>
+                      <div className="text-[10px] text-[var(--muted)]">Avg/Turn</div>
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-[var(--accent)]">{agent.stats.questionCount}</div>
+                      <div className="text-[10px] text-[var(--muted)]">Questions</div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Highlights */}
+          {log._analysis.highlights.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-[var(--muted)]">Highlights</div>
+              {log._analysis.highlights.map((h, i) => (
+                <div key={i} className="text-xs text-[var(--muted)] flex items-center gap-2">
+                  <span>💡</span> {h}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Tension Curve (simple ASCII bar chart) */}
+          {log._analysis.tensionCurve.length > 0 && (
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-[var(--muted)]">Tension</div>
+              <div className="flex items-end gap-px h-8">
+                {log._analysis.tensionCurve.map((t, i) => (
+                  <div
+                    key={i}
+                    className="flex-1 rounded-t bg-[var(--accent)] opacity-70"
+                    style={{ height: `${Math.max(4, t * 100)}%` }}
+                    title={`Turn ${i + 1}: ${Math.round(t * 100)}%`}
+                  />
+                ))}
+              </div>
+              <div className="flex justify-between text-[10px] text-[var(--muted)]">
+                <span>Turn 1</span>
+                <span>Turn {log._analysis.tensionCurve.length}</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Verification */}
       {log.merkleRoot && (
