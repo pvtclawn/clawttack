@@ -14,7 +14,7 @@
  */
 
 const NWAKU_WS = '/ip4/127.0.0.1/tcp/8645/ws';
-const NWAKU_REST = 'http://127.0.0.1:8645';
+const NWAKU_REST = 'http://127.0.0.1:8003';
 const CONTENT_TOPIC = '/clawttack/1/test-local/proto';
 
 async function main() {
@@ -41,50 +41,59 @@ async function main() {
   try {
     const infoRes = await fetch(`${NWAKU_REST}/debug/v1/info`);
     const info = await infoRes.json() as { listenAddresses: string[] };
-    // Find the WebSocket multiaddr
-    nwakuMultiaddr = info.listenAddresses?.find(a => a.includes('/ws')) ?? NWAKU_WS;
+    // Find the WebSocket multiaddr and replace Docker IP with localhost
+    const wsAddr = info.listenAddresses?.find(a => a.includes('/ws/'));
+    if (wsAddr) {
+      const peerId = wsAddr.split('/p2p/')[1];
+      nwakuMultiaddr = `/ip4/127.0.0.1/tcp/8645/ws/p2p/${peerId}`;
+    } else {
+      nwakuMultiaddr = NWAKU_WS;
+    }
     console.log('   📍 nwaku multiaddr:', nwakuMultiaddr);
   } catch {
     nwakuMultiaddr = NWAKU_WS;
     console.log('   Using default multiaddr:', nwakuMultiaddr);
   }
 
-  const { createLightNode, waitForRemotePeer, createEncoder, createDecoder } = await import('@waku/sdk');
+  const { createLightNode } = await import('@waku/sdk');
 
-  // 1. Create two light nodes pointing at our local nwaku
-  console.log('\n1️⃣  Creating Node A (bootstrap → local nwaku)...');
-  const nodeA = await createLightNode({
+  // 1. Create two light nodes pointing at our local nwaku (cluster 42 = private, no RLN)
+  const nodeOpts = {
     bootstrapPeers: [nwakuMultiaddr],
+    networkConfig: { clusterId: 42, contentTopics: [CONTENT_TOPIC] },
     libp2p: { filterMultiaddrs: false, hideWebSocketInfo: true },
-  });
+  };
+
+  console.log('\n1️⃣  Creating Node A (bootstrap → local nwaku, cluster 42)...');
+  const nodeA = await createLightNode(nodeOpts);
   await nodeA.start();
   console.log('   ✅ Node A started');
 
-  console.log('2️⃣  Creating Node B (bootstrap → local nwaku)...');
-  const nodeB = await createLightNode({
-    bootstrapPeers: [nwakuMultiaddr],
-    libp2p: { filterMultiaddrs: false, hideWebSocketInfo: true },
-  });
+  console.log('2️⃣  Creating Node B (bootstrap → local nwaku, cluster 42)...');
+  const nodeB = await createLightNode(nodeOpts);
   await nodeB.start();
   console.log('   ✅ Node B started');
 
-  // 2. Wait for peers (should be fast with local bootstrap)
-  console.log('3️⃣  Waiting for remote peers...');
-  try {
-    await Promise.all([
-      waitForRemotePeer(nodeA, undefined, AbortSignal.timeout(10_000)),
-      waitForRemotePeer(nodeB, undefined, AbortSignal.timeout(10_000)),
-    ]);
-    console.log('   ✅ Both nodes peered with nwaku');
-  } catch (err) {
-    console.error('   ❌ Peer connection failed:', err);
+  // 2. Give nodes time to connect (skip waitForRemotePeer which is flaky)
+  console.log('3️⃣  Waiting 5s for peer connections...');
+  await new Promise(r => setTimeout(r, 5000));
+  
+  // Check connected peers
+  const peersA = nodeA.libp2p?.getPeers?.() ?? [];
+  const peersB = nodeB.libp2p?.getPeers?.() ?? [];
+  console.log(`   Node A peers: ${peersA.length}, Node B peers: ${peersB.length}`);
+  
+  if (peersA.length === 0 && peersB.length === 0) {
+    console.error('   ❌ No peers connected. Check nwaku WebSocket config.');
     await cleanup(nodeA, nodeB);
     process.exit(1);
   }
+  console.log('   ✅ Peers found');
 
-  // 3. Node B subscribes
+  // 3. Node B subscribes (use node's decoder for correct routing)
   console.log('4️⃣  Node B subscribing to filter...');
-  const decoder = createDecoder(CONTENT_TOPIC);
+  const PUBSUB_TOPIC = '/waku/2/rs/42/0';
+  const decoder = nodeB.createDecoder({ contentTopic: CONTENT_TOPIC, shardId: 0 });
   let received = false;
   let receivedMessage = '';
 
@@ -106,9 +115,9 @@ async function main() {
     process.exit(1);
   }
 
-  // 4. Node A sends
+  // 4. Node A sends (use node's encoder for correct routing)
   console.log('5️⃣  Node A sending via Light Push...');
-  const encoder = createEncoder({ contentTopic: CONTENT_TOPIC });
+  const encoder = nodeA.createEncoder({ contentTopic: CONTENT_TOPIC, shardId: 0 });
   const testMessage = JSON.stringify({
     type: 'turn',
     battleId: 'test-local-001',
