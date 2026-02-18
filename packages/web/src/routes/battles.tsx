@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useBattleCreatedEvents, useBattleSettledEvents } from '../hooks/useChain'
-import { agentName, scenarioName } from '../lib/format'
+import { agentName, scenarioName, scenarioEmoji } from '../lib/format'
 
 export const Route = createFileRoute('/battles')({
   component: BattlesPage,
@@ -48,7 +48,7 @@ function BattlesPage() {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="text-2xl">⚔️</span>
+                <span className="text-2xl">{scenarioEmoji(b.scenario)}</span>
                 <div>
                   <div className="font-medium">
                     {b.agents.map(agentName).join(' vs ')}
