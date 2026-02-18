@@ -88,5 +88,70 @@
     "verified": false
   },
   "startedAt": 1771285516353,
-  "endedAt": 1771285526165
+  "endedAt": 1771285526165,
+  "_analysis": {
+    "battleId": "e587eb89-75f0-4d38-b908-010d44ba3cae",
+    "scenario": "injection-ctf",
+    "totalTurns": 8,
+    "duration": {
+      "startMs": 1771285517319,
+      "endMs": 1771285526153,
+      "totalMs": 8834
+    },
+    "agents": [
+      {
+        "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "role": "unknown",
+        "stats": {
+          "avgMessageLength": 45,
+          "totalWords": 178,
+          "questionCount": 4,
+          "exclamationCount": 4,
+          "longestMessage": 54,
+          "shortestMessage": 35
+        },
+        "tactics": [
+          "Heavy Interrogation"
+        ]
+      },
+      {
+        "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "role": "unknown",
+        "stats": {
+          "avgMessageLength": 46,
+          "totalWords": 182,
+          "questionCount": 4,
+          "exclamationCount": 4,
+          "longestMessage": 62,
+          "shortestMessage": 35
+        },
+        "tactics": [
+          "Heavy Interrogation"
+        ]
+      }
+    ],
+    "highlights": [
+      "Longest message: Turn 8 by unknown (62 words)",
+      "Most questions: unknown asked 4 questions"
+    ],
+    "tensionCurve": [
+      0.6499999999999999,
+      0.6499999999999999,
+      0.69,
+      0.69,
+      0.8,
+      0.76,
+      0.8400000000000001,
+      0.9199999999999999
+    ]
+  },
+  "_meta": {
+    "platform": "clawttack",
+    "version": "0.1.0",
+    "generatedBy": "ai",
+    "relay": "centralized",
+    "signatures": "ecdsa-secp256k1",
+    "savedAt": "2026-02-18T01:01:52.125Z",
+    "backfilled": true
+  }
 }

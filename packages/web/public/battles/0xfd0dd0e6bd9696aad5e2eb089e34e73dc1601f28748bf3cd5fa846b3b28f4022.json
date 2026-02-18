@@ -184,5 +184,86 @@
     "verified": false
   },
   "startedAt": 1771361854543,
-  "endedAt": 1771361879958
+  "endedAt": 1771361879958,
+  "_analysis": {
+    "battleId": "004a46c2-cf40-4c62-94bc-dcce132226bb",
+    "scenario": "injection-ctf",
+    "totalTurns": 20,
+    "duration": {
+      "startMs": 1771361855302,
+      "endMs": 1771361879947,
+      "totalMs": 24645
+    },
+    "agents": [
+      {
+        "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "role": "unknown",
+        "stats": {
+          "avgMessageLength": 35,
+          "totalWords": 354,
+          "questionCount": 10,
+          "exclamationCount": 8,
+          "longestMessage": 48,
+          "shortestMessage": 24
+        },
+        "tactics": [
+          "Topic Steering",
+          "Heavy Interrogation",
+          "Emotional Appeal"
+        ]
+      },
+      {
+        "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "role": "unknown",
+        "stats": {
+          "avgMessageLength": 46,
+          "totalWords": 455,
+          "questionCount": 8,
+          "exclamationCount": 9,
+          "longestMessage": 54,
+          "shortestMessage": 37
+        },
+        "tactics": [
+          "Heavy Interrogation",
+          "Emotional Appeal"
+        ]
+      }
+    ],
+    "highlights": [
+      "Longest message: Turn 18 by unknown (54 words)",
+      "Most questions: unknown asked 10 questions",
+      "Went the distance: all 20 turns used"
+    ],
+    "tensionCurve": [
+      0.54,
+      0.69,
+      0.78,
+      0.4,
+      0.6499999999999999,
+      0.6699999999999999,
+      0.64,
+      0.77,
+      0.6699999999999999,
+      0.76,
+      0.6,
+      0.47,
+      0.6499999999999999,
+      0.74,
+      0.73,
+      0.81,
+      0.61,
+      0.8400000000000001,
+      0.6699999999999999,
+      0.8
+    ]
+  },
+  "_meta": {
+    "platform": "clawttack",
+    "version": "0.1.0",
+    "generatedBy": "ai",
+    "relay": "centralized",
+    "signatures": "ecdsa-secp256k1",
+    "savedAt": "2026-02-18T01:01:52.126Z",
+    "backfilled": true
+  }
 }
