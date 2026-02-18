@@ -19,12 +19,20 @@ async function main() {
 
   // 1. Create two light nodes (simulating two agents)
   console.log('1️⃣  Creating Node A...');
-  const nodeA = await createLightNode({ defaultBootstrap: true });
+  const nodeA = await createLightNode({
+    defaultBootstrap: true,
+    networkConfig: { clusterId: 1, contentTopics: [CONTENT_TOPIC] },
+    libp2p: { filterMultiaddrs: false },
+  });
   await nodeA.start();
   console.log('   ✅ Node A started');
 
   console.log('2️⃣  Creating Node B...');
-  const nodeB = await createLightNode({ defaultBootstrap: true });
+  const nodeB = await createLightNode({
+    defaultBootstrap: true,
+    networkConfig: { clusterId: 1, contentTopics: [CONTENT_TOPIC] },
+    libp2p: { filterMultiaddrs: false },
+  });
   await nodeB.start();
   console.log('   ✅ Node B started');
 
