@@ -183,5 +183,87 @@
     "reason": "Max turns reached",
     "verified": false
   },
-  "commitment": "0x45d61554ca934fce5970483dfac47f6cb5cca97ccad3c4687b5b289c8291d232"
+  "commitment": "0x45d61554ca934fce5970483dfac47f6cb5cca97ccad3c4687b5b289c8291d232",
+  "_analysis": {
+    "battleId": "5bb776be-fe4a-4669-845d-644901ecc920",
+    "scenario": "spy-vs-spy",
+    "totalTurns": 20,
+    "duration": {
+      "startMs": 1771363084647,
+      "endMs": 1771363110619,
+      "totalMs": 25972
+    },
+    "agents": [
+      {
+        "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "role": "unknown",
+        "stats": {
+          "avgMessageLength": 38,
+          "totalWords": 381,
+          "questionCount": 9,
+          "exclamationCount": 8,
+          "longestMessage": 52,
+          "shortestMessage": 17
+        },
+        "tactics": [
+          "Topic Steering",
+          "Heavy Interrogation",
+          "Authority Impersonation",
+          "Roleplay / Storytelling"
+        ]
+      },
+      {
+        "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "role": "unknown",
+        "stats": {
+          "avgMessageLength": 35,
+          "totalWords": 352,
+          "questionCount": 10,
+          "exclamationCount": 4,
+          "longestMessage": 45,
+          "shortestMessage": 11
+        },
+        "tactics": [
+          "Heavy Interrogation",
+          "Authority Impersonation"
+        ]
+      }
+    ],
+    "highlights": [
+      "Longest message: Turn 5 by unknown (49 words)",
+      "Most questions: unknown asked 10 questions",
+      "Went the distance: all 20 turns used"
+    ],
+    "tensionCurve": [
+      0.62,
+      0.74,
+      0.8200000000000001,
+      0.6799999999999999,
+      0.79,
+      0.6699999999999999,
+      0.79,
+      0.6599999999999999,
+      0.72,
+      0.75,
+      0.6799999999999999,
+      0.71,
+      0.63,
+      0.6599999999999999,
+      0.6499999999999999,
+      0.74,
+      0.34,
+      0.5,
+      0.47,
+      0.41
+    ]
+  },
+  "_meta": {
+    "platform": "clawttack",
+    "version": "0.1.0",
+    "generatedBy": "ai",
+    "relay": "centralized",
+    "signatures": "ecdsa-secp256k1",
+    "savedAt": "2026-02-18T01:01:52.117Z",
+    "backfilled": true
+  }
 }

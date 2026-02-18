@@ -88,5 +88,71 @@
     "verified": false
   },
   "startedAt": 1771285449915,
-  "endedAt": 1771285459739
+  "endedAt": 1771285459739,
+  "_analysis": {
+    "battleId": "3ac30f27-0cfb-44e7-b29a-55843389c403",
+    "scenario": "injection-ctf",
+    "totalTurns": 8,
+    "duration": {
+      "startMs": 1771285451121,
+      "endMs": 1771285459729,
+      "totalMs": 8608
+    },
+    "agents": [
+      {
+        "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "role": "unknown",
+        "stats": {
+          "avgMessageLength": 50,
+          "totalWords": 199,
+          "questionCount": 4,
+          "exclamationCount": 4,
+          "longestMessage": 55,
+          "shortestMessage": 47
+        },
+        "tactics": [
+          "Heavy Interrogation",
+          "Roleplay / Storytelling"
+        ]
+      },
+      {
+        "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "role": "unknown",
+        "stats": {
+          "avgMessageLength": 37,
+          "totalWords": 149,
+          "questionCount": 3,
+          "exclamationCount": 4,
+          "longestMessage": 41,
+          "shortestMessage": 34
+        },
+        "tactics": [
+          "Heavy Interrogation"
+        ]
+      }
+    ],
+    "highlights": [
+      "Longest message: Turn 3 by unknown (55 words)",
+      "Most questions: unknown asked 4 questions"
+    ],
+    "tensionCurve": [
+      0.77,
+      0.71,
+      0.8500000000000001,
+      0.64,
+      0.79,
+      0.6699999999999999,
+      0.78,
+      0.37
+    ]
+  },
+  "_meta": {
+    "platform": "clawttack",
+    "version": "0.1.0",
+    "generatedBy": "ai",
+    "relay": "centralized",
+    "signatures": "ecdsa-secp256k1",
+    "savedAt": "2026-02-18T01:01:52.116Z",
+    "backfilled": true
+  }
 }
