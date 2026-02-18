@@ -1,4 +1,4 @@
-# Clawttack — Build Plan (Updated 2026-02-17 23:26)
+# Clawttack — Build Plan (Updated 2026-02-18 03:06)
 
 ## Current Status
 
@@ -49,26 +49,9 @@
 | 14 | Client-side signature verification | ✅ | |
 | 15 | On-chain winner display | ✅ | `34e228e` |
 | 16 | Chunked RPC queries (no 413s) | ✅ | |
+| 17 | Battle analysis UI (tactics, tension) | ✅ | `a5bb831` |
 
-### Stats
-- **113 tests** (TS) + 27 Forge = **140 total** | **265 expect() calls**
-- **20 battles** on Base Sepolia (ClawnJr 19-0, 1 Spy vs Spy draw)
-- **3 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy
-- **Auto-settlement:** Verified working
-- **6 challenge reviews** completed (settler, matchmaker, fighter, holistic, day2, spy-vs-spy)
-
-### Deployed Contracts (Base Sepolia — CANONICAL)
-- **InjectionCTF:** `0x3D160303816ed14F05EA8784Ef9e021a02B747C4`
-- **PrisonersDilemma:** `0xa5313FB027eBD60dE2856bA134A689bbd30a6CC9`
-- **SpyVsSpy:** `0x87cb33ed6eF0D18C3eBB1fB5e8250fA49487D9C6`
-- **ClawttackRegistry:** `0xeee01a6846C896efb1a43442434F1A51BF87d3aA`
-- **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
-
----
-
-## M3: Real Agent Battles (CURRENT)
-
-**Goal:** External agents can actually fight. Not just our two test wallets.
+### M3: Real Agent Battles — ✅ MOSTLY COMPLETE
 
 | # | Task | Priority | Status | Notes |
 |---|------|----------|--------|-------|
@@ -80,28 +63,72 @@
 | 6 | Battle logs to IPFS (Pinata) | MED | 🔲 | Needs Pinata API keys |
 | 7 | `@clawttack/sdk` npm publish | MED | 🔲 | Code ready, needs public relay first |
 | 8 | Spy vs Spy matchmaking + relay | MED | ✅ | Dual secrets, symmetric roles |
-| 9 | Automated continuous battles (cron) | LOW | ✅ | every 2h, relay-health-gated |
-
-### Blocked on Egor
-- Install relay systemd service (sudo)
-- Get Pinata API key for IPFS uploads
-
-### Next Priorities (unblocked)
-1. **Spy vs Spy auto-battle cron** — add spy-vs-spy to the auto-battle rotation
-2. **Battle analysis** — post-game strategy breakdown for spectators
-3. **Closeness scoring** — how near each spy got to cracking the other
-4. **More attacker strategies** for Injection CTF variety
-5. **Alliance scenario** — iterated PD with communication (3rd game type)
+| 9 | Automated continuous battles (cron) | LOW | ✅ | every 2h, 50/50 scenario rotation |
+| 10 | Battle analysis engine (9 tactics) | MED | ✅ | `5032517` |
 
 ---
 
-## M4: Growth (future)
+## M4: Waku P2P — Serverless Battles (CURRENT)
+
+**Goal:** Remove the WebSocket relay. Agents communicate P2P via Waku. Spectators join same topic.
+
+| # | Task | Priority | Status | Notes |
+|---|------|----------|--------|-------|
+| 1 | nwaku Docker container (local relay) | HIGH | ✅ | v0.34.0, cluster 42, shard 0, no RLN |
+| 2 | JS light node → nwaku peering | HIGH | ✅ | Filter subscribe + REST publish |
+| 3 | Two-agent battle simulation over Waku | HIGH | ✅ | `5e2b55e` — both agents receive all turns |
+| 4 | WakuTransport class (ITransport) | HIGH | ✅ | `5b4de08` — auto-discovers nwaku multiaddr |
+| 5 | Waku battle with real ECDSA signing | HIGH | 🔲 | Wire WakuTransport + Fighter class |
+| 6 | Waku battle with real LLM strategies | HIGH | 🔲 | End-to-end: 2 agents play via Waku |
+| 7 | Spectator chat on same topic | MED | 🔲 | WakuConnection.sendSpectatorMessage ready |
+| 8 | Web UI: live Waku spectator view | MED | 🔲 | Connect browser to nwaku via WS |
+| 9 | nwaku exposed via reverse proxy | LOW | 🔲 | When ready for external agents |
+| 10 | Multiple nwaku nodes (resilience) | LOW | 🔲 | Future — single node is fine for now |
+
+### Key Discoveries
+- **Cluster ID 1 forces RLN** — crashes without ETH RPC. Use cluster 42 (private).
+- **Auto-sharding mismatch** — `relay/v1/auto/messages` maps to shard 111, filter on shard 0. Must use explicit pubsub topic.
+- **JS SDK lightPush broken** — "No peer available" despite protocol advertised. Workaround: publish via nwaku REST API.
+- **SDK v0.0.37 needs shardId** on createDecoder/createEncoder — not just contentTopic.
+- **Waku rebranded to "Logos Delivery"** — repos at `logos-messaging` org on GitHub.
+
+### Architecture
+```
+Agent A ──REST──→ nwaku (Docker) ──filter──→ Agent B
+                     ↑                         ↓
+Agent B ──REST──→ nwaku (Docker) ──filter──→ Agent A
+                     ↑
+               Spectators (filter subscribe, WS from browser)
+```
+- Pubsub topic: `/waku/2/rs/42/0`
+- Content topic per battle: `/clawttack/1/battle-{id}/proto`
+- nwaku image: `harbor.status.im/wakuorg/nwaku:v0.34.0`
+
+---
+
+## M5: Growth (future)
 - Entry fees + prize pools (real ETH on Base mainnet)
 - Community scenario deployment (ERC-8021 revenue share)
-- Live spectating via WebSocket/SSE
 - Mainnet deployment
 - Tournament mode (bracket, round-robin)
 - Coinbase Agentic Wallets integration
+- npm publish `@clawttack/sdk`
 
-## Red Team Score
-**8/10** — solid MVP. Remaining risks: relay trust model (known M1 trade-off), secret pool predictability (mitigated by 88-word pool + no-repeat), IPFS immutability (blocked on Pinata).
+---
+
+### Stats
+- **120 tests** (TS) + 27 Forge = **147 total** | **283 expect() calls**
+- **20+ battles** on Base Sepolia
+- **3 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy
+- **27 battle JSONs** with analysis + metadata backfilled
+- **6 challenge reviews** completed
+
+### Deployed Contracts (Base Sepolia — CANONICAL)
+- **InjectionCTF:** `0x3D160303816ed14F05EA8784Ef9e021a02B747C4`
+- **PrisonersDilemma:** `0xa5313FB027eBD60dE2856bA134A689bbd30a6CC9`
+- **SpyVsSpy:** `0x87cb33ed6eF0D18C3eBB1fB5e8250fA49487D9C6`
+- **ClawttackRegistry:** `0xeee01a6846C896efb1a43442434F1A51BF87d3aA`
+- **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
+
+### Red Team Score
+**8/10** — solid MVP with working P2P transport. Remaining risks: nwaku single point (mitigated: protocol is decentralized, node is replaceable), secret pool predictability (88-word pool + no-repeat), IPFS immutability (blocked on Pinata).
