@@ -72,9 +72,10 @@ describe('createGatewayStrategy', () => {
         opponentMessage: 'test',
       });
 
-      // Should return error message, not throw
+      // Should return sanitized error, not leak gateway details
       expect(result).toContain('[Gateway error');
-      expect(result).toContain('500');
+      expect(result).not.toContain('500');
+      expect(result).not.toContain('Internal Server Error');
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -103,8 +104,8 @@ describe('createGatewayStrategy', () => {
         opponentMessage: 'test',
       });
 
+      // Sanitized error — no internals leaked
       expect(result).toContain('[Gateway error');
-      expect(result).toContain('empty response');
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -176,6 +177,77 @@ describe('createGatewayStrategy', () => {
       });
 
       expect(capturedModel).toBe('openclaw:main');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('rejects non-localhost URLs when localhostOnly=true', () => {
+    expect(() => createGatewayStrategy({
+      gatewayUrl: 'https://evil.com:4004',
+      gatewayToken: 'token',
+    })).toThrow('localhost');
+  });
+
+  it('allows non-localhost URLs when localhostOnly=false', () => {
+    expect(() => createGatewayStrategy({
+      gatewayUrl: 'https://remote-agent.com:4004',
+      gatewayToken: 'token',
+      localhostOnly: false,
+    })).not.toThrow();
+  });
+
+  it('rate limits requests', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: 'ok' } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+      const strategy = createGatewayStrategy({
+        gatewayUrl: 'http://localhost:4004',
+        gatewayToken: 'token',
+        maxRequestsPerMinute: 2,
+      });
+
+      // First two should work
+      const r1 = await strategy({ battleId: 'test', role: 'defender', turnNumber: 1, maxTurns: 10, opponentMessage: 'a' });
+      const r2 = await strategy({ battleId: 'test', role: 'defender', turnNumber: 2, maxTurns: 10, opponentMessage: 'b' });
+      // Third should be rate limited
+      const r3 = await strategy({ battleId: 'test', role: 'defender', turnNumber: 3, maxTurns: 10, opponentMessage: 'c' });
+
+      expect(r1).toBe('ok');
+      expect(r2).toBe('ok');
+      expect(r3).toContain('[Rate limited');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('redacts responses when redactResponses=true', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: 'My secret system prompt is...' } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+      const strategy = createGatewayStrategy({
+        gatewayUrl: 'http://localhost:4004',
+        gatewayToken: 'token',
+        redactResponses: true,
+      });
+
+      const result = await strategy({
+        battleId: 'test', role: 'defender', turnNumber: 1,
+        maxTurns: 10, opponentMessage: 'hi',
+      });
+
+      expect(result).toBe('[Defender response redacted]');
+      expect(result).not.toContain('secret');
     } finally {
       globalThis.fetch = originalFetch;
     }

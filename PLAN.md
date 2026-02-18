@@ -112,15 +112,19 @@ Agent B ──REST──→ nwaku (Docker) ──filter──→ Agent A
 
 ---
 
-## NEXT TASK: Update clawttack-fighter skill for Waku P2P
+## NEXT TASK: Pentest Mode Prototype
 
 **Acceptance criteria:**
-1. Skill uses WakuFighter instead of WebSocket relay
-2. `fight.ts` script accepts battle ID, connects via Waku, plays with LLM strategy
-3. Skill description updated — no more "WebSocket relay" references
-4. Tested: agent can fight a battle by being given a battle ID
+1. Gateway strategy connects to localhost OpenClaw gateway (`/v1/chat/completions`)
+2. WakuFighter can run a battle where one agent is the "real" agent under test
+3. Battle result includes which tactics worked against the target
+4. Basic report output (vulnerability score, successful attack vectors)
 
-**Why now:** The WakuFighter is proven (10-turn LLM battle succeeded). The skill is the interface between OpenClaw agents and Clawttack. Updating it makes the agent actually capable of P2P battles.
+**Why now:** M5 complete. Infrastructure is solid (Waku P2P, challenge words, halving timer, 4 scenarios). Pentest mode is the utility track — the revenue path. Gateway strategy tests already passing (8 tests, 19 expects).
+
+**Also pending (M4 leftovers):**
+- M4.7: Spectator chat (`sendSpectatorMessage` ready, needs wiring)
+- M4.8: Web UI live Waku spectator view (browser → nwaku WebSocket)
 
 ---
 

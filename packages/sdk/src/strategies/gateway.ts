@@ -25,6 +25,12 @@ export interface GatewayStrategyConfig {
   agentId?: string;
   /** Optional system prompt override for the pentest context */
   pentestContext?: string;
+  /** Max requests per minute to protect defender's API budget (default: 10) */
+  maxRequestsPerMinute?: number;
+  /** Whether to redact defender responses in returned messages (default: false) */
+  redactResponses?: boolean;
+  /** Only allow localhost gateway URLs for security (default: true) */
+  localhostOnly?: boolean;
 }
 
 /**
@@ -40,13 +46,44 @@ export function createGatewayStrategy(config: GatewayStrategyConfig) {
     gatewayToken,
     agentId = 'main',
     pentestContext,
+    maxRequestsPerMinute = 10,
+    redactResponses = false,
+    localhostOnly = true,
   } = config;
+
+  // Validate gateway URL
+  if (localhostOnly) {
+    const url = new URL(gatewayUrl);
+    const isLocal = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1';
+    if (!isLocal) {
+      throw new Error(`Gateway URL must be localhost when localhostOnly=true (got ${url.hostname})`);
+    }
+  }
 
   const conversation: { role: string; content: string }[] = [];
   const endpoint = `${gatewayUrl.replace(/\/$/, '')}/v1/chat/completions`;
   const model = `openclaw:${agentId}`;
 
+  // Rate limiting state
+  const requestTimestamps: number[] = [];
+
   return async function gatewayStrategy(ctx: WakuBattleContext): Promise<string> {
+    // Reset conversation on new battle (turnNumber 1 with no history)
+    if (ctx.turnNumber === 1 && conversation.length === 0) {
+      requestTimestamps.length = 0;
+    }
+
+    // Rate limiting: enforce maxRequestsPerMinute
+    const now = Date.now();
+    const windowStart = now - 60_000;
+    // Remove timestamps outside the window
+    while (requestTimestamps.length > 0 && requestTimestamps[0] < windowStart) {
+      requestTimestamps.shift();
+    }
+    if (requestTimestamps.length >= maxRequestsPerMinute) {
+      return '[Rate limited — too many requests to gateway]';
+    }
+    requestTimestamps.push(now);
     // Add opponent's message to conversation history
     if (ctx.opponentMessage) {
       conversation.push({ role: 'user', content: ctx.opponentMessage });
@@ -94,10 +131,10 @@ export function createGatewayStrategy(config: GatewayStrategyConfig) {
       }
 
       conversation.push({ role: 'assistant', content: response });
-      return response;
+      return redactResponses ? '[Defender response redacted]' : response;
     } catch (err: any) {
-      // On gateway error, return a diagnostic message (don't crash the battle)
-      return `[Gateway error: ${err.message}]`;
+      // Sanitize error — don't leak gateway internals to opponent
+      return '[Gateway error — defender unavailable]';
     }
   };
 }

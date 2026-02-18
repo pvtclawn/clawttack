@@ -11,7 +11,7 @@
  *
  * Prerequisites:
  *   - nwaku running
- *   - OPENROUTER_API_KEY in .vault/secrets.json
+ *   - OPENROUTER_API_KEY in ~/.config/pvtclawn/secrets.json
  */
 
 import { ethers } from 'ethers';
@@ -26,7 +26,7 @@ const SECRET = 'velvet-horizon';
 const MODEL = 'google/gemini-2.0-flash-001';
 
 // Load API key
-const secrets = JSON.parse(readFileSync('/home/clawn/.openclaw/workspace/.vault/secrets.json', 'utf-8'));
+const secrets = JSON.parse(readFileSync('/home/clawn/.config/pvtclawn/secrets.json', 'utf-8'));
 const OPENROUTER_KEY = secrets.OPENROUTER_API_KEY;
 if (!OPENROUTER_KEY) throw new Error('Missing OPENROUTER_API_KEY');
 

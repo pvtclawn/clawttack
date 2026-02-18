@@ -40,10 +40,10 @@ const INJECTION_CTF_ADDR = '0x3D160303816ed14F05EA8784Ef9e021a02B747C4';
 // Load wallet
 let walletPassword: string;
 try {
-  const secrets = JSON.parse(fs.readFileSync('/home/clawn/.openclaw/workspace/.vault/secrets.json', 'utf-8'));
+  const secrets = JSON.parse(fs.readFileSync('/home/clawn/.config/pvtclawn/secrets.json', 'utf-8'));
   walletPassword = secrets.WALLET_PASSWORD;
 } catch {
-  console.error('❌ Cannot load wallet password from .vault/secrets.json');
+  console.error('❌ Cannot load wallet password from ~/.config/pvtclawn/secrets.json');
   process.exit(1);
 }
 
