@@ -41,6 +41,8 @@ export interface WakuFighterConfig {
   transportConfig?: Partial<WakuTransportConfig>;
   /** Shared transport instance (optional — avoids creating separate Waku nodes) */
   transport?: WakuTransport;
+  /** ChallengeWordBattle config — enables challenge word generation per turn */
+  challengeWord?: ChallengeWordConfig;
 }
 
 export interface WakuBattleContext {
@@ -50,10 +52,72 @@ export interface WakuBattleContext {
   opponentMessage?: string;
   maxTurns: number;
   opponentAddress?: string;
+  /** Challenge word that MUST appear in the response (ChallengeWordBattle) */
+  challengeWord?: string;
+  /** Seconds allowed for this turn (decreasing timer) */
+  turnTimeoutSeconds?: number;
 }
 
 /** Strategy function: given context, return a message */
 export type WakuStrategy = (ctx: WakuBattleContext) => Promise<string> | string;
+
+/** Configuration for ChallengeWordBattle mode */
+export interface ChallengeWordConfig {
+  /** Commit from agent A (bytes32 hex) */
+  commitA: string;
+  /** Commit from agent B (bytes32 hex) */
+  commitB: string;
+  /** Whether to use decreasing timer (default: true) */
+  decreasingTimer?: boolean;
+}
+
+/**
+ * Word list matching ChallengeWordBattle.sol — MUST stay in sync.
+ * 64 four-letter words, deterministic index via keccak256.
+ */
+const CHALLENGE_WORDS = [
+  'blue', 'dark', 'fire', 'gold', 'iron', 'jade', 'keen', 'lime',
+  'mint', 'navy', 'onyx', 'pine', 'ruby', 'sage', 'teal', 'vine',
+  'arch', 'bolt', 'core', 'dawn', 'echo', 'flux', 'glow', 'haze',
+  'iris', 'jolt', 'knot', 'loom', 'mist', 'node', 'oath', 'peak',
+  'rift', 'silk', 'tide', 'unit', 'vale', 'warp', 'zero', 'apex',
+  'band', 'cape', 'dome', 'edge', 'fern', 'grit', 'husk', 'isle',
+  'jazz', 'kite', 'lark', 'maze', 'nest', 'opus', 'palm', 'quay',
+  'reed', 'spur', 'torn', 'urge', 'veil', 'wolf', 'yarn', 'zest',
+] as const;
+
+/**
+ * Generate the challenge word for a given turn — mirrors Solidity logic exactly.
+ * keccak256(abi.encodePacked(turnNumber, commitA, commitB)) % 64
+ */
+export function generateChallengeWord(
+  turnNumber: number,
+  commitA: string,
+  commitB: string,
+): string {
+  // abi.encodePacked(uint16, bytes32, bytes32) = 2 + 32 + 32 = 66 bytes
+  const packed = ethers.solidityPacked(
+    ['uint16', 'bytes32', 'bytes32'],
+    [turnNumber, commitA, commitB],
+  );
+  const hash = ethers.keccak256(packed);
+  const index = Number(BigInt(hash) % BigInt(CHALLENGE_WORDS.length));
+  return CHALLENGE_WORDS[index]!;
+}
+
+/**
+ * Get turn timeout in seconds — mirrors Solidity logic exactly.
+ * Halving timer: starts at 60s, halves each turn, minimum 1s.
+ * 60 → 30 → 15 → 7 → 3 → 1 → 1...
+ */
+export function getChallengeWordTimeout(turnNumber: number): number {
+  let timeout = 60;
+  for (let i = 1; i < turnNumber; i++) {
+    timeout = Math.floor(timeout / 2);
+    if (timeout < 1) return 1;
+  }
+  return timeout;
+}
 
 export interface WakuFightResult {
   battleId: string;
@@ -110,9 +174,14 @@ export class WakuFighter {
 
     // Create or use shared transport
     const ownsTransport = !this.config.transport;
+    const cwConfig = this.config.challengeWord;
     const transport = this.config.transport ?? new WakuTransport({
       nwakuRestUrl: this.config.nwakuRestUrl,
       turnTimeoutMs: this.config.turnTimeoutMs ?? 60_000,
+      // ChallengeWordBattle: use decreasing timer for opponent timeout too
+      ...(cwConfig?.decreasingTimer !== false && cwConfig
+        ? { turnTimeoutFn: (turn: number) => getChallengeWordTimeout(turn) * 1000 }
+        : {}),
       ...this.config.transportConfig,
     });
 
@@ -199,17 +268,42 @@ export class WakuFighter {
         const playTurn = async (turnNumber: number, opponentMessage?: string) => {
           if (cleanedUp) return;
           try {
+            // ChallengeWordBattle: compute challenge word + dynamic timeout
+            let challengeWord: string | undefined;
+            let turnTimeoutSeconds: number | undefined;
+            let effectiveTimeoutMs = this.config.turnTimeoutMs ?? 30_000;
+
+            if (cwConfig) {
+              challengeWord = generateChallengeWord(turnNumber, cwConfig.commitA, cwConfig.commitB);
+              if (cwConfig.decreasingTimer !== false) {
+                turnTimeoutSeconds = getChallengeWordTimeout(turnNumber);
+                effectiveTimeoutMs = turnTimeoutSeconds * 1000;
+              }
+              if (verbose) {
+                console.log(`  🔑 Challenge word: "${challengeWord}" | ⏱️ ${turnTimeoutSeconds ?? '∞'}s`);
+              }
+            }
+
             const ctx: WakuBattleContext = {
               battleId, role, turnNumber, opponentMessage, maxTurns,
               opponentAddress: opponentAddr,
+              challengeWord,
+              turnTimeoutSeconds,
             };
-            const strategyTimeoutMs = this.config.turnTimeoutMs ?? 30_000;
             const message = await Promise.race([
               Promise.resolve(this.config.strategy(ctx)),
               new Promise<never>((_, rej) =>
-                setTimeout(() => rej(new Error('Strategy timeout')), strategyTimeoutMs),
+                setTimeout(() => rej(new Error('Strategy timeout')), effectiveTimeoutMs),
               ),
             ]);
+
+            // ChallengeWordBattle: verify the response contains the challenge word
+            if (challengeWord && !message.toLowerCase().includes(challengeWord)) {
+              console.error(`  ❌ ${this.config.name}: response missing challenge word "${challengeWord}" — forfeiting`);
+              await conn.forfeit();
+              return;
+            }
+
             const signed = await this.signTurn(battleId, message, turnNumber);
             await conn.sendTurn(signed);
             turnCount = turnNumber;

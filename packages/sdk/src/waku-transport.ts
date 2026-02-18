@@ -54,6 +54,12 @@ export interface WakuTransportConfig {
   topicPrefix?: string;
   /** Turn timeout in ms — auto-forfeit opponent if they don't respond (default: 60000) */
   turnTimeoutMs?: number;
+  /**
+   * Dynamic turn timeout function — overrides turnTimeoutMs when set.
+   * Receives the current turn number, returns timeout in ms.
+   * Use with ChallengeWordBattle's decreasing timer.
+   */
+  turnTimeoutFn?: (turnNumber: number) => number;
 }
 
 type EventHandler = (...args: any[]) => void;
@@ -174,11 +180,15 @@ class WakuConnection implements ITransportConnection {
   private agentAddress?: string;
   private battleId: string;
   private registeredAgents = new Set<string>();
+  // Prevent duplicate battleStarted emissions
+  private battleStartedEmitted = false;
   // M4.5.3: Turn ordering + duplicate rejection
   private lastReceivedTurnNumber = 0;
   private receivedTurnNumbers = new Set<number>();
   // M4.5.4: Turn timeout
   private turnTimeoutMs: number;
+  /** Dynamic timeout — set by WakuTransport from config.turnTimeoutFn */
+  turnTimeoutFn?: (turnNumber: number) => number;
   private turnTimer: ReturnType<typeof setTimeout> | null = null;
   // Registration signature (for signed registration)
   private registrationSignature?: string;
@@ -250,7 +260,8 @@ class WakuConnection implements ITransportConnection {
       // Check if we already have enough agents (from messages received
       // before we set agentAddress — the handleRegister condition
       // requires agentAddress to be set)
-      if (this.registeredAgents.size >= 2 && this.agentAddress) {
+      if (this.registeredAgents.size >= 2 && this.agentAddress && !this.battleStartedEmitted) {
+        this.battleStartedEmitted = true;
         const sorted = [...this.registeredAgents].sort();
         const yourTurn = sorted[0] === this.agentAddress;
         this.emit('battleStarted', {
@@ -387,7 +398,12 @@ class WakuConnection implements ITransportConnection {
   /** M4.5.4: Start/reset the turn timeout timer */
   private resetTurnTimer(): void {
     this.clearTurnTimer();
-    if (this.turnTimeoutMs <= 0) return;
+    // Dynamic timeout: use turnTimeoutFn if available, else static turnTimeoutMs
+    const nextTurn = this.lastReceivedTurnNumber + 1;
+    const timeoutMs = this.turnTimeoutFn
+      ? this.turnTimeoutFn(nextTurn)
+      : this.turnTimeoutMs;
+    if (timeoutMs <= 0) return;
 
     this.turnTimer = setTimeout(() => {
       // Opponent didn't respond in time — they forfeit
@@ -399,7 +415,7 @@ class WakuConnection implements ITransportConnection {
           reason: 'timeout',
         },
       } satisfies BattleEndData);
-    }, this.turnTimeoutMs);
+    }, timeoutMs);
   }
 
   private clearTurnTimer(): void {
@@ -488,7 +504,8 @@ class WakuConnection implements ITransportConnection {
     this.registeredAgents.add(addr);
 
     // If two agents registered, battle can start
-    if (this.registeredAgents.size >= 2 && this.agentAddress) {
+    if (this.registeredAgents.size >= 2 && this.agentAddress && !this.battleStartedEmitted) {
+      this.battleStartedEmitted = true;
       // First registered agent goes first (deterministic)
       const sorted = [...this.registeredAgents].sort();
       const yourTurn = sorted[0] === this.agentAddress;
@@ -513,6 +530,12 @@ class WakuConnection implements ITransportConnection {
   private handleTurn(msg: WakuBattleMessage): void {
     const turnNumber = msg.payload.turnNumber as number;
     const message = msg.payload.message as string;
+
+    // Reject turns from unregistered agents (prevents third-party injection)
+    if (!this.registeredAgents.has(msg.sender)) {
+      this.emit('error', `Turn from unregistered agent ${msg.sender.slice(0, 10)} — rejected`);
+      return;
+    }
 
     // M4.5.3: Reject duplicate turns
     if (this.receivedTurnNumbers.has(turnNumber)) {
@@ -656,6 +679,10 @@ export class WakuTransport implements ITransport {
       this.config.shardId,
       this.config.turnTimeoutMs,
     );
+    // Pass through dynamic timeout function if configured
+    if (this.config.turnTimeoutFn) {
+      connection.turnTimeoutFn = this.config.turnTimeoutFn;
+    }
     this.connections.set(connId, connection);
 
     // Set up shared subscription for this content topic
