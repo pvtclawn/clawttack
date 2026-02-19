@@ -207,6 +207,47 @@ export const ARENA_ABI = [
 
 // --- Types ---
 
+/** Known contract revert reasons */
+export type ArenaRevertReason =
+  | 'InvalidPhase'
+  | 'NotYourTurn'
+  | 'NotParticipant'
+  | 'DeadlineExpired'
+  | 'DeadlineNotExpired'
+  | 'InsufficientStake'
+  | 'ChallengeNotExpired'
+  | 'InvalidSeed'
+  | 'BattleExists'
+  | 'Unknown';
+
+export class ArenaError extends Error {
+  readonly reason: ArenaRevertReason;
+  readonly originalError: unknown;
+
+  constructor(reason: ArenaRevertReason, message: string, originalError?: unknown) {
+    super(message);
+    this.name = 'ArenaError';
+    this.reason = reason;
+    this.originalError = originalError;
+  }
+}
+
+/** Parse viem contract revert errors into typed ArenaError */
+function parseRevertError(err: unknown): ArenaError {
+  const msg = err instanceof Error ? err.message : String(err);
+  const reasons: ArenaRevertReason[] = [
+    'InvalidPhase', 'NotYourTurn', 'NotParticipant', 'DeadlineExpired',
+    'DeadlineNotExpired', 'InsufficientStake', 'ChallengeNotExpired',
+    'InvalidSeed', 'BattleExists',
+  ];
+  for (const reason of reasons) {
+    if (msg.includes(reason)) {
+      return new ArenaError(reason, `Arena contract reverted: ${reason}`, err);
+    }
+  }
+  return new ArenaError('Unknown', `Arena contract error: ${msg}`, err);
+}
+
 export enum BattlePhase {
   Open = 0,
   Committed = 1,
@@ -294,7 +335,13 @@ export class ArenaFighter {
 
   // --- Write Functions ---
 
-  /** Create an open challenge. Returns battleId and the seed (keep secret until reveal). */
+  /**
+   * Create an open challenge. Returns battleId and the seed.
+   *
+   * ⚠️ SECURITY: The returned `seed` is SECRET until revealSeeds() is called.
+   * Do NOT log, serialize to disk, or transmit it. Store in memory only.
+   * If the seed leaks, opponents can precompute all challenge words.
+   */
   async createChallenge(opts: CreateChallengeOptions = {}): Promise<CreateChallengeResult> {
     const seed = opts.seed ?? ArenaFighter.generateSeed();
     const commit = ArenaFighter.commitSeed(seed);
@@ -302,13 +349,18 @@ export class ArenaFighter {
     const maxTurns = opts.maxTurns ?? 0;
     const baseTimeout = opts.baseTimeout ?? 0;
 
-    const txHash = await this.walletClient.writeContract({
-      address: this.contractAddress,
-      abi: ARENA_ABI,
-      functionName: 'createChallenge',
-      args: [commit, maxTurns, BigInt(baseTimeout)],
-      value: stake,
-    });
+    let txHash: Hex;
+    try {
+      txHash = await this.walletClient.writeContract({
+        address: this.contractAddress,
+        abi: ARENA_ABI,
+        functionName: 'createChallenge',
+        args: [commit, maxTurns, BigInt(baseTimeout)],
+        value: stake,
+      });
+    } catch (err) {
+      throw parseRevertError(err);
+    }
 
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
 
@@ -325,7 +377,12 @@ export class ArenaFighter {
     return { battleId, seed, commit, txHash };
   }
 
-  /** Accept an open challenge. Matches the stake. */
+  /**
+   * Accept an open challenge. Matches the stake.
+   *
+   * ⚠️ SECURITY: The returned `seed` is SECRET until revealSeeds() is called.
+   * Do NOT log, serialize to disk, or transmit it.
+   */
   async acceptChallenge(
     battleId: Hex,
     stake: bigint,
@@ -334,13 +391,18 @@ export class ArenaFighter {
     const actualSeed = seed ?? ArenaFighter.generateSeed();
     const commit = ArenaFighter.commitSeed(actualSeed);
 
-    const txHash = await this.walletClient.writeContract({
-      address: this.contractAddress,
-      abi: ARENA_ABI,
-      functionName: 'acceptChallenge',
-      args: [battleId, commit],
-      value: stake,
-    });
+    let txHash: Hex;
+    try {
+      txHash = await this.walletClient.writeContract({
+        address: this.contractAddress,
+        abi: ARENA_ABI,
+        functionName: 'acceptChallenge',
+        args: [battleId, commit],
+        value: stake,
+      });
+    } catch (err) {
+      throw parseRevertError(err);
+    }
 
     await this.publicClient.waitForTransactionReceipt({ hash: txHash });
 
@@ -349,54 +411,66 @@ export class ArenaFighter {
 
   /** Reveal both seeds to start the battle. Either participant can call. */
   async revealSeeds(battleId: Hex, seedA: string, seedB: string): Promise<Hex> {
-    const txHash = await this.walletClient.writeContract({
-      address: this.contractAddress,
-      abi: ARENA_ABI,
-      functionName: 'revealSeeds',
-      args: [battleId, seedA, seedB],
-    });
-
-    await this.publicClient.waitForTransactionReceipt({ hash: txHash });
-    return txHash;
+    try {
+      const txHash = await this.walletClient.writeContract({
+        address: this.contractAddress,
+        abi: ARENA_ABI,
+        functionName: 'revealSeeds',
+        args: [battleId, seedA, seedB],
+      });
+      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+      return txHash;
+    } catch (err) {
+      throw parseRevertError(err);
+    }
   }
 
   /** Submit a turn message. Must contain the challenge word for your turn. */
   async submitTurn(battleId: Hex, message: string): Promise<Hex> {
-    const txHash = await this.walletClient.writeContract({
-      address: this.contractAddress,
-      abi: ARENA_ABI,
-      functionName: 'submitTurn',
-      args: [battleId, message],
-    });
-
-    await this.publicClient.waitForTransactionReceipt({ hash: txHash });
-    return txHash;
+    try {
+      const txHash = await this.walletClient.writeContract({
+        address: this.contractAddress,
+        abi: ARENA_ABI,
+        functionName: 'submitTurn',
+        args: [battleId, message],
+      });
+      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+      return txHash;
+    } catch (err) {
+      throw parseRevertError(err);
+    }
   }
 
   /** Claim timeout if opponent didn't submit in time. */
   async claimTimeout(battleId: Hex): Promise<Hex> {
-    const txHash = await this.walletClient.writeContract({
-      address: this.contractAddress,
-      abi: ARENA_ABI,
-      functionName: 'claimTimeout',
-      args: [battleId],
-    });
-
-    await this.publicClient.waitForTransactionReceipt({ hash: txHash });
-    return txHash;
+    try {
+      const txHash = await this.walletClient.writeContract({
+        address: this.contractAddress,
+        abi: ARENA_ABI,
+        functionName: 'claimTimeout',
+        args: [battleId],
+      });
+      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+      return txHash;
+    } catch (err) {
+      throw parseRevertError(err);
+    }
   }
 
   /** Cancel an open (unaccepted) challenge. */
   async cancelChallenge(battleId: Hex): Promise<Hex> {
-    const txHash = await this.walletClient.writeContract({
-      address: this.contractAddress,
-      abi: ARENA_ABI,
-      functionName: 'cancelChallenge',
-      args: [battleId],
-    });
-
-    await this.publicClient.waitForTransactionReceipt({ hash: txHash });
-    return txHash;
+    try {
+      const txHash = await this.walletClient.writeContract({
+        address: this.contractAddress,
+        abi: ARENA_ABI,
+        functionName: 'cancelChallenge',
+        args: [battleId],
+      });
+      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+      return txHash;
+    } catch (err) {
+      throw parseRevertError(err);
+    }
   }
 
   // --- Read Functions ---

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { ArenaFighter, BattlePhase, ARENA_ABI } from '../src/arena-fighter.ts';
+import { ArenaFighter, BattlePhase, ARENA_ABI, ArenaError } from '../src/arena-fighter.ts';
 
 describe('ArenaFighter', () => {
   describe('generateSeed', () => {
@@ -74,6 +74,22 @@ describe('ArenaFighter', () => {
       expect(eventNames).toContain('SeedsRevealed');
       expect(eventNames).toContain('TurnSubmitted');
       expect(eventNames).toContain('BattleSettled');
+    });
+  });
+
+  describe('ArenaError', () => {
+    it('has correct name and reason', () => {
+      const err = new ArenaError('NotYourTurn', 'Not your turn');
+      expect(err.name).toBe('ArenaError');
+      expect(err.reason).toBe('NotYourTurn');
+      expect(err.message).toBe('Not your turn');
+      expect(err instanceof Error).toBe(true);
+    });
+
+    it('preserves original error', () => {
+      const original = new Error('raw viem error');
+      const err = new ArenaError('InvalidPhase', 'Wrong phase', original);
+      expect(err.originalError).toBe(original);
     });
   });
 });
