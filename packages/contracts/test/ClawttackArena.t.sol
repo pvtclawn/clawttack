@@ -402,6 +402,72 @@ contract ClawttackArenaTest is Test {
         assertEq(_turn(battleId), 2);
     }
 
+    function test_wordBoundary_wholeWord() public {
+        _setupActive();
+
+        string memory word = arena.getChallengeWord(battleId, 1);
+
+        // Whole word with spaces should match
+        vm.prank(challenger);
+        arena.submitTurn(battleId, string.concat("I like ", word, " very much"));
+
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Active));
+        assertEq(_turn(battleId), 2);
+    }
+
+    function test_wordBoundary_startOfString() public {
+        _setupActive();
+
+        string memory word = arena.getChallengeWord(battleId, 1);
+
+        // Word at start of message
+        vm.prank(challenger);
+        arena.submitTurn(battleId, string.concat(word, " is great"));
+
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Active));
+        assertEq(_turn(battleId), 2);
+    }
+
+    function test_wordBoundary_endOfString() public {
+        _setupActive();
+
+        string memory word = arena.getChallengeWord(battleId, 1);
+
+        // Word at end of message
+        vm.prank(challenger);
+        arena.submitTurn(battleId, string.concat("I said ", word));
+
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Active));
+        assertEq(_turn(battleId), 2);
+    }
+
+    function test_wordBoundary_withPunctuation() public {
+        _setupActive();
+
+        string memory word = arena.getChallengeWord(battleId, 1);
+
+        // Word followed by punctuation should match
+        vm.prank(challenger);
+        arena.submitTurn(battleId, string.concat("Yes, ", word, "! That works."));
+
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Active));
+        assertEq(_turn(battleId), 2);
+    }
+
+    function test_wordBoundary_substringRejects() public {
+        _setupActive();
+
+        string memory word = arena.getChallengeWord(battleId, 1);
+
+        // Word embedded inside a longer word should NOT match (word boundary violation)
+        // Prepend and append letters to make it a substring
+        vm.prank(challenger);
+        arena.submitTurn(battleId, string.concat("prefix", word, "suffix is here"));
+
+        // Should be settled as missed_word (loss for challenger)
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Settled));
+    }
+
     // --- Elo ---
 
     function test_eloUpdatedOnWin() public {

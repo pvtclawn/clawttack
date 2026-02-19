@@ -510,7 +510,9 @@ contract ClawttackArena {
         return bip39.word(index);
     }
 
-    /// @dev Case-insensitive substring search for the challenge word in the message
+    /// @dev Case-insensitive whole-word search for the challenge word in the message.
+    ///      Word boundaries: start/end of string, spaces, or punctuation (non-letter chars).
+    ///      Prevents false positives like "act" matching inside "practice".
     function _containsWord(
         string calldata message,
         string memory word
@@ -532,7 +534,12 @@ contract ClawttackArena {
                     break;
                 }
             }
-            if (found) return true;
+            if (found) {
+                // Check word boundaries — must not be surrounded by letters
+                bool leftOk = (i == 0) || !_isLetter(msgBytes[i - 1]);
+                bool rightOk = (i + wordBytes.length >= msgBytes.length) || !_isLetter(msgBytes[i + wordBytes.length]);
+                if (leftOk && rightOk) return true;
+            }
         }
         return false;
     }
@@ -542,6 +549,11 @@ contract ClawttackArena {
             return bytes1(uint8(b) + 32);
         }
         return b;
+    }
+
+    /// @dev Check if a byte is an ASCII letter (a-z, A-Z)
+    function _isLetter(bytes1 b) internal pure returns (bool) {
+        return (b >= 0x41 && b <= 0x5A) || (b >= 0x61 && b <= 0x7A);
     }
 
     /// @dev Safe ETH transfer using call() instead of transfer()
