@@ -258,7 +258,7 @@ export function useArenaAccepts() {
   })
 }
 
-export function useArenaTurns(battleId?: `0x${string}`) {
+export function useArenaTurns(battleId?: `0x${string}`, live = false) {
   return useQuery({
     queryKey: ['arena', 'turns', battleId],
     enabled: !!battleId,
@@ -279,13 +279,14 @@ export function useArenaTurns(battleId?: `0x${string}`) {
         }),
       })
     },
-    staleTime: 5 * 60_000,
-    gcTime: 60 * 60_000, // historical events are immutable — cache 1h
+    staleTime: live ? 0 : 5 * 60_000,
+    gcTime: 60 * 60_000,
+    refetchInterval: live ? 4_000 : false, // poll every 4s during live battles
     retry: 2,
   })
 }
 
-export function useArenaSettlements() {
+export function useArenaSettlements(live = false) {
   return useQuery({
     queryKey: ['arena', 'settlements'],
     queryFn: async (): Promise<ArenaSettledEvent[]> => {
@@ -303,8 +304,9 @@ export function useArenaSettlements() {
         }),
       })
     },
-    staleTime: 5 * 60_000,
-    gcTime: 60 * 60_000, // historical events are immutable — cache 1h
+    staleTime: live ? 0 : 5 * 60_000,
+    gcTime: 60 * 60_000,
+    refetchInterval: live ? 6_000 : false, // poll every 6s during live battles
     retry: 2,
   })
 }
