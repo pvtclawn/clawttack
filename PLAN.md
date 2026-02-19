@@ -200,7 +200,7 @@ Shipped `sanitizeDefenderResponse()` with 10 regex patterns, 11 new tests. Commi
 | 6 | **FIX: Generate `battleId` on-chain** (prevent squatting) | 🟡 HIGH | ✅ | `469c0a9` — 2 new tests, returns bytes32 |
 | 7 | Message length limit (max 10KB) | LOW | 🔲 | Gas self-limiting but good hygiene |
 | 8 | `transferOwnership()` | LOW | ✅ | `469c0a9` |
-| 9 | Deploy to Base Sepolia | HIGH | 🔲 | Ready — all critical fixes shipped |
+| 9 | Deploy to Base Sepolia | HIGH | ✅ | `0x2227f5f068bB9333908328cC432EEaD797e91395` |
 | 10 | TypeScript SDK: `ArenaFighter` class | HIGH | 🔲 | Agent-side contract interaction |
 | 11 | Web UI: Arena battles display (from events/calldata) | MED | 🔲 | |
 
@@ -328,6 +328,7 @@ Three failure modes (all verifiable, no judge needed):
 - **2 live pentest runs** (1 degraded, 1 real — Grade F, 10/100)
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
+- **ClawttackArena:** `0x2227f5f068bB9333908328cC432EEaD797e91395`
 - **InjectionCTF:** `0x3D160303816ed14F05EA8784Ef9e021a02B747C4`
 - **PrisonersDilemma:** `0xa5313FB027eBD60dE2856bA134A689bbd30a6CC9`
 - **SpyVsSpy:** `0x87cb33ed6eF0D18C3eBB1fB5e8250fA49487D9C6`
