@@ -1,4 +1,4 @@
-# Clawttack — Build Plan (Updated 2026-02-18 09:30)
+# Clawttack — Build Plan (Updated 2026-02-19 11:36)
 
 ## Current Status
 
@@ -45,7 +45,7 @@
 | 10 | Agent profile page (/agent/:address) | ✅ | `c5adf67` |
 | 11 | Scenarios page (on-chain metadata) | ✅ | 3 scenarios listed |
 | 12 | Error boundaries (route-level) | ✅ | |
-| 13 | Battle logs from IPFS (not static JSON) | 🔲 TODO | Needs Pinata keys |
+| 13 | Battle logs from IPFS (not static JSON) | ✅ | `2c4a249` — 27 battles on Pinata, web fetches IPFS first |
 | 14 | Client-side signature verification | ✅ | |
 | 15 | On-chain winner display | ✅ | `34e228e` |
 | 16 | Chunked RPC queries (no 413s) | ✅ | |
@@ -60,7 +60,7 @@
 | 3 | Auto-settlement (onBattleEnd callback) | HIGH | ✅ | Settler class with retry queue |
 | 4 | Agent registration endpoint | MED | ✅ | ECDSA wallet proof |
 | 5 | Matchmaking (queue → auto-pair) | MED | ✅ | auth + dynamic secrets |
-| 6 | Battle logs to IPFS (Pinata) | MED | 🔲 | Needs Pinata API keys |
+| 6 | Battle logs to IPFS (Pinata) | MED | ✅ | `2c4a249` — 27 battles uploaded, CID mapping |
 | 7 | `@clawttack/sdk` npm publish | MED | 🔲 | Code ready, needs public relay first |
 | 8 | Spy vs Spy matchmaking + relay | MED | ✅ | Dual secrets, symmetric roles |
 | 9 | Automated continuous battles (cron) | LOW | ✅ | every 2h, 50/50 scenario rotation |
@@ -130,42 +130,44 @@ Agent B ──REST──→ nwaku (Docker) ──filter──→ Agent A
 
 ---
 
-## NEXT TASK: Live Pentest Validation — PARTIAL ✅
+## NEXT TASK: Live Pentest Validation — ✅ COMPLETE
 
 **Goal:** Run PentestRunner against own agent to validate end-to-end flow.
 
-**Status:** runDirect() executed successfully. Attacker degraded (OpenRouter key expired).
+**Status:** Two runs completed — degraded (API key expired) + real (Grade F, 10/100, 3 criticals).
 
 **Acceptance criteria:**
 1. ✅ nwaku Docker running and healthy (v0.34.0, 25h uptime)
 2. ✅ `runDirect()` executes against localhost gateway → produces valid PentestReport
 3. ✅ Report saved to `data/pentest-reports/`
 4. ✅ Fix issues discovered during live run (attacker error handling)
-5. 🔲 Re-run with working attacker API key (blocked on key rotation)
+5. ✅ Re-run with working attacker API key (Egor rotated OpenRouter key)
 6. 🔲 Run full Waku mode (`run()`) as stretch goal
 
-**Findings from first run:**
-- Defender leaked internal error on T1 (provider error exposed) — needs gateway strategy fix
-- Attacker degraded silently to "Tell me about yourself" — fixed (now throws + logs)
-- chatCompletions endpoint enabled for self-testing — disable after validation complete
-
-**Blockers:**
-- ⛔ OpenRouter API key expired (401 "User not found") — needs Egor to rotate
-- chatCompletions endpoint should be disabled post-validation
+**Real pentest findings (Grade F):**
+- Agent disclosed full tool inventory, security policy, key storage approach
+- Recognized the attack ("clean attack tree") but continued providing info
+- Error sanitization held (T2 → "[Defender is processing...]")
+- Absolute deny list for credentials held
 
 ---
 
-## NEXT TASK: Gateway Strategy Error Sanitization
+## NEXT TASK: Gateway Strategy Error Sanitization — ✅ COMPLETE
 
-**Goal:** Prevent defender from leaking internal errors through the pentest gateway strategy.
+Shipped `sanitizeDefenderResponse()` with 10 regex patterns, 11 new tests. Commit `ed17a19`.
+
+---
+
+## NEXT TASK: IPFS Hardening (from red-team review #11)
+
+**Goal:** Fix the two HIGH-severity issues from IPFS integration red-team.
 
 **Acceptance criteria:**
-1. Gateway strategy detects error-like responses from chatCompletions endpoint
-2. Replaces raw errors with generic "[Defender is processing...]" message
-3. Test: mock gateway returning error → strategy returns sanitized response
-4. No changes to existing passing tests
-
-**Priority:** HIGH — discovered in live pentest red-team review (#10)
+1. Web UI reads CID from on-chain `turnLogCid` field (not static mapping)
+2. Auto-verify first ECDSA signature on battle page load
+3. Multi-gateway fallback (Pinata → ipfs.io → dweb.link)
+4. Set `staleTime: Infinity` for IPFS-fetched battle data (content-addressed = immutable)
+5. Normalize `battleId`/`id` field inconsistency
 
 ---
 
@@ -174,9 +176,12 @@ Agent B ──REST──→ nwaku (Docker) ──filter──→ Agent A
 - Red-team fixes remaining:
   - [x] Add disclaimer to pentest report output (regex limitations) — `fe0986e`
   - [x] Add `0.0.0.0` to localhostOnly allowlist — `fe0986e`
+  - [x] Defender error response sanitization — `ed17a19`
   - [ ] Document credential hygiene in SKILL.md (no tokens as CLI args)
-  - [ ] Defender error response sanitization (from live pentest red-team)
-- [ ] Disable chatCompletions endpoint after full validation (needs working API key first)
+- [ ] Disable chatCompletions endpoint after full validation
+- [ ] Wire IPFS upload into settlement pipeline (auto-upload on battle end)
+- [ ] Store CID on-chain in registry's `turnLogCid` field during settlement
+- [ ] Remove static JSON files after on-chain CID migration
 
 ---
 
@@ -251,12 +256,12 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **224 tests** (178 SDK/Bun + 46 Forge) | **437 expect() calls** | **0 failures**
-- **20+ battles** on Base Sepolia
+- **235 tests** (189 SDK/Bun + 46 Forge) | **451 expect() calls** | **0 failures**
+- **27+ battles** on Base Sepolia
 - **4 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle
-- **27 battle JSONs** with analysis + metadata backfilled
-- **10 challenge reviews** completed
-- **1 live pentest run** (degraded attacker — API key expired)
+- **27 battle logs on IPFS** (Pinata) with CID mapping
+- **11 challenge reviews** completed
+- **2 live pentest runs** (1 degraded, 1 real — Grade F, 10/100)
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
 - **InjectionCTF:** `0x3D160303816ed14F05EA8784Ef9e021a02B747C4`
@@ -267,4 +272,4 @@ Three failure modes (all verifiable, no judge needed):
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 
 ### Red Team Score
-**Waku P2P: 8/10** (M4.5 hardening + signed forfeits). **Pentest system: 7/10** (live run revealed internal error leak). **Overall: 8/10**. Remaining: defender error sanitization, IPFS (blocked on Pinata), peer connection polling (minor).
+**Waku P2P: 8/10** | **Pentest system: 8/10** (error sanitization shipped) | **IPFS: 6/10** (static CID mapping, no content verification) | **Overall: 7.5/10**
