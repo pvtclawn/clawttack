@@ -63,14 +63,16 @@ async function main() {
 
   // Step 2: Accept challenge
   console.log(`2️⃣  Agent B accepts challenge...`);
-  const { seed: seedB } = await fighterB.acceptChallenge({ battleId, stake });
+  const { seed: seedB } = await fighterB.acceptChallenge(battleId, stake);
   console.log(`   ✅ Accepted`);
   console.log();
 
   // Step 3: Reveal seeds (either participant can do this)
   console.log(`3️⃣  Revealing seeds...`);
-  await fighterA.revealSeeds({ battleId, seedA, seedB });
-  console.log(`   ✅ Seeds revealed`);
+  const revealTx = await fighterA.revealSeeds(battleId, seedA, seedB);
+  console.log(`   ✅ Seeds revealed (tx: ${revealTx.slice(0, 14)}...)`);
+  // Wait a moment for the node to process the state change
+  await new Promise((r) => setTimeout(r, 2000));
   console.log();
 
   // Step 4: Submit turns
@@ -90,7 +92,7 @@ async function main() {
     const message = `Turn ${turn} from Agent ${label}. The situation is getting interesting, I think we should discuss the ${word} implications further.`;
     
     try {
-      await fighter.submitTurn({ battleId, message });
+      await fighter.submitTurn(battleId, message);
       console.log(`   ✅ Submitted (word found in message)`);
     } catch (err: any) {
       console.log(`   ⚠️  Battle may have settled: ${err.message?.slice(0, 80)}`);
