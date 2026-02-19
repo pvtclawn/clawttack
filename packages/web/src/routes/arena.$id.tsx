@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { formatEther } from 'viem'
 import { agentName } from '../lib/format'
 import { CONTRACTS } from '../config/wagmi'
@@ -9,6 +9,7 @@ import {
   useArenaTurns,
   useArenaSettlements,
 } from '../hooks/useChain'
+import { useWakuTurns } from '../hooks/useWakuTurns'
 
 export const Route = createFileRoute('/arena/$id')({
   component: ArenaBattlePage,
@@ -29,6 +30,12 @@ function ArenaBattlePage() {
 
   const { data: turns, isLoading: loadingT } = useArenaTurns(battleId, isLive)
 
+  // Waku live subscription — near-instant turn delivery
+  const { wakuTurns, connected: wakuConnected } = useWakuTurns({
+    battleId,
+    enabled: isLive,
+  })
+
   const [visibleTurns, setVisibleTurns] = useState(0)
   const [isReplaying, setIsReplaying] = useState(false)
   const [prevTurnCount, setPrevTurnCount] = useState(0)
@@ -37,8 +44,17 @@ function ArenaBattlePage() {
 
   const challenge = challenges?.find((c) => c.battleId === battleId)
 
-  // Sort turns by turnNumber
-  const sortedTurns = [...(turns ?? [])].sort((a, b) => a.turnNumber - b.turnNumber)
+  // Merge on-chain turns with Waku turns (dedup by turnNumber, on-chain wins)
+  const sortedTurns = useMemo(() => {
+    const onChain = turns ?? []
+    const merged = [...onChain]
+    for (const wt of wakuTurns) {
+      if (!merged.some(t => t.turnNumber === wt.turnNumber)) {
+        merged.push(wt)
+      }
+    }
+    return merged.sort((a, b) => a.turnNumber - b.turnNumber)
+  }, [turns, wakuTurns])
 
   // Determine phase
   const phase = settlement ? 'settled' : accept ? 'active' : challenge ? 'open' : 'unknown'
@@ -166,6 +182,9 @@ function ArenaBattlePage() {
         {isLive && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-red-900/50 px-3 py-1 text-xs font-medium text-red-400">
             <span className="animate-pulse">●</span> LIVE
+            {wakuConnected && (
+              <span className="text-[10px] text-green-400 ml-1" title="Waku P2P connected">⚡</span>
+            )}
           </span>
         )}
         {challenge && (

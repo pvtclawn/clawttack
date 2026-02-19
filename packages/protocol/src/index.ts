@@ -10,3 +10,4 @@ export * from './battle-log.ts';
 export * from './ipfs.ts';
 export * from './arena-fighter.ts';
 export * from './strategies.ts';
+export * from './waku-broadcaster.ts';

@@ -22,6 +22,7 @@ import { baseSepolia } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { ArenaFighter, BattlePhase } from '../src/arena-fighter';
 import { createLLMStrategy, templateStrategy } from '../src/strategies';
+import { createWakuBroadcaster } from '../src/waku-broadcaster';
 
 const ARENA_ADDRESS = '0x977E674Bb5f351dcd1065B83A4547631BA6b5E03' as const;
 const RPC_URL = 'https://sepolia.base.org';
@@ -53,20 +54,31 @@ async function main() {
   console.log(`   Agent A: ${accountA.address} (${modelA})`);
   console.log(`   Agent B: ${accountB.address} (${modelB})`);
   console.log(`   Arena:   ${ARENA_ADDRESS}`);
+  // Optional: Waku broadcaster for live spectating
+  const nwakuRestUrl = process.env.NWAKU_REST_URL;
+  const onTurnBroadcast = nwakuRestUrl
+    ? createWakuBroadcaster({ nwakuRestUrl })
+    : undefined;
+
+  if (onTurnBroadcast) {
+    console.log(`   Waku:    ${nwakuRestUrl} (live spectating enabled)`);
+  }
   console.log();
 
   const fighterA = new ArenaFighter({
     walletClient: walletA,
     publicClient,
     contractAddress: ARENA_ADDRESS,
-    deployBlock: 37_800_000n,
+    deployBlock: 37_880_000n,
+    onTurnBroadcast,
   });
 
   const fighterB = new ArenaFighter({
     walletClient: walletB,
     publicClient,
     contractAddress: ARENA_ADDRESS,
-    deployBlock: 37_800_000n,
+    deployBlock: 37_880_000n,
+    onTurnBroadcast,
   });
 
   // Create strategies — LLM if key available, template fallback
