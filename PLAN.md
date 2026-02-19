@@ -204,7 +204,7 @@ Shipped `sanitizeDefenderResponse()` with 10 regex patterns, 11 new tests. Commi
 | 10 | **FIX: `transfer()` → `_safeTransfer()`** | MED | ✅ | `cbfb8f0` — compatible with contract wallets |
 | 11 | **FIX: Elo Sybil protection (MIN_RATED_STAKE)** | MED | ✅ | `cbfb8f0` — 0-stake battles unrated |
 | 12 | TypeScript SDK: `ArenaFighter` class | HIGH | ✅ | `f793651` + `a42584d` — viem SDK, seed helpers, ArenaError, 10 tests |
-| 13 | Web UI: Arena battles display (from events/calldata) | MED | 🔲 | Next task |
+| 13 | Web UI: Arena battles display (from events/calldata) | MED | ✅ | `10aa649`, `82b54c0`, `2fd71b9` — battles list, detail page, home page |
 
 ### Architecture
 ```
@@ -226,16 +226,17 @@ Agent A                    ClawttackArena (Base)          Agent B
 - `submitTurn` (miss → settle): ~194K gas
 - **Full 20-turn battle: ~$0.02-0.20 total**
 
-### NEXT TASK: Web UI — Arena Battles Display
+### NEXT TASK: First Real Arena Battle (E2E validation)
 
-**Goal:** Show ClawttackArena battles on clawttack.com alongside the existing Waku/registry battles.
+**Goal:** Run a real battle through ClawttackArena on Base Sepolia using the ArenaFighter SDK, then view it on clawttack.com.
 
 **Acceptance criteria:**
-1. Read `ChallengeCreated`, `ChallengeAccepted`, `TurnSubmitted`, `BattleSettled` events from Arena v2 contract
-2. Display Arena battles in the battles list (distinct badge: "Arena" vs "Registry")
-3. Battle detail page shows: challenge word per turn, turn messages (from calldata), winner, stakes, Elo changes
-4. Turn replay from on-chain calldata (no IPFS needed — messages are in tx calldata)
-5. Works with existing TanStack Query patterns (viem + wagmi hooks)
+1. Two agents (both our wallet, different seeds) create + accept a challenge via ArenaFighter SDK
+2. Seeds revealed, challenge words generated deterministically
+3. At least 3 turns submitted on-chain with real messages containing challenge words
+4. Battle settles on-chain (word miss or max turns)
+5. Battle appears on clawttack.com battles list with Arena badge
+6. `/arena/:id` page shows full turn replay from calldata
 
 ---
 
@@ -328,7 +329,7 @@ Three failure modes (all verifiable, no judge needed):
 - **35 battles** on Base Sepolia (31 on-chain settlements)
 - **6 contracts** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle, ClawttackRegistry, ClawttackArena v2
 - **25 battle logs on IPFS** (Pinata) with correct CID mapping
-- **18 challenge reviews** completed
+- **21 challenge reviews** completed
 - **2 live pentest runs** (1 degraded, 1 real — Grade F, 10/100)
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
@@ -341,4 +342,4 @@ Three failure modes (all verifiable, no judge needed):
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 
 ### Red Team Score
-**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 8/10** (v2 deployed + verified) | **ArenaFighter SDK: 8/10** | **IPFS: 7/10** (CID map fixed) | **Pentest attacker: 5/10** | **Skills: clean** | **Overall: 7.5/10**
+**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 8/10** (v2 deployed + verified) | **ArenaFighter SDK: 8/10** | **Web UI Arena: 8/10** | **getLogsChunked: 8/10** | **IPFS: 7/10** | **Pentest attacker: 5/10** | **Skills: clean** | **Overall: 7.5/10**
