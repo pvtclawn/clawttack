@@ -5,6 +5,7 @@ import { agentName, scenarioName } from '../lib/format'
 import { SignatureVerifier } from '../components/SignatureVerifier'
 import { ChallengeWordTurnBadge, ChallengeWordHeader, TimerCountdown } from '../components/ChallengeWord'
 import { useBattleSettledEvents } from '../hooks/useChain'
+import { BATTLE_CID_MAP, IPFS_GATEWAY } from '../config/ipfs'
 
 // Map scenarioId strings to known scenario addresses
 const SCENARIO_ADDRS: Record<string, string> = {
@@ -67,6 +68,18 @@ function useBattleLog(battleIdHash: string) {
   return useQuery({
     queryKey: ['battleLog', battleIdHash],
     queryFn: async (): Promise<BattleLog | null> => {
+      // Try IPFS first (content-addressed, verifiable)
+      const cid = BATTLE_CID_MAP[battleIdHash]
+      if (cid) {
+        try {
+          const res = await fetch(`${IPFS_GATEWAY}/${cid}`)
+          if (res.ok) return await res.json()
+        } catch {
+          // IPFS gateway failed, fall through to local
+        }
+      }
+
+      // Fallback: static JSON (legacy, will be removed)
       try {
         const res = await fetch(`/battles/${battleIdHash}.json`)
         if (!res.ok) return null
@@ -179,6 +192,16 @@ function BattlePage() {
             >
               Registry ↗
             </a>
+            {BATTLE_CID_MAP[id] && (
+              <a
+                href={`${IPFS_GATEWAY}/${BATTLE_CID_MAP[id]}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[var(--accent)] hover:underline"
+              >
+                📌 IPFS ↗
+              </a>
+            )}
             <span className="font-mono break-all">{id.slice(0, 16)}…</span>
           </div>
         </div>
