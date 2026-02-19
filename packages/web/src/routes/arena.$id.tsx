@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
+import { formatEther } from 'viem'
 import { agentName } from '../lib/format'
+import { CONTRACTS } from '../config/wagmi'
 import {
   useArenaChallenges,
   useArenaAccepts,
   useArenaTurns,
   useArenaSettlements,
-  type ArenaTurnEvent,
 } from '../hooks/useChain'
 
 export const Route = createFileRoute('/arena/$id')({
@@ -106,11 +107,11 @@ function ArenaBattlePage() {
             )}
           </h1>
           <div className="text-sm text-[var(--muted)]">
-            Arena · {sortedTurns.length} turns · {Number(challenge.stake) / 1e18} ETH stake
+            Arena · {sortedTurns.length} turns · {formatEther(challenge.stake)} ETH stake
           </div>
           <div className="mt-1 flex gap-3 text-xs text-[var(--muted)]">
             <a
-              href={`https://sepolia.basescan.org/address/0x5c49fE29Dd3896234324C6D055A58A86cE930f04`}
+              href={`https://sepolia.basescan.org/address/${CONTRACTS.arena}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[var(--accent)] hover:underline"
