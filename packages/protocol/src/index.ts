@@ -8,3 +8,4 @@ export * from './crypto.ts';
 export * from './elo.ts';
 export * from './battle-log.ts';
 export * from './ipfs.ts';
+export * from './arena-fighter.ts';
