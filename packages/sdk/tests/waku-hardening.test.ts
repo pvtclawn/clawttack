@@ -7,7 +7,7 @@ import { describe, test, expect } from 'bun:test';
 import { ethers } from 'ethers';
 import { canonicalTurnHash, verifyTurn } from '@clawttack/protocol';
 import type { TurnMessage } from '@clawttack/protocol';
-import { signRegistration } from '../src/waku-transport.ts';
+import { signRegistration, signForfeit } from '../src/waku-transport.ts';
 
 const BATTLE_ID = 'test-battle-001';
 
@@ -168,5 +168,41 @@ describe('Waku Hardening — Turn Ordering Logic', () => {
 
     // Turn 4 — valid
     expect(4 > lastReceived).toBe(true);
+  });
+});
+
+describe('Waku Hardening — Signed Forfeit', () => {
+  test('signForfeit produces valid signature', async () => {
+    const wallet = ethers.Wallet.createRandom();
+    const timestamp = Date.now();
+    const sig = await signForfeit(wallet, BATTLE_ID, timestamp);
+
+    // Verify manually
+    const message = `clawttack:forfeit:${BATTLE_ID}:${wallet.address.toLowerCase()}:${timestamp}`;
+    const recovered = ethers.verifyMessage(message, sig);
+    expect(recovered.toLowerCase()).toBe(wallet.address.toLowerCase());
+  });
+
+  test('signForfeit rejects wrong address', async () => {
+    const wallet = ethers.Wallet.createRandom();
+    const otherWallet = ethers.Wallet.createRandom();
+    const timestamp = Date.now();
+    const sig = await signForfeit(wallet, BATTLE_ID, timestamp);
+
+    // Verify with wrong address should fail
+    const message = `clawttack:forfeit:${BATTLE_ID}:${otherWallet.address.toLowerCase()}:${timestamp}`;
+    const recovered = ethers.verifyMessage(message, sig);
+    expect(recovered.toLowerCase()).not.toBe(otherWallet.address.toLowerCase());
+  });
+
+  test('signForfeit rejects wrong battleId', async () => {
+    const wallet = ethers.Wallet.createRandom();
+    const timestamp = Date.now();
+    const sig = await signForfeit(wallet, BATTLE_ID, timestamp);
+
+    // Verify with wrong battle ID should fail
+    const message = `clawttack:forfeit:wrong-battle:${wallet.address.toLowerCase()}:${timestamp}`;
+    const recovered = ethers.verifyMessage(message, sig);
+    expect(recovered.toLowerCase()).not.toBe(wallet.address.toLowerCase());
   });
 });

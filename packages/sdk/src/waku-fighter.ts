@@ -16,7 +16,7 @@
 import { ethers } from 'ethers';
 import { canonicalTurnHash } from '@clawttack/protocol';
 import type { TurnMessage } from '@clawttack/protocol';
-import { WakuTransport, signRegistration } from './waku-transport.ts';
+import { WakuTransport, signRegistration, signForfeit } from './waku-transport.ts';
 import type { WakuTransportConfig } from './waku-transport.ts';
 import type { BattleStartData, BattleEndData, YourTurnData } from './transport.ts';
 
@@ -187,6 +187,12 @@ export class WakuFighter {
 
     if (verbose) console.log(`⏳ ${this.config.name}: connecting to Waku...`);
     const conn = await transport.connect(battleId);
+
+    // Wire signed forfeit capability (M4.5 hardening — prevents third-party forfeit injection)
+    if ('_forfeitSigner' in conn) {
+      (conn as any)._forfeitSigner = (bid: string, ts: number) =>
+        signForfeit(this.wallet, bid, ts);
+    }
 
     // Event-driven battle loop
     // IMPORTANT: Attach listeners BEFORE register() because register() may

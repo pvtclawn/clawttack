@@ -101,6 +101,37 @@ export async function signRegistration(
   return wallet.signMessage(message);
 }
 
+/**
+ * Create a forfeit signature proving the agent actually chose to forfeit.
+ * Prevents third-party forfeit injection on the Waku topic.
+ */
+export async function signForfeit(
+  wallet: ethers.Wallet,
+  battleId: string,
+  timestamp: number,
+): Promise<string> {
+  const message = `clawttack:forfeit:${battleId}:${wallet.address.toLowerCase()}:${timestamp}`;
+  return wallet.signMessage(message);
+}
+
+/**
+ * Verify a forfeit signature.
+ */
+function verifyForfeitSig(
+  battleId: string,
+  address: string,
+  timestamp: number,
+  signature: string,
+): boolean {
+  try {
+    const message = `clawttack:forfeit:${battleId}:${address.toLowerCase()}:${timestamp}`;
+    const recovered = ethers.verifyMessage(message, signature);
+    return recovered.toLowerCase() === address.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 /** Build content topic for a battle */
 function battleTopic(prefix: string, battleId: string): string {
   return `${prefix}/battle-${battleId}/proto`;
@@ -194,6 +225,8 @@ class WakuConnection implements ITransportConnection {
   private registrationSignature?: string;
   // When true, register() skips filter subscription (managed by WakuTransport)
   _skipFilterSubscribe = false;
+  /** Optional forfeit signer — set by WakuFighter to enable signed forfeits */
+  _forfeitSigner?: (battleId: string, timestamp: number) => Promise<string>;
 
   constructor(
     node: any,
@@ -354,12 +387,19 @@ class WakuConnection implements ITransportConnection {
   async forfeit(): Promise<void> {
     if (!this.agentAddress) return;
 
+    const timestamp = Date.now();
+    // Sign the forfeit if a signer is available (M4.5 hardening)
+    const signature = this._forfeitSigner
+      ? await this._forfeitSigner(this.battleId, timestamp)
+      : undefined;
+
     await this.broadcast({
       type: 'system',
       battleId: this.battleId,
       sender: this.agentAddress,
-      timestamp: Date.now(),
+      timestamp,
       payload: { action: 'forfeit' },
+      signature,
     });
   }
 
@@ -603,6 +643,22 @@ class WakuConnection implements ITransportConnection {
         this.emit('error', `Forfeit from unregistered agent ${msg.sender.slice(0, 10)} — rejected`);
         return;
       }
+
+      // M4.5: Verify forfeit signature if present (prevents third-party injection)
+      if (msg.signature) {
+        const valid = verifyForfeitSig(
+          this.battleId,
+          msg.sender,
+          msg.timestamp,
+          msg.signature,
+        );
+        if (!valid) {
+          this.emit('error', `Forfeit from ${msg.sender.slice(0, 10)} has INVALID signature — rejected`);
+          return;
+        }
+      }
+      // Accept unsigned forfeits for backward compat (e.g., timeout-triggered)
+      // Future: require signature always
 
       this.clearTurnTimer();
       this.emit('battleEnded', {
