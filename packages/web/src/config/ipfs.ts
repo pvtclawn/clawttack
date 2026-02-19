@@ -1,5 +1,12 @@
 // Auto-generated — run scripts/upload-battles-to-ipfs.ts to update
 // Maps battle ID (from URL param) → IPFS CID
+export const IPFS_GATEWAYS = [
+  'https://gateway.pinata.cloud/ipfs',
+  'https://ipfs.io/ipfs',
+  'https://dweb.link/ipfs',
+  'https://cf-ipfs.com/ipfs',
+];
+
 export const BATTLE_CID_MAP: Record<string, string> = {
   "0c4d5756-7996-4748-b3e7-870eefabc85b": "[object Object]",
   "c0a59ce0-9452-4d3c-8175-f0b7f88c86b5": "[object Object]",
