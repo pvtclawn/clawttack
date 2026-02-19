@@ -1,4 +1,4 @@
-# Clawttack — Build Plan (Updated 2026-02-19 11:36)
+# Clawttack — Build Plan (Updated 2026-02-19 15:26)
 
 ## Current Status
 
@@ -186,6 +186,55 @@ Shipped `sanitizeDefenderResponse()` with 10 regex patterns, 11 new tests. Commi
 
 ---
 
+## M8: ClawttackArena — Chain IS the Transport (CURRENT) 🏟️
+
+**Egor's architecture pivot:** Per-turn on-chain txs. No relay, no Waku for turn exchange. Contract handles the full lifecycle.
+
+| # | Task | Priority | Status | Notes |
+|---|------|----------|--------|-------|
+| 1 | `ClawttackArena.sol` — challenge/accept/reveal/submitTurn/timeout | HIGH | ✅ | `15e01fe` — 28 Forge tests |
+| 2 | Optimizer config (via-ir, 200 runs) → 10KB bytecode | HIGH | ✅ | `4f08e88` — under 24KB limit |
+| 3 | Red-team audit #15 | HIGH | ✅ | 10 findings, 6/10 |
+| 4 | **FIX: `reclaimCommitted()` — fund lock in Committed phase** | 🔴 CRITICAL | 🔲 | Funds stuck forever if seeds never revealed |
+| 5 | **FIX: Restrict `revealSeeds()` to participants** | 🟡 HIGH | 🔲 | Griefing: anyone can start battle |
+| 6 | **FIX: Generate `battleId` on-chain** (prevent squatting) | 🟡 HIGH | 🔲 | Front-runner can block IDs |
+| 7 | Message length limit (max 10KB) | LOW | 🔲 | Gas self-limiting but good hygiene |
+| 8 | `transferOwnership()` | LOW | 🔲 | Owner key management |
+| 9 | Deploy to Base Sepolia | HIGH | 🔲 | After fixes #4-6 |
+| 10 | TypeScript SDK: `ArenaFighter` class | HIGH | 🔲 | Agent-side contract interaction |
+| 11 | Web UI: Arena battles display (from events/calldata) | MED | 🔲 | |
+
+### Architecture
+```
+Agent A                    ClawttackArena (Base)          Agent B
+   |                            |                          |
+   |── createChallenge(stake)──→|                          |
+   |                            |←── acceptChallenge(stake)|
+   |── revealSeeds(seedA,seedB)→|  [verifies commitments]  |
+   |── submitTurn("...fire...")→|  ✅ word found (T1)       |
+   |                            |←── submitTurn("...arch") |
+   |── submitTurn("no word") ──→|  ❌ word missing → settle |
+   |                            |  → 95% pool to B, 5% fee |
+```
+
+### Gas Costs (Base L2)
+- `createChallenge`: ~158K gas
+- `acceptChallenge`: ~108K gas  
+- `submitTurn` (with word): ~63K gas median
+- `submitTurn` (miss → settle): ~194K gas
+- **Full 20-turn battle: ~$0.02-0.20 total**
+
+### NEXT TASK: Fix Critical Arena Bugs (3 fixes)
+
+**Acceptance criteria:**
+1. Add `reclaimCommitted(battleId)` — either party can reclaim after turnDeadline in Committed phase
+2. Add `require(msg.sender == b.challenger || msg.sender == b.opponent)` to `revealSeeds()`
+3. Change `createChallenge` to generate battleId internally: `keccak256(abi.encodePacked(msg.sender, commitA, block.timestamp))`
+4. Add Forge tests for all 3 fixes
+5. All existing tests still pass
+
+---
+
 ## Also Pending
 - M4.8: Web UI live Waku spectator view (browser → nwaku WebSocket)
 - Red-team fixes remaining:
@@ -271,11 +320,11 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **235 tests** (189 SDK/Bun + 46 Forge) | **451 expect() calls** | **0 failures**
-- **27+ battles** on Base Sepolia
-- **4 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle
-- **27 battle logs on IPFS** (Pinata) with CID mapping
-- **12 challenge reviews** completed
+- **266 tests** (192 SDK/Bun + 74 Forge) | **461 expect() calls** | **0 failures**
+- **35 battles** on Base Sepolia (31 on-chain settlements)
+- **5 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle, ClawttackArena (local)
+- **35 battle logs on IPFS** (Pinata) with CID mapping
+- **15 challenge reviews** completed
 - **2 live pentest runs** (1 degraded, 1 real — Grade F, 10/100)
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
@@ -287,4 +336,4 @@ Three failure modes (all verifiable, no judge needed):
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 
 ### Red Team Score
-**Waku P2P: 8/10** | **Pentest system: 8/10** (error sanitization shipped) | **IPFS: 7/10** (multi-gateway + infinite cache shipped) | **Pentest attacker: 5/10** (naive vs ARACNE/RapidPen SOTA) | **Overall: 7/10**
+**Waku P2P: 8/10** | **Pentest system: 8/10** | **IPFS: 7/10** | **ClawttackArena: 6/10** (3 must-fix) | **Pentest attacker: 5/10** | **Overall: 7/10**
