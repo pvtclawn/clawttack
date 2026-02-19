@@ -46,6 +46,7 @@ contract ClawttackArena {
     uint64 public constant MIN_TIMEOUT = 5;            // minimum seconds per turn
     uint64 public constant CHALLENGE_EXPIRY = 1 hours;  // open challenge expires after
     uint256 public constant MIN_STAKE = 0;              // 0 = free battles allowed
+    uint256 public constant MIN_RATED_STAKE = 0.0001 ether; // Min stake for Elo-rated battles
 
     /// @notice Word list for challenge word generation (4-letter words)
     string[64] private WORDS = [
@@ -197,7 +198,7 @@ contract ClawttackArena {
 
         // Refund excess stake
         if (msg.value > b.stake) {
-            payable(msg.sender).transfer(msg.value - b.stake);
+            _safeTransfer(msg.sender, msg.value - b.stake);
         }
 
         emit ChallengeAccepted(battleId, msg.sender, commitB);
@@ -294,7 +295,7 @@ contract ClawttackArena {
         b.phase = BattlePhase.Cancelled;
 
         if (b.stake > 0) {
-            payable(b.challenger).transfer(b.stake);
+            _safeTransfer(b.challenger, b.stake);
         }
 
         emit ChallengeCancelled(battleId);
@@ -310,7 +311,7 @@ contract ClawttackArena {
         b.phase = BattlePhase.Cancelled;
 
         if (b.stake > 0) {
-            payable(b.challenger).transfer(b.stake);
+            _safeTransfer(b.challenger, b.stake);
         }
 
         emit ChallengeCancelled(battleId);
@@ -327,8 +328,8 @@ contract ClawttackArena {
 
         // Return both stakes
         if (b.stake > 0) {
-            payable(b.challenger).transfer(b.stake);
-            payable(b.opponent).transfer(b.stake);
+            _safeTransfer(b.challenger, b.stake);
+            _safeTransfer(b.opponent, b.stake);
         }
 
         emit ChallengeCancelled(battleId);
@@ -420,21 +421,23 @@ contract ClawttackArena {
         if (totalPool > 0) {
             if (winner == address(0)) {
                 // Draw — return stakes
-                payable(b.challenger).transfer(b.stake);
-                payable(b.opponent).transfer(b.stake);
+                _safeTransfer(b.challenger, b.stake);
+                _safeTransfer(b.opponent, b.stake);
             } else {
                 // Winner takes pool minus protocol fee
                 uint256 fee = (totalPool * protocolFeeRate) / 10000;
                 uint256 payout = totalPool - fee;
-                payable(winner).transfer(payout);
+                _safeTransfer(winner, payout);
                 if (fee > 0) {
-                    payable(feeRecipient).transfer(fee);
+                    _safeTransfer(feeRecipient, fee);
                 }
             }
         }
 
-        // Update Elo
-        _updateElo(b.challenger, b.opponent, winner);
+        // Update Elo only for rated battles (non-zero stake)
+        if (b.stake >= MIN_RATED_STAKE) {
+            _updateElo(b.challenger, b.opponent, winner);
+        }
 
         emit BattleSettled(battleId, winner, b.currentTurn, reason);
     }
@@ -545,5 +548,12 @@ contract ClawttackArena {
             return bytes1(uint8(b) + 32);
         }
         return b;
+    }
+
+    /// @dev Safe ETH transfer using call() instead of transfer()
+    /// transfer() forwards only 2300 gas which fails for contract wallets
+    function _safeTransfer(address to, uint256 amount) internal {
+        (bool success,) = payable(to).call{value: amount}("");
+        require(success, "ETH transfer failed");
     }
 }

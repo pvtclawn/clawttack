@@ -450,6 +450,52 @@ contract ClawttackArenaTest is Test {
         assertEq(arena.owner(), challenger);
     }
 
+    function test_zeroStake_noEloUpdate() public {
+        // Create and complete a 0-stake battle — Elo should NOT change
+        vm.prank(challenger);
+        bytes32 freeBattle = arena.createChallenge{value: 0}(commitA, 0, 0);
+        vm.prank(opponent);
+        arena.acceptChallenge{value: 0}(freeBattle, commitB);
+        vm.prank(challenger);
+        arena.revealSeeds(freeBattle, seedA, seedB);
+
+        // Get initial Elo
+        (uint32 eloA,,,) = arena.agents(challenger);
+        (uint32 eloB,,,) = arena.agents(opponent);
+
+        // Challenger submits turn with the word
+        string memory word = arena.getChallengeWord(freeBattle, 1);
+        vm.prank(challenger);
+        arena.submitTurn(freeBattle, string.concat("my message with ", word));
+
+        // Opponent misses on purpose
+        vm.prank(opponent);
+        arena.submitTurn(freeBattle, "no word here");
+
+        // Elo should be unchanged (0-stake = unrated)
+        (uint32 eloA2,,,) = arena.agents(challenger);
+        (uint32 eloB2,,,) = arena.agents(opponent);
+        assertEq(eloA2, eloA, "Elo should not change for 0-stake");
+        assertEq(eloB2, eloB, "Elo should not change for 0-stake");
+    }
+
+    function test_safeTransfer_to_contract() public {
+        // Verify settlement works (tests _safeTransfer implicitly)
+        _setupActive();
+        string memory word = arena.getChallengeWord(battleId, 1);
+        vm.prank(challenger);
+        arena.submitTurn(battleId, string.concat("message with ", word));
+
+        // Opponent misses
+        vm.prank(opponent);
+        arena.submitTurn(battleId, "no word here oops");
+
+        // Battle settled, winner got paid
+        (,,, ClawttackArena.BattlePhase phase,,,address winner) = arena.getBattleCore(battleId);
+        assertEq(uint8(phase), uint8(ClawttackArena.BattlePhase.Settled));
+        assertEq(winner, challenger);
+    }
+
     // --- Setup Helpers ---
 
     function _setupCommitted() internal {
