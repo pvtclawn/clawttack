@@ -64,14 +64,18 @@ interface BattleLog {
   }
 }
 
-function useBattleLog(battleIdHash: string) {
+function useBattleLog(battleIdHash: string, onChainCid?: `0x${string}`) {
   return useQuery({
     queryKey: ['battleLog', battleIdHash],
     // Content-addressed data never changes — cache forever
     staleTime: Infinity,
     gcTime: 1000 * 60 * 60, // keep in memory for 1h
     queryFn: async (): Promise<BattleLog | null> => {
-      // Try IPFS gateways in order (content-addressed, verifiable)
+      // Priority 1: On-chain CID from BattleSettled event (trustless, verifiable)
+      // Note: bytes32 CIDs will be supported when settlement pipeline uploads to IPFS
+      // For now, on-chain CIDs are bytes32(0) — skip if zero
+
+      // Priority 2: Static CID mapping (stopgap until on-chain CIDs are populated)
       const cid = BATTLE_CID_MAP[battleIdHash]
       if (cid) {
         for (const gateway of IPFS_GATEWAYS) {
