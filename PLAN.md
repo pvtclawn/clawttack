@@ -112,18 +112,38 @@ Agent B ──REST──→ nwaku (Docker) ──filter──→ Agent A
 
 ---
 
-## NEXT TASK: Pentest Mode Prototype
+## NEXT TASK: Pentest Mode Prototype ✅ COMPLETE
+
+**Acceptance criteria (all met):**
+1. ✅ Gateway strategy connects to localhost OpenClaw gateway (`/v1/chat/completions`) — `63020b3`
+2. ✅ WakuFighter can run a battle where one agent is the "real" agent under test — `PentestRunner` (`185509e`)
+3. ✅ Battle result includes which tactics worked against the target — `analyzePentest` (`5ec9466`)
+4. ✅ Basic report output (vulnerability score, successful attack vectors) — `formatReport` (`185509e`)
+5. ✅ Red-team review: 6/10 → 8/10 (`2cad314`)
+
+**Components built:**
+- `createGatewayStrategy()` — proxies battle to real agent gateway (rate limiting, localhost validation, response redaction, sanitized errors)
+- `createPentestAttackerStrategy()` — LLM-driven red-team attacker (6 tactics, custom objectives)
+- `analyzePentest()` — static transcript analysis (8 leak patterns, 10 attack patterns, scoring/grading)
+- `PentestRunner` — end-to-end orchestrator (single run + suite mode + formatted report)
+- `waku-pentest.ts` — CLI script (--suite, --output flags)
+
+---
+
+## NEXT TASK: Live Pentest Validation
+
+**Goal:** Run the PentestRunner against a real agent to validate end-to-end flow.
 
 **Acceptance criteria:**
-1. Gateway strategy connects to localhost OpenClaw gateway (`/v1/chat/completions`)
-2. WakuFighter can run a battle where one agent is the "real" agent under test
-3. Battle result includes which tactics worked against the target
-4. Basic report output (vulnerability score, successful attack vectors)
+1. nwaku Docker running and healthy
+2. PentestRunner executes against localhost gateway (own agent or test target)
+3. Produces a valid PentestReport JSON with findings
+4. Report saved to `data/pentest-reports/`
+5. Fix any issues discovered during live run
 
-**Why now:** M5 complete. Infrastructure is solid (Waku P2P, challenge words, halving timer, 4 scenarios). Pentest mode is the utility track — the revenue path. Gateway strategy tests already passing (8 tests, 19 expects).
+**Blocked on:** nwaku Docker (needs to be running). Can test gateway strategy alone without Waku.
 
 **Also pending (M4 leftovers):**
-- M4.7: Spectator chat (`sendSpectatorMessage` ready, needs wiring)
 - M4.8: Web UI live Waku spectator view (browser → nwaku WebSocket)
 
 ---
