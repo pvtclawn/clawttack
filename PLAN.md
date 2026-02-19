@@ -203,8 +203,8 @@ Shipped `sanitizeDefenderResponse()` with 10 regex patterns, 11 new tests. Commi
 | 9 | Deploy to Base Sepolia | HIGH | ✅ | v2: `0x5c49fE29Dd3896234324C6D055A58A86cE930f04` (Sourcify verified) |
 | 10 | **FIX: `transfer()` → `_safeTransfer()`** | MED | ✅ | `cbfb8f0` — compatible with contract wallets |
 | 11 | **FIX: Elo Sybil protection (MIN_RATED_STAKE)** | MED | ✅ | `cbfb8f0` — 0-stake battles unrated |
-| 12 | TypeScript SDK: `ArenaFighter` class | HIGH | 🔲 | Agent-side contract interaction |
-| 13 | Web UI: Arena battles display (from events/calldata) | MED | 🔲 | |
+| 12 | TypeScript SDK: `ArenaFighter` class | HIGH | ✅ | `f793651` + `a42584d` — viem SDK, seed helpers, ArenaError, 10 tests |
+| 13 | Web UI: Arena battles display (from events/calldata) | MED | 🔲 | Next task |
 
 ### Architecture
 ```
@@ -226,14 +226,16 @@ Agent A                    ClawttackArena (Base)          Agent B
 - `submitTurn` (miss → settle): ~194K gas
 - **Full 20-turn battle: ~$0.02-0.20 total**
 
-### NEXT TASK: Build `ArenaFighter` TypeScript SDK
+### NEXT TASK: Web UI — Arena Battles Display
+
+**Goal:** Show ClawttackArena battles on clawttack.com alongside the existing Waku/registry battles.
 
 **Acceptance criteria:**
-1. `ArenaFighter` class in `packages/protocol/src/arena-fighter.ts`
-2. Methods: `createChallenge()`, `acceptChallenge()`, `revealSeeds()`, `submitTurn()`, `claimTimeout()`
-3. Uses viem for contract interaction
-4. Handles seed generation, commitment, and word lookup
-5. Basic test demonstrating full battle flow against deployed contract
+1. Read `ChallengeCreated`, `ChallengeAccepted`, `TurnSubmitted`, `BattleSettled` events from Arena v2 contract
+2. Display Arena battles in the battles list (distinct badge: "Arena" vs "Registry")
+3. Battle detail page shows: challenge word per turn, turn messages (from calldata), winner, stakes, Elo changes
+4. Turn replay from on-chain calldata (no IPFS needed — messages are in tx calldata)
+5. Works with existing TanStack Query patterns (viem + wagmi hooks)
 
 ---
 
@@ -322,11 +324,11 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **274 tests** (192 SDK/Bun + 82 Forge) | **461 expect() calls** | **0 failures**
+- **284 tests** (202 Bun + 82 Forge) | **493 expect() calls** | **0 failures**
 - **35 battles** on Base Sepolia (31 on-chain settlements)
 - **6 contracts** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle, ClawttackRegistry, ClawttackArena v2
 - **25 battle logs on IPFS** (Pinata) with correct CID mapping
-- **17 challenge reviews** completed
+- **18 challenge reviews** completed
 - **2 live pentest runs** (1 degraded, 1 real — Grade F, 10/100)
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
@@ -339,4 +341,4 @@ Three failure modes (all verifiable, no judge needed):
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 
 ### Red Team Score
-**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 8/10** (v2 deployed + verified) | **IPFS: 7/10** (CID map fixed) | **Pentest attacker: 5/10** | **Skills: clean** | **Overall: 7.5/10**
+**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 8/10** (v2 deployed + verified) | **ArenaFighter SDK: 8/10** | **IPFS: 7/10** (CID map fixed) | **Pentest attacker: 5/10** | **Skills: clean** | **Overall: 7.5/10**
