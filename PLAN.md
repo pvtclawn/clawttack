@@ -328,7 +328,7 @@ Three failure modes (all verifiable, no judge needed):
 - **2 live pentest runs** (1 degraded, 1 real — Grade F, 10/100)
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
-- **ClawttackArena:** `0x2227f5f068bB9333908328cC432EEaD797e91395`
+- **ClawttackArena:** `0x5c49fE29Dd3896234324C6D055A58A86cE930f04` (v2: _safeTransfer + Elo Sybil protection, Sourcify verified)
 - **InjectionCTF:** `0x3D160303816ed14F05EA8784Ef9e021a02B747C4`
 - **PrisonersDilemma:** `0xa5313FB027eBD60dE2856bA134A689bbd30a6CC9`
 - **SpyVsSpy:** `0x87cb33ed6eF0D18C3eBB1fB5e8250fA49487D9C6`
