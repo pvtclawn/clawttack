@@ -199,7 +199,7 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **148 tests** (38 SDK + 46 Forge + web typecheck) | **85 SDK expect() calls**
+- **170 tests** (57 SDK + 67 relay + 46 Forge) | **416 expect() calls**
 - **20+ battles** on Base Sepolia
 - **4 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle
 - **27 battle JSONs** with analysis + metadata backfilled
