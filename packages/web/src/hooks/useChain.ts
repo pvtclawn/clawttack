@@ -101,7 +101,8 @@ export function useBattleCreatedEvents() {
         }),
       })
     },
-    staleTime: 60_000,
+    // Historical chain events don't change — cache for 5 minutes
+    staleTime: 5 * 60_000,
     retry: 2,
   })
 }
@@ -123,7 +124,8 @@ export function useBattleSettledEvents() {
         }),
       })
     },
-    staleTime: 60_000,
+    // Historical chain events don't change — cache for 5 minutes
+    staleTime: 5 * 60_000,
     retry: 2,
   })
 }
