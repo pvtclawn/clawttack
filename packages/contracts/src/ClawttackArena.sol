@@ -74,6 +74,7 @@ contract ClawttackArena {
     uint32 public constant DEFAULT_ELO = 1200;
     uint32 public constant K_FACTOR = 32;
     uint256 public protocolFeeRate = 500; // 5% in basis points
+    uint256 public battleNonce;
     address public owner;
     address public feeRecipient;
 
@@ -136,16 +137,18 @@ contract ClawttackArena {
     // --- Core Functions ---
 
     /// @notice Create an open challenge — anyone can accept
-    /// @param battleId Unique identifier (caller picks)
     /// @param commitA keccak256(abi.encodePacked(seedA))
     /// @param maxTurns Max turns (0 = default 20)
     /// @param baseTimeout Starting timeout in seconds (0 = default 120)
+    /// @return battleId The generated unique battle identifier
     function createChallenge(
-        bytes32 battleId,
         bytes32 commitA,
         uint8 maxTurns,
         uint64 baseTimeout
-    ) external payable {
+    ) external payable returns (bytes32 battleId) {
+        battleId = keccak256(abi.encodePacked(msg.sender, commitA, battleNonce));
+        battleNonce++;
+
         if (battles[battleId].createdAt != 0) revert BattleExists();
 
         uint8 turns = maxTurns > 0 ? maxTurns : DEFAULT_MAX_TURNS;
@@ -200,7 +203,7 @@ contract ClawttackArena {
         emit ChallengeAccepted(battleId, msg.sender, commitB);
     }
 
-    /// @notice Reveal seeds to start the battle — either party can call
+    /// @notice Reveal seeds to start the battle — only participants can call
     /// @dev Both seeds must be provided. Once revealed, battle starts immediately.
     /// @param battleId The battle
     /// @param seedA Challenger's seed (must hash to commitA)
@@ -212,6 +215,7 @@ contract ClawttackArena {
     ) external {
         Battle storage b = battles[battleId];
         if (b.phase != BattlePhase.Committed) revert InvalidPhase(BattlePhase.Committed, b.phase);
+        if (msg.sender != b.challenger && msg.sender != b.opponent) revert NotParticipant();
 
         // Verify both seeds match commitments
         if (keccak256(abi.encodePacked(seedA)) != b.commitA) revert InvalidSeed();
@@ -312,6 +316,24 @@ contract ClawttackArena {
         emit ChallengeCancelled(battleId);
     }
 
+    /// @notice Reclaim stakes from a Committed battle where seeds were never revealed
+    /// @param battleId The stale committed battle
+    function reclaimCommitted(bytes32 battleId) external {
+        Battle storage b = battles[battleId];
+        if (b.phase != BattlePhase.Committed) revert InvalidPhase(BattlePhase.Committed, b.phase);
+        if (block.timestamp <= b.turnDeadline) revert ChallengeNotExpired();
+
+        b.phase = BattlePhase.Cancelled;
+
+        // Return both stakes
+        if (b.stake > 0) {
+            payable(b.challenger).transfer(b.stake);
+            payable(b.opponent).transfer(b.stake);
+        }
+
+        emit ChallengeCancelled(battleId);
+    }
+
     // --- View Functions ---
 
     /// @notice Get the challenge word for a turn
@@ -351,6 +373,12 @@ contract ClawttackArena {
         require(msg.sender == owner, "Not owner");
         require(newRecipient != address(0), "Zero address");
         feeRecipient = newRecipient;
+    }
+
+    function transferOwnership(address newOwner) external {
+        require(msg.sender == owner, "Not owner");
+        require(newOwner != address(0), "Zero address");
+        owner = newOwner;
     }
 
     // --- Getters (split to avoid stack-too-deep) ---
