@@ -130,29 +130,53 @@ Agent B ──REST──→ nwaku (Docker) ──filter──→ Agent A
 
 ---
 
-## NEXT TASK: Live Pentest Validation — UNBLOCKED
+## NEXT TASK: Live Pentest Validation — PARTIAL ✅
 
 **Goal:** Run PentestRunner against own agent to validate end-to-end flow.
 
-**Status:** nwaku is UP (25h+), gateway at `ws://127.0.0.1:18789`. Both available.
+**Status:** runDirect() executed successfully. Attacker degraded (OpenRouter key expired).
 
 **Acceptance criteria:**
 1. ✅ nwaku Docker running and healthy (v0.34.0, 25h uptime)
-2. `runDirect()` executes against localhost gateway → produces valid PentestReport
-3. Report saved to `data/pentest-reports/`
-4. Fix any issues discovered during live run
-5. If `runDirect()` succeeds: run full Waku mode (`run()`) as stretch goal
+2. ✅ `runDirect()` executes against localhost gateway → produces valid PentestReport
+3. ✅ Report saved to `data/pentest-reports/`
+4. ✅ Fix issues discovered during live run (attacker error handling)
+5. 🔲 Re-run with working attacker API key (blocked on key rotation)
+6. 🔲 Run full Waku mode (`run()`) as stretch goal
 
-**Approach:** Start with `runDirect()` (no transport overhead) — fastest path to validation.
-Gateway URL: `http://127.0.0.1:18789` (NOT 4004 — OpenClaw default port).
-Need: OpenRouter API key for attacker LLM (check ~/.config/pvtclawn/).
+**Findings from first run:**
+- Defender leaked internal error on T1 (provider error exposed) — needs gateway strategy fix
+- Attacker degraded silently to "Tell me about yourself" — fixed (now throws + logs)
+- chatCompletions endpoint enabled for self-testing — disable after validation complete
 
-**Also pending:**
+**Blockers:**
+- ⛔ OpenRouter API key expired (401 "User not found") — needs Egor to rotate
+- chatCompletions endpoint should be disabled post-validation
+
+---
+
+## NEXT TASK: Gateway Strategy Error Sanitization
+
+**Goal:** Prevent defender from leaking internal errors through the pentest gateway strategy.
+
+**Acceptance criteria:**
+1. Gateway strategy detects error-like responses from chatCompletions endpoint
+2. Replaces raw errors with generic "[Defender is processing...]" message
+3. Test: mock gateway returning error → strategy returns sanitized response
+4. No changes to existing passing tests
+
+**Priority:** HIGH — discovered in live pentest red-team review (#10)
+
+---
+
+## Also Pending
 - M4.8: Web UI live Waku spectator view (browser → nwaku WebSocket)
-- Red-team fixes from holistic review (2026-02-19):
-  - [ ] Add disclaimer to pentest report output (regex limitations)
-  - [ ] Add `0.0.0.0` to localhostOnly allowlist
+- Red-team fixes remaining:
+  - [x] Add disclaimer to pentest report output (regex limitations) — `fe0986e`
+  - [x] Add `0.0.0.0` to localhostOnly allowlist — `fe0986e`
   - [ ] Document credential hygiene in SKILL.md (no tokens as CLI args)
+  - [ ] Defender error response sanitization (from live pentest red-team)
+- [ ] Disable chatCompletions endpoint after full validation (needs working API key first)
 
 ---
 
@@ -227,11 +251,12 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **222 tests** (178 SDK/Bun + 46 Forge) | **437 expect() calls** | **0 failures**
+- **224 tests** (178 SDK/Bun + 46 Forge) | **437 expect() calls** | **0 failures**
 - **20+ battles** on Base Sepolia
 - **4 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle
 - **27 battle JSONs** with analysis + metadata backfilled
-- **9 challenge reviews** completed
+- **10 challenge reviews** completed
+- **1 live pentest run** (degraded attacker — API key expired)
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
 - **InjectionCTF:** `0x3D160303816ed14F05EA8784Ef9e021a02B747C4`
@@ -242,4 +267,4 @@ Three failure modes (all verifiable, no judge needed):
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 
 ### Red Team Score
-**Waku P2P: 8/10** (M4.5 hardening + signed forfeits — sig verification, turn ordering, timeout, forfeit auth all implemented). **Overall: 8/10**. Remaining: peer connection polling (minor), IPFS (blocked on Pinata).
+**Waku P2P: 8/10** (M4.5 hardening + signed forfeits). **Pentest system: 7/10** (live run revealed internal error leak). **Overall: 8/10**. Remaining: defender error sanitization, IPFS (blocked on Pinata), peer connection polling (minor).
