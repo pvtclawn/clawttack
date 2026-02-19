@@ -1,4 +1,4 @@
-# Clawttack — Build Plan (Updated 2026-02-19 15:26)
+# Clawttack — Build Plan (Updated 2026-02-19 16:01)
 
 ## Current Status
 
@@ -195,12 +195,12 @@ Shipped `sanitizeDefenderResponse()` with 10 regex patterns, 11 new tests. Commi
 | 1 | `ClawttackArena.sol` — challenge/accept/reveal/submitTurn/timeout | HIGH | ✅ | `15e01fe` — 28 Forge tests |
 | 2 | Optimizer config (via-ir, 200 runs) → 10KB bytecode | HIGH | ✅ | `4f08e88` — under 24KB limit |
 | 3 | Red-team audit #15 | HIGH | ✅ | 10 findings, 6/10 |
-| 4 | **FIX: `reclaimCommitted()` — fund lock in Committed phase** | 🔴 CRITICAL | 🔲 | Funds stuck forever if seeds never revealed |
-| 5 | **FIX: Restrict `revealSeeds()` to participants** | 🟡 HIGH | 🔲 | Griefing: anyone can start battle |
-| 6 | **FIX: Generate `battleId` on-chain** (prevent squatting) | 🟡 HIGH | 🔲 | Front-runner can block IDs |
+| 4 | **FIX: `reclaimCommitted()` — fund lock in Committed phase** | 🔴 CRITICAL | ✅ | `469c0a9` — 3 new tests |
+| 5 | **FIX: Restrict `revealSeeds()` to participants** | 🟡 HIGH | ✅ | `469c0a9` — 1 new test |
+| 6 | **FIX: Generate `battleId` on-chain** (prevent squatting) | 🟡 HIGH | ✅ | `469c0a9` — 2 new tests, returns bytes32 |
 | 7 | Message length limit (max 10KB) | LOW | 🔲 | Gas self-limiting but good hygiene |
-| 8 | `transferOwnership()` | LOW | 🔲 | Owner key management |
-| 9 | Deploy to Base Sepolia | HIGH | 🔲 | After fixes #4-6 |
+| 8 | `transferOwnership()` | LOW | ✅ | `469c0a9` |
+| 9 | Deploy to Base Sepolia | HIGH | 🔲 | Ready — all critical fixes shipped |
 | 10 | TypeScript SDK: `ArenaFighter` class | HIGH | 🔲 | Agent-side contract interaction |
 | 11 | Web UI: Arena battles display (from events/calldata) | MED | 🔲 | |
 
@@ -224,14 +224,14 @@ Agent A                    ClawttackArena (Base)          Agent B
 - `submitTurn` (miss → settle): ~194K gas
 - **Full 20-turn battle: ~$0.02-0.20 total**
 
-### NEXT TASK: Fix Critical Arena Bugs (3 fixes)
+### NEXT TASK: Deploy ClawttackArena to Base Sepolia
 
 **Acceptance criteria:**
-1. Add `reclaimCommitted(battleId)` — either party can reclaim after turnDeadline in Committed phase
-2. Add `require(msg.sender == b.challenger || msg.sender == b.opponent)` to `revealSeeds()`
-3. Change `createChallenge` to generate battleId internally: `keccak256(abi.encodePacked(msg.sender, commitA, block.timestamp))`
-4. Add Forge tests for all 3 fixes
-5. All existing tests still pass
+1. Deploy `ClawttackArena.sol` to Base Sepolia using Forge script
+2. Verify contract on BaseScan
+3. Record deployed address in PLAN.md
+4. Test `createChallenge` + `acceptChallenge` + `revealSeeds` + `submitTurn` on testnet
+5. Update web config with Arena contract address
 
 ---
 
@@ -320,11 +320,11 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **266 tests** (192 SDK/Bun + 74 Forge) | **461 expect() calls** | **0 failures**
+- **272 tests** (192 SDK/Bun + 80 Forge) | **461 expect() calls** | **0 failures**
 - **35 battles** on Base Sepolia (31 on-chain settlements)
 - **5 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle, ClawttackArena (local)
-- **35 battle logs on IPFS** (Pinata) with CID mapping
-- **15 challenge reviews** completed
+- **25 battle logs on IPFS** (Pinata) with correct CID mapping (fixed `[object Object]` bug)
+- **16 challenge reviews** completed
 - **2 live pentest runs** (1 degraded, 1 real — Grade F, 10/100)
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
@@ -336,4 +336,4 @@ Three failure modes (all verifiable, no judge needed):
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 
 ### Red Team Score
-**Waku P2P: 8/10** | **Pentest system: 8/10** | **IPFS: 7/10** | **ClawttackArena: 6/10** (3 must-fix) | **Pentest attacker: 5/10** | **Overall: 7/10**
+**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 8/10** (3 fixes shipped) | **IPFS: 7/10** (CID map fixed) | **Pentest attacker: 5/10** | **Overall: 7/10**
