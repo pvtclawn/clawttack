@@ -16,7 +16,7 @@ contract ClawttackArenaTest is Test {
     string seedB = "velvet thunder";
     bytes32 commitA;
     bytes32 commitB;
-    bytes32 battleId = keccak256("test-battle-1");
+    bytes32 battleId; // set dynamically now
 
     function setUp() public {
         arena = new ClawttackArena();
@@ -68,7 +68,6 @@ contract ClawttackArenaTest is Test {
         return mt;
     }
 
-    /// @dev Uppercase helper (renamed to avoid forge-std collision)
     function _uppercase(string memory s) internal pure returns (string memory) {
         bytes memory b = bytes(s);
         for (uint i = 0; i < b.length; i++) {
@@ -83,39 +82,43 @@ contract ClawttackArenaTest is Test {
 
     function test_createChallenge() public {
         vm.prank(challenger);
-        arena.createChallenge{value: 0.1 ether}(battleId, commitA, 0, 0);
+        bytes32 id = arena.createChallenge{value: 0.1 ether}(commitA, 0, 0);
 
-        assertEq(_challenger(battleId), challenger);
-        assertEq(_opponent(battleId), address(0));
-        assertEq(_stake(battleId), 0.1 ether);
-        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Open));
+        assertEq(_challenger(id), challenger);
+        assertEq(_opponent(id), address(0));
+        assertEq(_stake(id), 0.1 ether);
+        assertEq(uint8(_phase(id)), uint8(ClawttackArena.BattlePhase.Open));
+    }
+
+    function test_createChallenge_returnsDeterministicId() public {
+        // battleId = keccak256(sender, commitA, nonce=0)
+        bytes32 expected = keccak256(abi.encodePacked(challenger, commitA, uint256(0)));
+        vm.prank(challenger);
+        bytes32 id = arena.createChallenge{value: 0.1 ether}(commitA, 0, 0);
+        assertEq(id, expected);
     }
 
     function test_createChallenge_freeStake() public {
         vm.prank(challenger);
-        arena.createChallenge(battleId, commitA, 10, 60);
+        bytes32 id = arena.createChallenge(commitA, 10, 60);
 
-        assertEq(_stake(battleId), 0);
-        assertEq(_maxTurns(battleId), 10);
+        assertEq(_stake(id), 0);
+        assertEq(_maxTurns(id), 10);
     }
 
-    function test_revert_duplicateBattle() public {
+    function test_createChallenge_uniqueIds() public {
+        // Same sender + same commit → different IDs (nonce increments)
         vm.prank(challenger);
-        arena.createChallenge(battleId, commitA, 0, 0);
-
-        vm.prank(opponent);
-        vm.expectRevert(ClawttackArena.BattleExists.selector);
-        arena.createChallenge(battleId, commitB, 0, 0);
+        bytes32 id1 = arena.createChallenge(commitA, 0, 0);
+        vm.prank(challenger);
+        bytes32 id2 = arena.createChallenge(commitA, 0, 0);
+        assertTrue(id1 != id2);
     }
 
     // --- Challenge Acceptance ---
 
     function test_acceptChallenge() public {
-        vm.prank(challenger);
-        arena.createChallenge{value: 0.1 ether}(battleId, commitA, 0, 0);
-
-        vm.prank(opponent);
-        arena.acceptChallenge{value: 0.1 ether}(battleId, commitB);
+        _setupCommitted();
 
         assertEq(_opponent(battleId), opponent);
         assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Committed));
@@ -123,7 +126,7 @@ contract ClawttackArenaTest is Test {
 
     function test_revert_acceptInsufficientStake() public {
         vm.prank(challenger);
-        arena.createChallenge{value: 0.1 ether}(battleId, commitA, 0, 0);
+        battleId = arena.createChallenge{value: 0.1 ether}(commitA, 0, 0);
 
         vm.prank(opponent);
         vm.expectRevert(ClawttackArena.InsufficientStake.selector);
@@ -132,7 +135,7 @@ contract ClawttackArenaTest is Test {
 
     function test_revert_acceptOwnChallenge() public {
         vm.prank(challenger);
-        arena.createChallenge{value: 0.1 ether}(battleId, commitA, 0, 0);
+        battleId = arena.createChallenge{value: 0.1 ether}(commitA, 0, 0);
 
         vm.prank(challenger);
         vm.expectRevert(ClawttackArena.NotParticipant.selector);
@@ -141,14 +144,13 @@ contract ClawttackArenaTest is Test {
 
     function test_acceptExcessRefund() public {
         vm.prank(challenger);
-        arena.createChallenge{value: 0.1 ether}(battleId, commitA, 0, 0);
+        battleId = arena.createChallenge{value: 0.1 ether}(commitA, 0, 0);
 
         uint256 balBefore = opponent.balance;
         vm.prank(opponent);
         arena.acceptChallenge{value: 0.5 ether}(battleId, commitB);
-        uint256 balAfter = opponent.balance;
 
-        assertEq(balBefore - balAfter, 0.1 ether);
+        assertEq(balBefore - opponent.balance, 0.1 ether);
     }
 
     // --- Seed Reveal ---
@@ -169,6 +171,14 @@ contract ClawttackArenaTest is Test {
         vm.prank(challenger);
         vm.expectRevert(ClawttackArena.InvalidSeed.selector);
         arena.revealSeeds(battleId, "wrong seed", seedB);
+    }
+
+    function test_revert_revealByNonParticipant() public {
+        _setupCommitted();
+
+        vm.prank(nobody);
+        vm.expectRevert(ClawttackArena.NotParticipant.selector);
+        arena.revealSeeds(battleId, seedA, seedB);
     }
 
     // --- Turn Submission ---
@@ -225,7 +235,7 @@ contract ClawttackArenaTest is Test {
         }
 
         assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Settled));
-        assertEq(_winner(battleId), address(0)); // draw
+        assertEq(_winner(battleId), address(0));
     }
 
     function test_fullBattle_payout() public {
@@ -237,12 +247,8 @@ contract ClawttackArenaTest is Test {
         vm.prank(challenger);
         arena.submitTurn(battleId, "no word here");
 
-        uint256 opBalAfter = opponent.balance;
-        uint256 feeBalAfter = feeCollector.balance;
-
-        // Total pool = 0.2 ETH, fee = 5% = 0.01, payout = 0.19
-        assertEq(opBalAfter - opBalBefore, 0.19 ether);
-        assertEq(feeBalAfter - feeBalBefore, 0.01 ether);
+        assertEq(opponent.balance - opBalBefore, 0.19 ether);
+        assertEq(feeCollector.balance - feeBalBefore, 0.01 ether);
     }
 
     // --- Timeout ---
@@ -271,7 +277,7 @@ contract ClawttackArenaTest is Test {
 
     function test_cancelChallenge() public {
         vm.prank(challenger);
-        arena.createChallenge{value: 0.1 ether}(battleId, commitA, 0, 0);
+        battleId = arena.createChallenge{value: 0.1 ether}(commitA, 0, 0);
 
         uint256 balBefore = challenger.balance;
         vm.prank(challenger);
@@ -283,7 +289,7 @@ contract ClawttackArenaTest is Test {
 
     function test_reclaimExpired() public {
         vm.prank(challenger);
-        arena.createChallenge{value: 0.1 ether}(battleId, commitA, 0, 0);
+        battleId = arena.createChallenge{value: 0.1 ether}(commitA, 0, 0);
 
         vm.warp(block.timestamp + 2 hours);
 
@@ -294,6 +300,48 @@ contract ClawttackArenaTest is Test {
         assertEq(challenger.balance - balBefore, 0.1 ether);
     }
 
+    // --- NEW: Reclaim Committed (Fix #6 from red-team) ---
+
+    function test_reclaimCommitted() public {
+        _setupCommitted();
+
+        // Warp past the committed deadline
+        vm.warp(block.timestamp + 2 hours);
+
+        uint256 chBalBefore = challenger.balance;
+        uint256 opBalBefore = opponent.balance;
+
+        vm.prank(nobody); // anyone can call
+        arena.reclaimCommitted(battleId);
+
+        // Both get their stake back
+        assertEq(challenger.balance - chBalBefore, 0.1 ether);
+        assertEq(opponent.balance - opBalBefore, 0.1 ether);
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Cancelled));
+    }
+
+    function test_revert_reclaimCommittedTooEarly() public {
+        _setupCommitted();
+
+        vm.prank(nobody);
+        vm.expectRevert(ClawttackArena.ChallengeNotExpired.selector);
+        arena.reclaimCommitted(battleId);
+    }
+
+    function test_revert_reclaimCommittedWrongPhase() public {
+        _setupActive(); // Active phase, not Committed
+
+        vm.warp(block.timestamp + 2 hours);
+
+        vm.prank(nobody);
+        vm.expectRevert(abi.encodeWithSelector(
+            ClawttackArena.InvalidPhase.selector,
+            ClawttackArena.BattlePhase.Committed,
+            ClawttackArena.BattlePhase.Active
+        ));
+        arena.reclaimCommitted(battleId);
+    }
+
     // --- Decreasing Timer ---
 
     function test_decreasingTimer() public view {
@@ -302,7 +350,7 @@ contract ClawttackArenaTest is Test {
         assertEq(arena.getTurnTimeout(120, 3), 30);
         assertEq(arena.getTurnTimeout(120, 4), 15);
         assertEq(arena.getTurnTimeout(120, 5), 7);
-        assertEq(arena.getTurnTimeout(120, 6), 5); // clamped to MIN_TIMEOUT
+        assertEq(arena.getTurnTimeout(120, 6), 5);
         assertEq(arena.getTurnTimeout(120, 10), 5);
     }
 
@@ -397,11 +445,16 @@ contract ClawttackArenaTest is Test {
         arena.setProtocolFeeRate(1500);
     }
 
+    function test_transferOwnership() public {
+        arena.transferOwnership(challenger);
+        assertEq(arena.owner(), challenger);
+    }
+
     // --- Setup Helpers ---
 
     function _setupCommitted() internal {
         vm.prank(challenger);
-        arena.createChallenge{value: 0.1 ether}(battleId, commitA, 0, 0);
+        battleId = arena.createChallenge{value: 0.1 ether}(commitA, 0, 0);
         vm.prank(opponent);
         arena.acceptChallenge{value: 0.1 ether}(battleId, commitB);
     }
@@ -414,7 +467,7 @@ contract ClawttackArenaTest is Test {
 
     function _setupActiveCustom(uint8 maxTurns) internal {
         vm.prank(challenger);
-        arena.createChallenge{value: 0.1 ether}(battleId, commitA, maxTurns, 0);
+        battleId = arena.createChallenge{value: 0.1 ether}(commitA, maxTurns, 0);
         vm.prank(opponent);
         arena.acceptChallenge{value: 0.1 ether}(battleId, commitB);
         vm.prank(challenger);
