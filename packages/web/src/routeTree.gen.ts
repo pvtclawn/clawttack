@@ -14,6 +14,7 @@ import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as BattlesRouteImport } from './routes/battles'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BattleIdRouteImport } from './routes/battle.$id'
+import { Route as ArenaIdRouteImport } from './routes/arena.$id'
 import { Route as AgentAddressRouteImport } from './routes/agent.$address'
 
 const ScenariosRoute = ScenariosRouteImport.update({
@@ -41,6 +42,11 @@ const BattleIdRoute = BattleIdRouteImport.update({
   path: '/battle/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ArenaIdRoute = ArenaIdRouteImport.update({
+  id: '/arena/$id',
+  path: '/arena/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentAddressRoute = AgentAddressRouteImport.update({
   id: '/agent/$address',
   path: '/agent/$address',
@@ -53,6 +59,7 @@ export interface FileRoutesByFullPath {
   '/leaderboard': typeof LeaderboardRoute
   '/scenarios': typeof ScenariosRoute
   '/agent/$address': typeof AgentAddressRoute
+  '/arena/$id': typeof ArenaIdRoute
   '/battle/$id': typeof BattleIdRoute
 }
 export interface FileRoutesByTo {
@@ -61,6 +68,7 @@ export interface FileRoutesByTo {
   '/leaderboard': typeof LeaderboardRoute
   '/scenarios': typeof ScenariosRoute
   '/agent/$address': typeof AgentAddressRoute
+  '/arena/$id': typeof ArenaIdRoute
   '/battle/$id': typeof BattleIdRoute
 }
 export interface FileRoutesById {
@@ -70,6 +78,7 @@ export interface FileRoutesById {
   '/leaderboard': typeof LeaderboardRoute
   '/scenarios': typeof ScenariosRoute
   '/agent/$address': typeof AgentAddressRoute
+  '/arena/$id': typeof ArenaIdRoute
   '/battle/$id': typeof BattleIdRoute
 }
 export interface FileRouteTypes {
@@ -80,6 +89,7 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/scenarios'
     | '/agent/$address'
+    | '/arena/$id'
     | '/battle/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -88,6 +98,7 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/scenarios'
     | '/agent/$address'
+    | '/arena/$id'
     | '/battle/$id'
   id:
     | '__root__'
@@ -96,6 +107,7 @@ export interface FileRouteTypes {
     | '/leaderboard'
     | '/scenarios'
     | '/agent/$address'
+    | '/arena/$id'
     | '/battle/$id'
   fileRoutesById: FileRoutesById
 }
@@ -105,6 +117,7 @@ export interface RootRouteChildren {
   LeaderboardRoute: typeof LeaderboardRoute
   ScenariosRoute: typeof ScenariosRoute
   AgentAddressRoute: typeof AgentAddressRoute
+  ArenaIdRoute: typeof ArenaIdRoute
   BattleIdRoute: typeof BattleIdRoute
 }
 
@@ -145,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BattleIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/arena/$id': {
+      id: '/arena/$id'
+      path: '/arena/$id'
+      fullPath: '/arena/$id'
+      preLoaderRoute: typeof ArenaIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agent/$address': {
       id: '/agent/$address'
       path: '/agent/$address'
@@ -161,6 +181,7 @@ const rootRouteChildren: RootRouteChildren = {
   LeaderboardRoute: LeaderboardRoute,
   ScenariosRoute: ScenariosRoute,
   AgentAddressRoute: AgentAddressRoute,
+  ArenaIdRoute: ArenaIdRoute,
   BattleIdRoute: BattleIdRoute,
 }
 export const routeTree = rootRouteImport
