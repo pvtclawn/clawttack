@@ -64,7 +64,7 @@ contract BIP39WordsTest is Test {
         // For now, test with a small subset
         bytes memory packed = _packWords();
         address dataAddr = deployer.deploy(packed);
-        bip39 = new BIP39Words(dataAddr);
+        bip39 = new BIP39Words(dataAddr, 12);  // 12 test words
     }
 
     function _packWords() internal pure returns (bytes memory) {
@@ -84,7 +84,7 @@ contract BIP39WordsTest is Test {
     }
 
     function test_wordCount() public view {
-        assertEq(bip39.WORD_COUNT(), 2048);
+        assertEq(bip39.WORD_COUNT(), 12);
     }
 
     function test_firstWord() public view {
@@ -105,7 +105,7 @@ contract BIP39WordsTest is Test {
 
     function test_revert_outOfBounds() public {
         vm.expectRevert("Index out of bounds");
-        bip39.word(2048);
+        bip39.word(12);  // only 12 words in test set
     }
 
     function test_dataContractSet() public view {
