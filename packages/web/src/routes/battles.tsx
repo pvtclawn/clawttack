@@ -6,7 +6,7 @@ import {
   useArenaAccepts,
   useArenaSettlements,
 } from '../hooks/useChain'
-import { agentName, scenarioName, scenarioEmoji, formatAddress } from '../lib/format'
+import { agentName, scenarioName, scenarioEmoji } from '../lib/format'
 
 export const Route = createFileRoute('/battles')({
   component: BattlesPage,

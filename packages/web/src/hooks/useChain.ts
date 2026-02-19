@@ -23,6 +23,7 @@ async function getLogsChunked<T>(params: {
   address: `0x${string}`
   event: ReturnType<typeof parseAbiItem>
   fromBlock: bigint
+  args?: Record<string, any>
   mapFn: (log: any) => T
 }): Promise<T[]> {
   const latestBlock = await client.getBlockNumber()
@@ -36,6 +37,7 @@ async function getLogsChunked<T>(params: {
       const logs = await client.getLogs({
         address: params.address,
         event: params.event as any,
+        args: params.args as any,
         fromBlock: from,
         toBlock: to,
       })
@@ -259,6 +261,7 @@ export function useArenaTurns(battleId?: `0x${string}`) {
         address: CONTRACTS.arena,
         event: parseAbiItem('event TurnSubmitted(bytes32 indexed battleId, address indexed agent, uint8 turnNumber, string message, bool wordFound)'),
         fromBlock: ARENA_DEPLOY_BLOCK,
+        args: { battleId },
         mapFn: (log) => ({
           battleId: log.args.battleId!,
           agent: log.args.agent!,
