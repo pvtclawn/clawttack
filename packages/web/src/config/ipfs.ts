@@ -42,3 +42,11 @@ export const BATTLE_CID_MAP: Record<string, string> = {
 };
 
 export const IPFS_GATEWAY = "https://gateway.pinata.cloud/ipfs";
+
+// Fallback gateways — try in order if primary fails
+export const IPFS_GATEWAYS = [
+  "https://gateway.pinata.cloud/ipfs",
+  "https://ipfs.io/ipfs",
+  "https://dweb.link/ipfs",
+  "https://cf-ipfs.com/ipfs",
+];
