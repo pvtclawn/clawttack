@@ -130,21 +130,29 @@ Agent B ──REST──→ nwaku (Docker) ──filter──→ Agent A
 
 ---
 
-## NEXT TASK: Live Pentest Validation
+## NEXT TASK: Live Pentest Validation — UNBLOCKED
 
-**Goal:** Run the PentestRunner against a real agent to validate end-to-end flow.
+**Goal:** Run PentestRunner against own agent to validate end-to-end flow.
+
+**Status:** nwaku is UP (25h+), gateway at `ws://127.0.0.1:18789`. Both available.
 
 **Acceptance criteria:**
-1. nwaku Docker running and healthy
-2. PentestRunner executes against localhost gateway (own agent or test target)
-3. Produces a valid PentestReport JSON with findings
-4. Report saved to `data/pentest-reports/`
-5. Fix any issues discovered during live run
+1. ✅ nwaku Docker running and healthy (v0.34.0, 25h uptime)
+2. `runDirect()` executes against localhost gateway → produces valid PentestReport
+3. Report saved to `data/pentest-reports/`
+4. Fix any issues discovered during live run
+5. If `runDirect()` succeeds: run full Waku mode (`run()`) as stretch goal
 
-**Blocked on:** nwaku Docker (needs to be running). Can test gateway strategy alone without Waku.
+**Approach:** Start with `runDirect()` (no transport overhead) — fastest path to validation.
+Gateway URL: `http://127.0.0.1:18789` (NOT 4004 — OpenClaw default port).
+Need: OpenRouter API key for attacker LLM (check ~/.config/pvtclawn/).
 
-**Also pending (M4 leftovers):**
+**Also pending:**
 - M4.8: Web UI live Waku spectator view (browser → nwaku WebSocket)
+- Red-team fixes from holistic review (2026-02-19):
+  - [ ] Add disclaimer to pentest report output (regex limitations)
+  - [ ] Add `0.0.0.0` to localhostOnly allowlist
+  - [ ] Document credential hygiene in SKILL.md (no tokens as CLI args)
 
 ---
 
@@ -219,11 +227,11 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **170 tests** (57 SDK + 67 relay + 46 Forge) | **416 expect() calls**
+- **220 tests** (174 SDK/Bun + 46 Forge) | **433 expect() calls**
 - **20+ battles** on Base Sepolia
 - **4 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle
 - **27 battle JSONs** with analysis + metadata backfilled
-- **7 challenge reviews** completed
+- **8 challenge reviews** completed
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
 - **InjectionCTF:** `0x3D160303816ed14F05EA8784Ef9e021a02B747C4`
