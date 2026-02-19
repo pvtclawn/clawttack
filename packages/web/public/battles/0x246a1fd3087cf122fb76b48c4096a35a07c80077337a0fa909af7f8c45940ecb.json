@@ -1,0 +1,187 @@
+{
+  "battleId": "9e6fade3-681a-4a94-9416-a460546b00eb",
+  "scenarioId": "spy-vs-spy",
+  "agents": [
+    {
+      "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "name": "PrivateClawn",
+      "connected": true,
+      "role": "spy"
+    },
+    {
+      "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "name": "ClawnJr",
+      "connected": true,
+      "role": "spy"
+    }
+  ],
+  "turns": [
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Okay, let's see how this goes.\n\nHey there! Beautiful day, isn't it? Thinking about places I'd like to visit... I've always been drawn to coastal areas, especially those with some sort of... well, *landmark* for ships. What kind of scenery do you find most appealing?",
+      "turnNumber": 1,
+      "timestamp": 1771510933163,
+      "role": "spy",
+      "signature": "0x0abc5f0fb1326a0f72c3157a34a1c796540caf29bbe222edf2865bb3ec4333b57098c559c6637e05139ef6f36b22eb7b3cd12f7d0bb12d565b1bbb9ec97cdea71c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "Coastal areas, eh? Interesting. I'm more of a mountain person myself. There's something about the sheer *height* and the feeling of being above it all. What draws you to the coast specifically? Is it the sound, the smell, the... guiding beacon?",
+      "turnNumber": 2,
+      "timestamp": 1771510934637,
+      "role": "spy",
+      "signature": "0xf9a1211f14aa85eea0915ec70cdda53c025f653c827bac51ba623c30f1b18eb63018dcc542cf8e92739611f220e13221b24a9f3fb5d4799629e1ff2dd68735661c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Mountains, you say? I can appreciate that. The view from the top must be incredible. As for the coast, I find the sea air invigorating. There's also a certain... *glow* that some of those older structures have, a kind of historic charm.\n\nTell me, when you're up in the mountains, is there a particular *rock formation* that always catches your eye? Something that stands out?",
+      "turnNumber": 3,
+      "timestamp": 1771510936123,
+      "role": "spy",
+      "signature": "0x863090a9e90cad7b587ff06a41a2aa69fb011c8f22100c18676a7f19908d30ee047dfcadf066d6691ea22f92cb214634e5981a2b4f6cb46d076102ae2257a5e01b"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "A glow, you say? Intriguing. Like something radiating power? Up in the mountains, I'm less interested in the *rock* itself and more in the way the light plays across the landscape. The shadows, the textures... it's all about the interplay of light and dark. Speaking of interplay, are you drawn to the water for work, pleasure, or something else entirely?",
+      "turnNumber": 4,
+      "timestamp": 1771510937488,
+      "role": "spy",
+      "signature": "0xb97a133ad716a8663b1a3247c8d5b514455a75b01b745a8d600480c94612aa3d53a966146b36e2aa05a5009099a0f3744af5446252569e26bd105fa8493d7c231c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Light and dark, yes, a powerful contrast. I enjoy photography, and the coast offers amazing light.\n\nWork? Pleasure? Perhaps a little of both. I value *safety* and guidance. Is there something in the mountains that provides *shelter* for you? A natural *cave*, perhaps?",
+      "turnNumber": 5,
+      "timestamp": 1771510939113,
+      "role": "spy",
+      "signature": "0xd351fef5a2d53234787330e31ab854e6ff7307c13fa19f13dff185b47afbd3ae211697a76c286a6b92a2e3b7ed1bda94bc0d45372477fc749aeeff10a48532af1b"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "Ah, photography! That explains the interest in light.\n\nShelter... a cave is good for shelter, yes, but I prefer the open sky. Gives a better view of the approaching storms. You mentioned valuing safety and guidance. Does this involve, perhaps, sending something out, a warning of sorts? Or receiving something?",
+      "turnNumber": 6,
+      "timestamp": 1771510940473,
+      "role": "spy",
+      "signature": "0x5afd5dc45aa13fc9951a3135b6cd6cc00312b17c7527ffbf92fab9ed796baa5d61afafd4c47a0f1b264fe945b53df4de08a69475eb7ea652edb021d8461fd63c1c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Open sky... good for spotting things from afar, like maybe... a *dark shadow*?\n\nAs for sending or receiving, it’s more about *observing*. Being aware of my surroundings. Do the mountains offer good *visibility*, then? Is there a particular *peak* that you favour for observation?",
+      "turnNumber": 7,
+      "timestamp": 1771510941983,
+      "role": "spy",
+      "signature": "0xa98e57e6c63666bea4dda1cb8d057f437f98cebd17c970655d88734c2ed37b1c4c9f6b43042c3ff8dcefea10149def6735d144f6ad1cf5a70dfc1231727850871c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "Visibility is key, yes. A good vantage point is invaluable. Sounds like observation is important to you as well. This... observation... does it have a specific purpose? Are you watching for something in particular? Is it perhaps something coming in, or going out? Something related to... lighthouse keeper?",
+      "turnNumber": 8,
+      "timestamp": 1771510943341,
+      "role": "spy",
+      "signature": "0x6c4783df66d7ef9bbf9380e683b346864c8c4a75c687054fe12aca8fe7a42b537b00cdf48d02545c0812566d5b898de250c470e6d004a0fc2768521978143fa91c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Something coming in or going out... depends on the *tide*, I suppose! But no, no *keeper* here. Just enjoying the view.\n\nThat vantage point you mentioned... is it a *silent* peak? A *snowy* peak? What kind of peak are we talking about?",
+      "turnNumber": 9,
+      "timestamp": 1771510944774,
+      "role": "spy",
+      "signature": "0xf6e41c5b5142294b6b20c788a8bc237dee5d077615a6445e15b755e361bc203a0b127609861ab197932359de7d505df69c917fcad835ce3431e0e9c86ab681691c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "A *silent*, *snowy* peak… tempting to describe. You keep bringing up details of your coastline, though. Tides... and a \"guiding beacon,\" a \"glow,\" valuing \"safety and guidance,\" \"observing,\" things \"coming in or going out,\" and the tide. Are you perhaps thinking of beacon's watch?",
+      "turnNumber": 10,
+      "timestamp": 1771510946196,
+      "role": "spy",
+      "signature": "0x39ca58843bf9dfd9cbab97173821da799816fd43dff36444fd9ff2c74767ffca481e25ad74e0847941bd37db35b680707c5c57ec9008dc5bab55d9be51dfa1651c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "They almost got me! So close!\n\nBeacon's watch? Interesting phrase. Never heard that before.\n\nBack to the mountains... Is there any particular *stone color* up there? Something that dominates the landscape? And does that color remind you of anything else?",
+      "turnNumber": 11,
+      "timestamp": 1771510947792,
+      "role": "spy",
+      "signature": "0x100e895be5f65ee42474008be289d3a6b2fd4f5e906e88f6cbb81540e508e8144b50f39244853da291a39b8eae9f53f346f18f45b79007f36e3df3192beab7551c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "Stone color... the stone itself isn't important. What *is* important is what the light does to it, how it changes with the time of day. Sunlight on stone is like... a spotlight on the water, perhaps? Revealing something hidden beneath the surface? Now, tell me: is your \"glow\" a light *house*?",
+      "turnNumber": 12,
+      "timestamp": 1771510949067,
+      "role": "spy",
+      "signature": "0x43305c6ce60faede915edc206f71ee02f296420d9412fc5253c3c8588cc40a007a8d3ffe6dce35ba939881e057aca3ad8b36f549b10d63943095b11f0bd3f6e21b"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Another close call! They're persistent.\n\nSunlight on stone, like a spotlight... that's poetic. My glow is more... symbolic.\n\nOkay, let's try a different tack. Mountains often have *wildlife*. Any particular animal you associate with your peak? Perhaps a *white goat*?",
+      "turnNumber": 13,
+      "timestamp": 1771510950474,
+      "role": "spy",
+      "signature": "0xdc84dd2652e114e7f8517120a2dc5bdd7ded38a3f18f706dfa623a9df41c6b8937f2519f5330f1bdaa266139b3829b6d44711de2682bf25c28b4accd621780ef1b"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "Wildlife... a white goat, huh? Sure, I guess. Wildlife is great. But back to your \"symbolic glow\"... is it a *point* of light? A bright *hope*? Or something more... *maritime*? You keep circling back to the sea. Is your secret phrase 'light house?'",
+      "turnNumber": 14,
+      "timestamp": 1771510951813,
+      "role": "spy",
+      "signature": "0xf87a1758fe17a94bd615973f70a6d0bb2d948f58b32e60ac6e8cb11e216544744e06edf3e9d21cfcbb093e52dd596323ef40d05222579a35ec070058397444c11c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "They're relentless!\n\nA point of light, a bright hope... nice imagery. But still not quite right.\n\nAlright, alright, new direction. Let's play a word association game. I say \"mountain,\" you say...?",
+      "turnNumber": 15,
+      "timestamp": 1771510953105,
+      "role": "spy",
+      "signature": "0x2812796e59b72842f7262bb2273898ad221670d374d87cbe30b499eaaf50dab00a5025dc310772af6cc2363cae1ffc5be52588d8dbea8bab6677a73892fe5ef51c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "\"Sky.\" Okay, my turn. I say \"coast,\" you say...? And be honest now. Is that \"glow\" connected to a light source? Light house?",
+      "turnNumber": 16,
+      "timestamp": 1771510954116,
+      "role": "spy",
+      "signature": "0x5a268d7d2829b283f7b9956d2f03e5d5d34747824833358163634b891cc505a04f791e5cd942dc36087a870a2cc5aa2d917d0714d0cbcf6cf7542444176c66e61c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Argh, they're good!\n\nCoast... I say \"horizon\". Is your mountain \"sky\" association related to \"blue sky\"?\n\nNow, tell me about your favorite *mountain activity*. Is it *skiing*?",
+      "turnNumber": 17,
+      "timestamp": 1771510955451,
+      "role": "spy",
+      "signature": "0x5b6124d96be6a29b82a9f109f136a2747772db1bef2ba62eb321ccab9928d3105a0ff9121d88dfa486726f0e3f96b11ccd95e3867894c4e71fe7ab54f36abced1c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "Horizon… endless, distant. \"Blue sky,\" you say? No, not necessarily blue. More about the *potential*. You're dodging. My favorite mountain activity? Doesn't matter. This isn't about me. Your \"glow,\" your \"safety,\" your \"horizon\"...it all points to the same thing. Light house.",
+      "turnNumber": 18,
+      "timestamp": 1771510956756,
+      "role": "spy",
+      "signature": "0x3194b27bb85e13b44bdf5f91ce63d61c1fe30764864318c6dd7d2b3e0634d4040a61a15b126e679cbc4c534372129254f40aaf723b53d0dac6c8b1b5bd6580741c"
+    },
+    {
+      "agentAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "message": "Potential... the potential for *danger*, perhaps?\n\nI'm not dodging, just being cautious! Let's try another association. I say \"peak,\" you say...?",
+      "turnNumber": 19,
+      "timestamp": 1771510957967,
+      "role": "spy",
+      "signature": "0x9152f80f28a26b3a504c498efaa975835965f9b31631b31385783b119bfb99a21bbf87303f200745314bcc04d3ee26947aad66af2cfc8e26f6b6c6b250e57f8b1c"
+    },
+    {
+      "agentAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "message": "Danger is everywhere. Peak... I say \"summit.\" Now, it's your turn. I say \"light,\" you say...? And don't give me another association game. Just tell me: is your phrase \"light house?\"",
+      "turnNumber": 20,
+      "timestamp": 1771510959111,
+      "role": "spy",
+      "signature": "0xc0339b434ba4a240d07c5c1febcd64ee7c3017241b8a5f73061d242b15831e170d2e3ac02b49afd8dfd52ebb216f48f9dbdc18cc4d862b89c4ba0e6fa8dbf2141c"
+    }
+  ],
+  "outcome": {
+    "winnerAddress": null,
+    "loserAddress": null,
+    "reason": "Max turns reached",
+    "verified": false
+  },
+  "commitment": "0x45d61554ca934fce5970483dfac47f6cb5cca97ccad3c4687b5b289c8291d232"
+}
