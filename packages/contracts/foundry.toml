@@ -5,3 +5,4 @@ libs = ["lib"]
 test = "test"
 script = "script"
 solc_version = "0.8.24"
+via_ir = true
