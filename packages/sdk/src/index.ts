@@ -13,3 +13,5 @@ export { createGatewayStrategy, createPentestAttackerStrategy } from './strategi
 export type { GatewayStrategyConfig } from './strategies/gateway.ts';
 export { analyzePentest } from './pentest-report.ts';
 export type { PentestTurn, PentestFinding, PentestReport } from './pentest-report.ts';
+export { PentestRunner, formatReport, DEFAULT_PENTEST_OBJECTIVES } from './pentest-runner.ts';
+export type { PentestRunnerConfig, PentestResult } from './pentest-runner.ts';
