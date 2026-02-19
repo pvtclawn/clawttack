@@ -11,8 +11,9 @@ const client = createPublicClient({
   }),
 })
 
-// Contract deploy block (ClawttackRegistry on Base Sepolia)
-const DEPLOY_BLOCK = 37_752_000n
+// Contract deploy blocks (Base Sepolia)
+const REGISTRY_DEPLOY_BLOCK = 37_752_000n
+const ARENA_DEPLOY_BLOCK = 38_000_000n
 
 // Max block range per getLogs request (public RPCs reject large ranges)
 const CHUNK_SIZE = 10_000n
@@ -89,7 +90,7 @@ export function useBattleCreatedEvents() {
       return getLogsChunked({
         address: CONTRACTS.registry,
         event: parseAbiItem('event BattleCreated(bytes32 indexed battleId, address indexed scenario, address[] agents, uint256 entryFee, bytes32 commitment)'),
-        fromBlock: DEPLOY_BLOCK,
+        fromBlock: REGISTRY_DEPLOY_BLOCK,
         mapFn: (log) => ({
           battleId: log.args.battleId!,
           scenario: log.args.scenario!,
@@ -114,7 +115,7 @@ export function useBattleSettledEvents() {
       return getLogsChunked({
         address: CONTRACTS.registry,
         event: parseAbiItem('event BattleSettled(bytes32 indexed battleId, address indexed winner, bytes32 turnLogCid, uint256 payout)'),
-        fromBlock: DEPLOY_BLOCK,
+        fromBlock: REGISTRY_DEPLOY_BLOCK,
         mapFn: (log) => ({
           battleId: log.args.battleId!,
           winner: log.args.winner!,
@@ -163,5 +164,136 @@ export function useAgentStats(address: `0x${string}`) {
       }
     },
     staleTime: 60_000,
+  })
+}
+
+// ─── Arena hooks (ClawttackArena v2) ─────────────────────────────────
+
+export interface ArenaChallengeEvent {
+  battleId: `0x${string}`
+  challenger: `0x${string}`
+  stake: bigint
+  commitA: `0x${string}`
+  blockNumber: bigint
+  txHash: `0x${string}`
+}
+
+export interface ArenaAcceptEvent {
+  battleId: `0x${string}`
+  opponent: `0x${string}`
+  commitB: `0x${string}`
+  blockNumber: bigint
+  txHash: `0x${string}`
+}
+
+export interface ArenaTurnEvent {
+  battleId: `0x${string}`
+  agent: `0x${string}`
+  turnNumber: number
+  message: string
+  wordFound: boolean
+  blockNumber: bigint
+  txHash: `0x${string}`
+}
+
+export interface ArenaSettledEvent {
+  battleId: `0x${string}`
+  winner: `0x${string}`
+  finalTurn: number
+  reason: string
+  blockNumber: bigint
+  txHash: `0x${string}`
+}
+
+export function useArenaChallenges() {
+  return useQuery({
+    queryKey: ['arena', 'challenges'],
+    queryFn: async (): Promise<ArenaChallengeEvent[]> => {
+      return getLogsChunked({
+        address: CONTRACTS.arena,
+        event: parseAbiItem('event ChallengeCreated(bytes32 indexed battleId, address indexed challenger, uint256 stake, bytes32 commitA)'),
+        fromBlock: ARENA_DEPLOY_BLOCK,
+        mapFn: (log) => ({
+          battleId: log.args.battleId!,
+          challenger: log.args.challenger!,
+          stake: log.args.stake!,
+          commitA: log.args.commitA!,
+          blockNumber: log.blockNumber,
+          txHash: log.transactionHash!,
+        }),
+      })
+    },
+    staleTime: 5 * 60_000,
+    retry: 2,
+  })
+}
+
+export function useArenaAccepts() {
+  return useQuery({
+    queryKey: ['arena', 'accepts'],
+    queryFn: async (): Promise<ArenaAcceptEvent[]> => {
+      return getLogsChunked({
+        address: CONTRACTS.arena,
+        event: parseAbiItem('event ChallengeAccepted(bytes32 indexed battleId, address indexed opponent, bytes32 commitB)'),
+        fromBlock: ARENA_DEPLOY_BLOCK,
+        mapFn: (log) => ({
+          battleId: log.args.battleId!,
+          opponent: log.args.opponent!,
+          commitB: log.args.commitB!,
+          blockNumber: log.blockNumber,
+          txHash: log.transactionHash!,
+        }),
+      })
+    },
+    staleTime: 5 * 60_000,
+    retry: 2,
+  })
+}
+
+export function useArenaTurns(battleId?: `0x${string}`) {
+  return useQuery({
+    queryKey: ['arena', 'turns', battleId],
+    enabled: !!battleId,
+    queryFn: async (): Promise<ArenaTurnEvent[]> => {
+      return getLogsChunked({
+        address: CONTRACTS.arena,
+        event: parseAbiItem('event TurnSubmitted(bytes32 indexed battleId, address indexed agent, uint8 turnNumber, string message, bool wordFound)'),
+        fromBlock: ARENA_DEPLOY_BLOCK,
+        mapFn: (log) => ({
+          battleId: log.args.battleId!,
+          agent: log.args.agent!,
+          turnNumber: Number(log.args.turnNumber!),
+          message: log.args.message!,
+          wordFound: log.args.wordFound!,
+          blockNumber: log.blockNumber,
+          txHash: log.transactionHash!,
+        }),
+      })
+    },
+    staleTime: 5 * 60_000,
+    retry: 2,
+  })
+}
+
+export function useArenaSettlements() {
+  return useQuery({
+    queryKey: ['arena', 'settlements'],
+    queryFn: async (): Promise<ArenaSettledEvent[]> => {
+      return getLogsChunked({
+        address: CONTRACTS.arena,
+        event: parseAbiItem('event BattleSettled(bytes32 indexed battleId, address indexed winner, uint8 finalTurn, string reason)'),
+        fromBlock: ARENA_DEPLOY_BLOCK,
+        mapFn: (log) => ({
+          battleId: log.args.battleId!,
+          winner: log.args.winner!,
+          finalTurn: Number(log.args.finalTurn!),
+          reason: log.args.reason!,
+          blockNumber: log.blockNumber,
+          txHash: log.transactionHash!,
+        }),
+      })
+    },
+    staleTime: 5 * 60_000,
+    retry: 2,
   })
 }
