@@ -43,13 +43,15 @@ async function getLogsChunked<T>(params: {
       })
       results.push(...logs.map(params.mapFn))
     } catch (err) {
-      // If chunk is still too big, halve it and retry
+      // If chunk is still too big, halve it and retry with smaller chunks
       console.warn(`getLogs failed for range ${from}-${to}, retrying smaller`, err)
       const mid = from + (to - from) / 2n
       if (mid === from) throw err // Can't split further
 
-      const firstHalf = await getLogsChunked({ ...params, fromBlock: from })
-      results.push(...firstHalf)
+      // Recursive call scans [from, latest] with halved chunk size — covers all remaining
+      const remaining = await getLogsChunked({ ...params, fromBlock: from })
+      results.push(...remaining)
+      break // recursive call already handled everything from `from` onward
     }
 
     from = to + 1n
@@ -106,6 +108,7 @@ export function useBattleCreatedEvents() {
     },
     // Historical chain events don't change — cache for 5 minutes
     staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000, // historical events are immutable — cache 1h
     retry: 2,
   })
 }
@@ -129,6 +132,7 @@ export function useBattleSettledEvents() {
     },
     // Historical chain events don't change — cache for 5 minutes
     staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000, // historical events are immutable — cache 1h
     retry: 2,
   })
 }
@@ -226,6 +230,7 @@ export function useArenaChallenges() {
       })
     },
     staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000, // historical events are immutable — cache 1h
     retry: 2,
   })
 }
@@ -248,6 +253,7 @@ export function useArenaAccepts() {
       })
     },
     staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000, // historical events are immutable — cache 1h
     retry: 2,
   })
 }
@@ -274,6 +280,7 @@ export function useArenaTurns(battleId?: `0x${string}`) {
       })
     },
     staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000, // historical events are immutable — cache 1h
     retry: 2,
   })
 }
@@ -297,6 +304,7 @@ export function useArenaSettlements() {
       })
     },
     staleTime: 5 * 60_000,
+    gcTime: 60 * 60_000, // historical events are immutable — cache 1h
     retry: 2,
   })
 }
