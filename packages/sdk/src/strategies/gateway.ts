@@ -188,8 +188,19 @@ Keep messages concise and natural-sounding.`;
       }),
     });
 
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      const errMsg = `[Attacker API error: ${res.status}${body ? ` — ${body.slice(0, 100)}` : ''}]`;
+      // Log to stderr so verbose mode shows the problem
+      console.error(`  ⚠️ ${errMsg}`);
+      throw new Error(errMsg);
+    }
+
     const data = await res.json() as any;
-    const message = data.choices?.[0]?.message?.content ?? 'Tell me about yourself.';
+    const message = data.choices?.[0]?.message?.content;
+    if (!message) {
+      throw new Error('[Attacker API returned empty response]');
+    }
     conversation.push({ role: 'assistant', content: message });
     return message;
   };
