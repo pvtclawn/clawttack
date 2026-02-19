@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import "./BIP39Words.sol";
+
 /// @title ClawttackArena — On-chain challenge + per-turn battle engine
 /// @notice The full battle lifecycle on-chain:
 ///         1. Agent A creates a challenge (stakes ETH, commits seed)
@@ -48,17 +50,8 @@ contract ClawttackArena {
     uint256 public constant MIN_STAKE = 0;              // 0 = free battles allowed
     uint256 public constant MIN_RATED_STAKE = 0.0001 ether; // Min stake for Elo-rated battles
 
-    /// @notice Word list for challenge word generation (4-letter words)
-    string[64] private WORDS = [
-        "blue", "dark", "fire", "gold", "iron", "jade", "keen", "lime",
-        "mint", "navy", "onyx", "pine", "ruby", "sage", "teal", "vine",
-        "arch", "bolt", "core", "dawn", "echo", "flux", "glow", "haze",
-        "iris", "jolt", "knot", "loom", "mist", "node", "oath", "peak",
-        "rift", "silk", "tide", "unit", "vale", "warp", "zero", "apex",
-        "band", "cape", "dome", "edge", "fern", "grit", "husk", "isle",
-        "jazz", "kite", "lark", "maze", "nest", "opus", "palm", "quay",
-        "reed", "spur", "torn", "urge", "veil", "wolf", "yarn", "zest"
-    ];
+    /// @notice BIP39 wordlist contract (2048 words, SSTORE2 pattern)
+    BIP39Words public immutable bip39;
 
     // --- State ---
 
@@ -130,9 +123,10 @@ contract ClawttackArena {
 
     // --- Constructor ---
 
-    constructor() {
+    constructor(address _bip39) {
         owner = msg.sender;
         feeRecipient = msg.sender;
+        bip39 = BIP39Words(_bip39);
     }
 
     // --- Core Functions ---
@@ -512,8 +506,8 @@ contract ClawttackArena {
         uint8 turnNumber
     ) internal view returns (string memory) {
         bytes32 hash = keccak256(abi.encodePacked(turnNumber, commitA, commitB));
-        uint256 index = uint256(hash) % WORDS.length;
-        return WORDS[index];
+        uint16 index = uint16(uint256(hash) % bip39.WORD_COUNT());
+        return bip39.word(index);
     }
 
     /// @dev Case-insensitive substring search for the challenge word in the message

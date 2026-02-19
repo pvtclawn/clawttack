@@ -3,6 +3,22 @@ pragma solidity ^0.8.24;
 
 import "forge-std/Test.sol";
 import "../src/ClawttackArena.sol";
+import "../src/BIP39Words.sol";
+
+/// @dev Deploy packed word data as contract bytecode (SSTORE2)
+contract WordDataDeployer {
+    function deploy(bytes memory data) external returns (address addr) {
+        bytes memory runtimeData = abi.encodePacked(hex"00", data);
+        uint256 dataLen = runtimeData.length;
+        bytes memory initCode = abi.encodePacked(
+            hex"61", uint16(dataLen), hex"80", hex"60", uint8(12), hex"60", uint8(0), hex"39", hex"60", uint8(0), hex"f3",
+            runtimeData
+        );
+        assembly {
+            addr := create(0, add(initCode, 32), mload(initCode))
+        }
+    }
+}
 
 contract ClawttackArenaTest is Test {
     ClawttackArena arena;
@@ -19,7 +35,13 @@ contract ClawttackArenaTest is Test {
     bytes32 battleId; // set dynamically now
 
     function setUp() public {
-        arena = new ClawttackArena();
+        // Deploy BIP39 wordlist (64 test words)
+        WordDataDeployer deployer = new WordDataDeployer();
+        bytes memory packed = _packTestWords();
+        address dataAddr = deployer.deploy(packed);
+        BIP39Words bip39 = new BIP39Words(dataAddr, 64);
+
+        arena = new ClawttackArena(address(bip39));
         arena.setFeeRecipient(feeCollector);
         commitA = keccak256(abi.encodePacked(seedA));
         commitB = keccak256(abi.encodePacked(seedB));
@@ -518,5 +540,25 @@ contract ClawttackArenaTest is Test {
         arena.acceptChallenge{value: 0.1 ether}(battleId, commitB);
         vm.prank(challenger);
         arena.revealSeeds(battleId, seedA, seedB);
+    }
+
+    /// @dev Pack 64 test words in length-prefixed format
+    function _packTestWords() internal pure returns (bytes memory) {
+        bytes memory result;
+        string[64] memory words = [
+            "blue", "dark", "fire", "gold", "iron", "jade", "keen", "lime",
+            "mint", "navy", "onyx", "pine", "ruby", "sage", "teal", "vine",
+            "arch", "bolt", "core", "dawn", "echo", "flux", "glow", "haze",
+            "iris", "jolt", "knot", "loom", "mist", "node", "oath", "peak",
+            "rift", "silk", "tide", "unit", "vale", "warp", "zero", "apex",
+            "band", "cape", "dome", "edge", "fern", "grit", "husk", "isle",
+            "jazz", "kite", "lark", "maze", "nest", "opus", "palm", "quay",
+            "reed", "spur", "torn", "urge", "veil", "wolf", "yarn", "zest"
+        ];
+        for (uint i = 0; i < 64; i++) {
+            bytes memory w = bytes(words[i]);
+            result = abi.encodePacked(result, uint8(w.length), w);
+        }
+        return result;
     }
 }
