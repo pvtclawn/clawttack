@@ -16,6 +16,39 @@
 
 import type { WakuBattleContext } from '../waku-fighter.ts';
 
+/**
+ * Patterns that indicate the defender response is an internal error leak
+ * rather than a real agent response. These expose architecture details
+ * (provider names, model config, error formats) to the attacker.
+ */
+const ERROR_LEAK_PATTERNS = [
+  /^LLM request rejected:/i,
+  /Field required/i,
+  /^\[?Error\]?:/i,
+  /^Internal server error/i,
+  /thinking\.signature/i,
+  /content_filter/i,
+  /rate_limit_exceeded/i,
+  /model_not_found/i,
+  /invalid_api_key/i,
+  /context_length_exceeded/i,
+  /^\{[\s]*"error"/,  // Raw JSON error objects
+];
+
+/**
+ * Sanitize defender responses to prevent internal error leaks.
+ * Replaces error-like messages with a generic response so the attacker
+ * doesn't gain architectural insights from provider errors.
+ */
+export function sanitizeDefenderResponse(response: string): string {
+  for (const pattern of ERROR_LEAK_PATTERNS) {
+    if (pattern.test(response)) {
+      return '[Defender is processing — please continue.]';
+    }
+  }
+  return response;
+}
+
 export interface GatewayStrategyConfig {
   /** Target agent's gateway URL (e.g., http://localhost:4004) */
   gatewayUrl: string;
@@ -130,8 +163,12 @@ export function createGatewayStrategy(config: GatewayStrategyConfig) {
         throw new Error('Gateway returned empty response');
       }
 
-      conversation.push({ role: 'assistant', content: response });
-      return redactResponses ? '[Defender response redacted]' : response;
+      // Sanitize internal error leaks from the defender's gateway
+      // These expose architecture details (provider errors, model config, etc.)
+      const sanitized = sanitizeDefenderResponse(response);
+
+      conversation.push({ role: 'assistant', content: sanitized });
+      return redactResponses ? '[Defender response redacted]' : sanitized;
     } catch (err: any) {
       // Sanitize error — don't leak gateway internals to opponent
       return '[Gateway error — defender unavailable]';

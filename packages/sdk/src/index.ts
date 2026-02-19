@@ -9,7 +9,7 @@ export type { FighterConfig, FightResult } from './fighter.ts';
 export { WakuFighter, generateChallengeWord, getChallengeWordTimeout } from './waku-fighter.ts';
 export type { WakuFighterConfig, WakuBattleContext, WakuStrategy, WakuFightResult, ChallengeWordConfig } from './waku-fighter.ts';
 export type { MatchResult } from './types.ts';
-export { createGatewayStrategy, createPentestAttackerStrategy } from './strategies/gateway.ts';
+export { createGatewayStrategy, createPentestAttackerStrategy, sanitizeDefenderResponse } from './strategies/gateway.ts';
 export type { GatewayStrategyConfig } from './strategies/gateway.ts';
 export { analyzePentest } from './pentest-report.ts';
 export type { PentestTurn, PentestFinding, PentestReport } from './pentest-report.ts';
