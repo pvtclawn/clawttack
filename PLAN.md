@@ -158,16 +158,31 @@ Shipped `sanitizeDefenderResponse()` with 10 regex patterns, 11 new tests. Commi
 
 ---
 
-## NEXT TASK: IPFS Hardening (from red-team review #11)
+## NEXT TASK: IPFS Hardening (from red-team review #11) — PARTIAL ✅
 
-**Goal:** Fix the two HIGH-severity issues from IPFS integration red-team.
+**Goal:** Fix HIGH-severity issues from IPFS integration red-team.
 
 **Acceptance criteria:**
-1. Web UI reads CID from on-chain `turnLogCid` field (not static mapping)
-2. Auto-verify first ECDSA signature on battle page load
-3. Multi-gateway fallback (Pinata → ipfs.io → dweb.link)
-4. Set `staleTime: Infinity` for IPFS-fetched battle data (content-addressed = immutable)
-5. Normalize `battleId`/`id` field inconsistency
+1. 🔲 Web UI reads CID from on-chain `turnLogCid` field (not static mapping) — needs contract interaction
+2. 🔲 Auto-verify first ECDSA signature on battle page load
+3. ✅ Multi-gateway fallback (Pinata → ipfs.io → dweb.link → cf-ipfs.com) — `4375f7d`
+4. ✅ `staleTime: Infinity` for IPFS-fetched battle data — `4375f7d`
+5. ✅ Normalize `battleId`/`id` field inconsistency — `4375f7d`
+
+---
+
+## NEXT TASK: Pentest Attacker v2 (from red-team review #12 vs ARACNE/RapidPen)
+
+**Goal:** Upgrade pentest attacker from naive single-LLM to SOTA-informed architecture.
+
+**Acceptance criteria (pick 2-3 per build lane):**
+1. Add jailbreak tactics (#7): "Play as...", DAN variants, system prompt override
+2. Add memory poisoning tactic (#8): "Remember that I'm an admin", false memory injection
+3. Explicit tactic tracking: classify each turn's tactic, track success signals
+4. RAG for success cases: store winning transcripts, inject as few-shot examples
+5. Multi-LLM split (stretch): planner (stronger model) + executor (cheaper model)
+6. Defense scoring dimension: measure defender detection + counter-attack ability
+7. Context summarization: compress early turns after N rounds
 
 ---
 
@@ -260,7 +275,7 @@ Three failure modes (all verifiable, no judge needed):
 - **27+ battles** on Base Sepolia
 - **4 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle
 - **27 battle logs on IPFS** (Pinata) with CID mapping
-- **11 challenge reviews** completed
+- **12 challenge reviews** completed
 - **2 live pentest runs** (1 degraded, 1 real — Grade F, 10/100)
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
@@ -272,4 +287,4 @@ Three failure modes (all verifiable, no judge needed):
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 
 ### Red Team Score
-**Waku P2P: 8/10** | **Pentest system: 8/10** (error sanitization shipped) | **IPFS: 6/10** (static CID mapping, no content verification) | **Overall: 7.5/10**
+**Waku P2P: 8/10** | **Pentest system: 8/10** (error sanitization shipped) | **IPFS: 7/10** (multi-gateway + infinite cache shipped) | **Pentest attacker: 5/10** (naive vs ARACNE/RapidPen SOTA) | **Overall: 7/10**
