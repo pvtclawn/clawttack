@@ -1,4 +1,4 @@
-# Clawttack — Build Plan (Updated 2026-02-19 16:41)
+# Clawttack — Build Plan (Updated 2026-02-19 20:31)
 
 ## Current Status
 
@@ -205,6 +205,9 @@ Shipped `sanitizeDefenderResponse()` with 10 regex patterns, 11 new tests. Commi
 | 11 | **FIX: Elo Sybil protection (MIN_RATED_STAKE)** | MED | ✅ | `cbfb8f0` — 0-stake battles unrated |
 | 12 | TypeScript SDK: `ArenaFighter` class | HIGH | ✅ | `f793651` + `a42584d` — viem SDK, seed helpers, ArenaError, 10 tests |
 | 13 | Web UI: Arena battles display (from events/calldata) | MED | ✅ | `10aa649`, `82b54c0`, `2fd71b9` — battles list, detail page, home page |
+| 14 | First real Arena battle (E2E) | HIGH | ✅ | `3510e78` — pvtclawn vs ClawnJr, 2 battles on Base Sepolia |
+| 15 | LLM-powered battle strategies | HIGH | ✅ | `66d403b` — TurnStrategy, createLLMStrategy, playTurn, getBattleHistory |
+| 16 | Basescan contract verification | MED | ✅ | Arena v2 verified on Basescan |
 
 ### Architecture
 ```
@@ -226,17 +229,19 @@ Agent A                    ClawttackArena (Base)          Agent B
 - `submitTurn` (miss → settle): ~194K gas
 - **Full 20-turn battle: ~$0.02-0.20 total**
 
-### NEXT TASK: First Real Arena Battle (E2E validation)
+### NEXT TASK: BIP39 Wordlist for Challenge Words
 
-**Goal:** Run a real battle through ClawttackArena on Base Sepolia using the ArenaFighter SDK, then view it on clawttack.com.
+**Goal:** Replace 64 hand-picked 4-letter words with BIP39 standard wordlist (2048 words, 3-8 letters).
+
+**Design options (awaiting Egor's decision):**
+1. Separate `BIP39Words.sol` library contract (cleanest, reusable, pure bytecode lookup)
+2. Expand inline array in Arena contract (limited by 24KB contract size)
 
 **Acceptance criteria:**
-1. Two agents (both our wallet, different seeds) create + accept a challenge via ArenaFighter SDK
-2. Seeds revealed, challenge words generated deterministically
-3. At least 3 turns submitted on-chain with real messages containing challenge words
-4. Battle settles on-chain (word miss or max turns)
-5. Battle appears on clawttack.com battles list with Arena badge
-6. `/arena/:id` page shows full turn replay from calldata
+1. Challenge words drawn from BIP39 English wordlist
+2. On-chain verification preserved (contract can check word inclusion)
+3. Arena v3 deployment with Basescan verification
+4. All existing tests updated + passing
 
 ---
 
@@ -325,21 +330,19 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **284 tests** (202 Bun + 82 Forge) | **493 expect() calls** | **0 failures**
-- **35 battles** on Base Sepolia (31 on-chain settlements)
-- **6 contracts** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle, ClawttackRegistry, ClawttackArena v2
+- **291 tests** (209 Bun + 82 Forge) | **512 expect() calls** | **0 failures**
+- **4 Arena battles** on Base Sepolia (1 timeout win ClawnJr, 1 draw, 1 LLM battle draw, 2 orphaned)
+- **1 LLM-powered battle** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
+- **6 contracts** deployed (only Arena v2 active on Base Sepolia)
 - **25 battle logs on IPFS** (Pinata) with correct CID mapping
-- **21 challenge reviews** completed
-- **2 live pentest runs** (1 degraded, 1 real — Grade F, 10/100)
+- **22 challenge reviews** completed
+- **45+ commits** on 2026-02-19
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
-- **ClawttackArena:** `0x5c49fE29Dd3896234324C6D055A58A86cE930f04` (v2: _safeTransfer + Elo Sybil protection, Sourcify verified)
-- **InjectionCTF:** `0x3D160303816ed14F05EA8784Ef9e021a02B747C4`
-- **PrisonersDilemma:** `0xa5313FB027eBD60dE2856bA134A689bbd30a6CC9`
-- **SpyVsSpy:** `0x87cb33ed6eF0D18C3eBB1fB5e8250fA49487D9C6`
-- **ChallengeWordBattle:** `0xa2dF845c10cBE9DA434991a91A3f0c3DBC39AAEd`
-- **ClawttackRegistry:** `0xeee01a6846C896efb1a43442434F1A51BF87d3aA`
+- **ClawttackArena v2:** `0x5c49fE29Dd3896234324C6D055A58A86cE930f04` (Sourcify + Basescan verified ✅)
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
+- **ClawnJr wallet:** `0x2020B0F3BCa556380f39C63D44255502dE13C0D0`
+- Old contracts (Registry, InjectionCTF, PrisonersDilemma, SpyVsSpy, ChallengeWordBattle) — no code at addresses, deprecated
 
 ### Red Team Score
-**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 8/10** (v2 deployed + verified) | **ArenaFighter SDK: 8/10** | **Web UI Arena: 8/10** | **getLogsChunked: 8/10** | **IPFS: 7/10** | **Pentest attacker: 5/10** | **Skills: clean** | **Overall: 7.5/10**
+**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 8/10** (v2 deployed + verified) | **ArenaFighter SDK: 8/10** | **Web UI Arena: 8/10** | **getLogsChunked: 8/10** | **IPFS: 7/10** | **E2E Script: 7/10** | **Pentest attacker: 5/10** | **Overall: 7.5/10**
