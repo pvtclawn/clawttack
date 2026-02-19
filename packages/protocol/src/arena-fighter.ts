@@ -287,6 +287,20 @@ export interface ArenaFighterConfig {
   contractAddress: Address;
   /** Block number the Arena contract was deployed at. Used for event queries. Default: 0 */
   deployBlock?: bigint;
+  /**
+   * Optional callback invoked after a turn is confirmed on-chain.
+   * Use to broadcast turn data to Waku, IPFS, or other real-time channels.
+   */
+  onTurnBroadcast?: (turn: ArenaTurnBroadcast) => void | Promise<void>;
+}
+
+/** Turn data broadcast after on-chain confirmation */
+export interface ArenaTurnBroadcast {
+  battleId: Hex;
+  agent: Address;
+  turnNumber: number;
+  message: string;
+  txHash: Hex;
 }
 
 export interface CreateChallengeOptions {
@@ -354,12 +368,14 @@ export class ArenaFighter {
   private walletClient: WalletClient;
   private contractAddress: Address;
   private deployBlock: bigint;
+  private onTurnBroadcast?: (turn: ArenaTurnBroadcast) => void | Promise<void>;
 
   constructor(config: ArenaFighterConfig) {
     this.publicClient = config.publicClient;
     this.walletClient = config.walletClient;
     this.contractAddress = config.contractAddress;
     this.deployBlock = config.deployBlock ?? 0n;
+    this.onTurnBroadcast = config.onTurnBroadcast;
   }
 
   // --- Seed Helpers ---
@@ -738,6 +754,19 @@ export class ArenaFighter {
     }
 
     const txHash = await this.submitTurn(battleId, message);
+
+    // Broadcast turn to real-time channels (Waku, etc.) — fire and forget
+    if (this.onTurnBroadcast) {
+      const [account] = await this.walletClient.getAddresses();
+      Promise.resolve(this.onTurnBroadcast({
+        battleId,
+        agent: account,
+        turnNumber,
+        message,
+        txHash,
+      })).catch(() => {}); // don't let broadcast errors affect gameplay
+    }
+
     return { message, txHash };
   }
 }
