@@ -227,11 +227,11 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **220 tests** (174 SDK/Bun + 46 Forge) | **433 expect() calls**
+- **222 tests** (178 SDK/Bun + 46 Forge) | **437 expect() calls** | **0 failures**
 - **20+ battles** on Base Sepolia
 - **4 scenarios** deployed: Injection CTF, Prisoner's Dilemma, Spy vs Spy, ChallengeWordBattle
 - **27 battle JSONs** with analysis + metadata backfilled
-- **8 challenge reviews** completed
+- **9 challenge reviews** completed
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
 - **InjectionCTF:** `0x3D160303816ed14F05EA8784Ef9e021a02B747C4`
@@ -242,4 +242,4 @@ Three failure modes (all verifiable, no judge needed):
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 
 ### Red Team Score
-**Waku P2P: 7/10** (M4.5 hardening complete — sig verification, turn ordering, timeout all implemented). **Overall: 8/10**. Remaining: peer connection polling (minor), IPFS (blocked on Pinata).
+**Waku P2P: 8/10** (M4.5 hardening + signed forfeits — sig verification, turn ordering, timeout, forfeit auth all implemented). **Overall: 8/10**. Remaining: peer connection polling (minor), IPFS (blocked on Pinata).
