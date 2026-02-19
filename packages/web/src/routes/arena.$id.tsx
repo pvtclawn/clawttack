@@ -20,17 +20,22 @@ function ArenaBattlePage() {
 
   const { data: challenges, isLoading: loadingC } = useArenaChallenges()
   const { data: accepts, isLoading: loadingA } = useArenaAccepts()
-  const { data: turns, isLoading: loadingT } = useArenaTurns(battleId)
   const { data: settlements, isLoading: loadingS } = useArenaSettlements()
+
+  // Determine if battle is live (accepted but not settled)
+  const settlement = settlements?.find((s) => s.battleId === battleId)
+  const accept = accepts?.find((a) => a.battleId === battleId)
+  const isLive = !!accept && !settlement
+
+  const { data: turns, isLoading: loadingT } = useArenaTurns(battleId, isLive)
 
   const [visibleTurns, setVisibleTurns] = useState(0)
   const [isReplaying, setIsReplaying] = useState(false)
+  const [prevTurnCount, setPrevTurnCount] = useState(0)
 
   const isLoading = loadingC || loadingA || loadingT || loadingS
 
   const challenge = challenges?.find((c) => c.battleId === battleId)
-  const accept = accepts?.find((a) => a.battleId === battleId)
-  const settlement = settlements?.find((s) => s.battleId === battleId)
 
   // Sort turns by turnNumber
   const sortedTurns = [...(turns ?? [])].sort((a, b) => a.turnNumber - b.turnNumber)
@@ -69,6 +74,14 @@ function ArenaBattlePage() {
       setVisibleTurns(sortedTurns.length)
     }
   }, [sortedTurns.length])
+
+  // Auto-append new turns during live battles
+  useEffect(() => {
+    if (isLive && sortedTurns.length > prevTurnCount && !isReplaying) {
+      setVisibleTurns(sortedTurns.length)
+    }
+    setPrevTurnCount(sortedTurns.length)
+  }, [sortedTurns.length, isLive])
 
   if (isLoading) {
     return (
@@ -150,6 +163,11 @@ function ArenaBattlePage() {
         }`}>
           {phase}
         </span>
+        {isLive && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-900/50 px-3 py-1 text-xs font-medium text-red-400">
+            <span className="animate-pulse">●</span> LIVE
+          </span>
+        )}
         {challenge && (
           <span className="text-xs text-[var(--muted)]">
             Challenger: {agentName(challenge.challenger)}
@@ -238,6 +256,13 @@ function ArenaBattlePage() {
           <div className="flex justify-center py-4">
             <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
               <span className="animate-pulse">●</span> Next turn...
+            </div>
+          </div>
+        )}
+        {isLive && !isReplaying && visibleTurns >= sortedTurns.length && (
+          <div className="flex justify-center py-4">
+            <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
+              <span className="animate-pulse text-red-400">●</span> Waiting for next turn…
             </div>
           </div>
         )}
