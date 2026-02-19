@@ -13,7 +13,7 @@ const client = createPublicClient({
 
 // Contract deploy blocks (Base Sepolia)
 const REGISTRY_DEPLOY_BLOCK = 37_752_000n
-const ARENA_DEPLOY_BLOCK = 37_880_000n
+const ARENA_DEPLOY_BLOCK = 37_884_000n
 
 // Max block range per getLogs request (public RPCs reject large ranges)
 const CHUNK_SIZE = 10_000n

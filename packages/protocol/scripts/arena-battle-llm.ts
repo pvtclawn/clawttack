@@ -24,7 +24,7 @@ import { ArenaFighter, BattlePhase } from '../src/arena-fighter';
 import { createLLMStrategy, templateStrategy } from '../src/strategies';
 import { createWakuBroadcaster } from '../src/waku-broadcaster';
 
-const ARENA_ADDRESS = '0x977E674Bb5f351dcd1065B83A4547631BA6b5E03' as const;
+const ARENA_ADDRESS = '0xf7caed5eb794fa193c400efef40083acfaae184e' as const;
 const RPC_URL = 'https://sepolia.base.org';
 
 async function main() {
