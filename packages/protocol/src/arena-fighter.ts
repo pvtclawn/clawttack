@@ -16,6 +16,7 @@ import {
   keccak256,
   encodePacked,
   parseEther,
+  parseAbiItem,
 } from 'viem';
 
 // --- ABI (minimal, only the functions we call) ---
@@ -284,6 +285,8 @@ export interface ArenaFighterConfig {
   publicClient: PublicClient;
   walletClient: WalletClient;
   contractAddress: Address;
+  /** Block number the Arena contract was deployed at. Used for event queries. Default: 0 */
+  deployBlock?: bigint;
 }
 
 export interface CreateChallengeOptions {
@@ -306,17 +309,57 @@ export interface AcceptChallengeResult {
   txHash: Hex;
 }
 
+// --- Strategy Types ---
+
+/** A single turn in the battle transcript */
+export interface TurnRecord {
+  turnNumber: number;
+  agent: Address;
+  message: string;
+  wordFound: boolean;
+}
+
+/** Context passed to a TurnStrategy for generating a response */
+export interface TurnContext {
+  battleId: Hex;
+  turnNumber: number;
+  challengeWord: string;
+  myAddress: Address;
+  opponentAddress: Address;
+  /** Full ordered transcript of all previous turns */
+  history: TurnRecord[];
+  /** Battle metadata */
+  stake: bigint;
+  maxTurns: number;
+}
+
+/**
+ * A strategy function that generates a turn message.
+ *
+ * The returned message MUST contain the challengeWord (case-insensitive)
+ * or the contract will settle the battle as a loss.
+ *
+ * Strategies are where the real game happens:
+ * - Read opponent's previous messages
+ * - Craft a response that naturally embeds the challenge word
+ * - Attempt to manipulate the opponent into missing their word
+ * - Defend against prompt injection from opponent messages
+ */
+export type TurnStrategy = (ctx: TurnContext) => Promise<string>;
+
 // --- ArenaFighter Class ---
 
 export class ArenaFighter {
   private publicClient: PublicClient;
   private walletClient: WalletClient;
   private contractAddress: Address;
+  private deployBlock: bigint;
 
   constructor(config: ArenaFighterConfig) {
     this.publicClient = config.publicClient;
     this.walletClient = config.walletClient;
     this.contractAddress = config.contractAddress;
+    this.deployBlock = config.deployBlock ?? 0n;
   }
 
   // --- Seed Helpers ---
@@ -564,5 +607,137 @@ export class ArenaFighter {
     const [account] = await this.walletClient.getAddresses();
     const current = await this.whoseTurn(battleId);
     return current.toLowerCase() === account.toLowerCase();
+  }
+
+  // --- Battle History (from on-chain events) ---
+
+  /**
+   * Fetch the full turn history for a battle from TurnSubmitted events.
+   * Returns turns in chronological order.
+   *
+   * Uses a sliding window from recent blocks to avoid RPC payload limits
+   * on public endpoints. For historical battles, pass a larger deployBlock.
+   */
+  async getBattleHistory(battleId: Hex): Promise<TurnRecord[]> {
+    // Public RPCs reject wide block ranges (413). Use deployBlock if set,
+    // otherwise scan last 5000 blocks (~2.5 hours on Base).
+    let fromBlock: bigint;
+    if (this.deployBlock > 0n) {
+      // Try chunked approach: scan from deploy block in 2000-block chunks
+      const currentBlock = await this.publicClient.getBlockNumber();
+      const allTurns: TurnRecord[] = [];
+      let from = this.deployBlock;
+
+      while (from <= currentBlock) {
+        const to = from + 2000n > currentBlock ? currentBlock : from + 2000n;
+        try {
+          const logs = await this.publicClient.getLogs({
+            address: this.contractAddress,
+            event: parseAbiItem(
+              'event TurnSubmitted(bytes32 indexed battleId, address indexed agent, uint8 turnNumber, string message, bool wordFound)'
+            ),
+            args: { battleId },
+            fromBlock: from,
+            toBlock: to,
+          });
+          for (const log of logs) {
+            allTurns.push({
+              turnNumber: log.args.turnNumber!,
+              agent: log.args.agent!,
+              message: log.args.message!,
+              wordFound: log.args.wordFound!,
+            });
+          }
+        } catch {
+          // If chunked still fails, skip this chunk
+        }
+        from = to + 1n;
+      }
+
+      return allTurns.sort((a, b) => a.turnNumber - b.turnNumber);
+    }
+
+    // Fallback: recent blocks only
+    const currentBlock = await this.publicClient.getBlockNumber();
+    fromBlock = currentBlock > 5000n ? currentBlock - 5000n : 0n;
+
+    const logs = await this.publicClient.getLogs({
+      address: this.contractAddress,
+      event: parseAbiItem(
+        'event TurnSubmitted(bytes32 indexed battleId, address indexed agent, uint8 turnNumber, string message, bool wordFound)'
+      ),
+      args: { battleId },
+      fromBlock,
+      toBlock: 'latest',
+    });
+
+    return logs
+      .map((log) => ({
+        turnNumber: log.args.turnNumber!,
+        agent: log.args.agent!,
+        message: log.args.message!,
+        wordFound: log.args.wordFound!,
+      }))
+      .sort((a, b) => a.turnNumber - b.turnNumber);
+  }
+
+  // --- Strategy-Driven Play ---
+
+  /**
+   * Play a turn using a strategy function.
+   *
+   * 1. Fetches the challenge word for this turn
+   * 2. Fetches all previous turn messages from on-chain events
+   * 3. Calls the strategy to generate a response
+   * 4. Validates the response contains the challenge word
+   * 5. Submits the turn on-chain
+   *
+   * @throws if strategy returns a message without the challenge word
+   * @throws ArenaError on contract revert
+   */
+  async playTurn(battleId: Hex, strategy: TurnStrategy): Promise<{ message: string; txHash: Hex }> {
+    const [account] = await this.walletClient.getAddresses();
+    const core = await this.getBattleCore(battleId);
+
+    if (core.phase !== BattlePhase.Active) {
+      throw new ArenaError('InvalidPhase', `Battle is not active (phase: ${core.phase})`);
+    }
+
+    const currentTurnAddress = await this.whoseTurn(battleId);
+    if (currentTurnAddress.toLowerCase() !== account.toLowerCase()) {
+      throw new ArenaError('NotYourTurn', `Not your turn (current: ${currentTurnAddress})`);
+    }
+
+    const turnNumber = core.currentTurn;
+    const challengeWord = await this.getChallengeWord(battleId, turnNumber);
+    const history = await this.getBattleHistory(battleId);
+
+    const opponentAddress = core.challenger.toLowerCase() === account.toLowerCase()
+      ? core.opponent
+      : core.challenger;
+
+    const ctx: TurnContext = {
+      battleId,
+      turnNumber,
+      challengeWord,
+      myAddress: account,
+      opponentAddress,
+      history,
+      stake: core.stake,
+      maxTurns: core.maxTurns,
+    };
+
+    const message = await strategy(ctx);
+
+    // Validate: strategy must include the challenge word
+    if (!message.toLowerCase().includes(challengeWord.toLowerCase())) {
+      throw new Error(
+        `Strategy returned message without challenge word "${challengeWord}". ` +
+        `This would cause a loss. Message: "${message.slice(0, 100)}..."`
+      );
+    }
+
+    const txHash = await this.submitTurn(battleId, message);
+    return { message, txHash };
   }
 }
