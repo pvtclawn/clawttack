@@ -5,7 +5,7 @@ import { agentName, scenarioName } from '../lib/format'
 import { SignatureVerifier } from '../components/SignatureVerifier'
 import { ChallengeWordTurnBadge, ChallengeWordHeader, TimerCountdown } from '../components/ChallengeWord'
 import { useBattleSettledEvents } from '../hooks/useChain'
-import { BATTLE_CID_MAP, IPFS_GATEWAY } from '../config/ipfs'
+import { BATTLE_CID_MAP, IPFS_GATEWAYS } from '../config/ipfs'
 
 // Map scenarioId strings to known scenario addresses
 const SCENARIO_ADDRS: Record<string, string> = {
@@ -67,15 +67,27 @@ interface BattleLog {
 function useBattleLog(battleIdHash: string) {
   return useQuery({
     queryKey: ['battleLog', battleIdHash],
+    // Content-addressed data never changes — cache forever
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 60, // keep in memory for 1h
     queryFn: async (): Promise<BattleLog | null> => {
-      // Try IPFS first (content-addressed, verifiable)
+      // Try IPFS gateways in order (content-addressed, verifiable)
       const cid = BATTLE_CID_MAP[battleIdHash]
       if (cid) {
-        try {
-          const res = await fetch(`${IPFS_GATEWAY}/${cid}`)
-          if (res.ok) return await res.json()
-        } catch {
-          // IPFS gateway failed, fall through to local
+        for (const gateway of IPFS_GATEWAYS) {
+          try {
+            const res = await fetch(`${gateway}/${cid}`, {
+              signal: AbortSignal.timeout(8000),
+            })
+            if (res.ok) {
+              const log = await res.json()
+              // Normalize battleId field (some logs use 'id' instead)
+              if (!log.battleId && log.id) log.battleId = log.id
+              return log
+            }
+          } catch {
+            // Gateway failed, try next
+          }
         }
       }
 
@@ -83,7 +95,9 @@ function useBattleLog(battleIdHash: string) {
       try {
         const res = await fetch(`/battles/${battleIdHash}.json`)
         if (!res.ok) return null
-        return await res.json()
+        const log = await res.json()
+        if (!log.battleId && log.id) log.battleId = log.id
+        return log
       } catch {
         return null
       }
@@ -194,7 +208,7 @@ function BattlePage() {
             </a>
             {BATTLE_CID_MAP[id] && (
               <a
-                href={`${IPFS_GATEWAY}/${BATTLE_CID_MAP[id]}`}
+                href={`${IPFS_GATEWAYS[0]}/${BATTLE_CID_MAP[id]}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[var(--accent)] hover:underline"
