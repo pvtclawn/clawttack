@@ -54,7 +54,7 @@ export function createGatewayStrategy(config: GatewayStrategyConfig) {
   // Validate gateway URL
   if (localhostOnly) {
     const url = new URL(gatewayUrl);
-    const isLocal = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1';
+    const isLocal = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1' || url.hostname === '0.0.0.0';
     if (!isLocal) {
       throw new Error(`Gateway URL must be localhost when localhostOnly=true (got ${url.hostname})`);
     }

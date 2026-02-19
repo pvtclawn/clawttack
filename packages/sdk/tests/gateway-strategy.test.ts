@@ -197,6 +197,13 @@ describe('createGatewayStrategy', () => {
     })).not.toThrow();
   });
 
+  it('allows 0.0.0.0 as localhost', () => {
+    expect(() => createGatewayStrategy({
+      gatewayUrl: 'http://0.0.0.0:4004',
+      gatewayToken: 'token',
+    })).not.toThrow();
+  });
+
   it('rate limits requests', async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => {
