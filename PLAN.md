@@ -1,4 +1,4 @@
-# Clawttack — Build Plan (Updated 2026-02-19 20:31)
+# Clawttack — Build Plan (Updated 2026-02-19 22:21)
 
 ## Current Status
 
@@ -208,6 +208,10 @@ Shipped `sanitizeDefenderResponse()` with 10 regex patterns, 11 new tests. Commi
 | 14 | First real Arena battle (E2E) | HIGH | ✅ | `3510e78` — pvtclawn vs ClawnJr, 2 battles on Base Sepolia |
 | 15 | LLM-powered battle strategies | HIGH | ✅ | `66d403b` — TurnStrategy, createLLMStrategy, playTurn, getBattleHistory |
 | 16 | Basescan contract verification | MED | ✅ | Arena v2 verified on Basescan |
+| 17 | BIP39 wordlist (SSTORE2) | HIGH | ✅ | `458a896`, `e14b37f` — 2048 words on-chain |
+| 18 | Word boundary checking | HIGH | ✅ | `92f14d8` — prevents substring false positives |
+| 19 | Waku live spectating | MED | ✅ | `a73dea3` — onTurnBroadcast + useWakuTurns |
+| 20 | Live polling (on-chain fallback) | MED | ✅ | `3692122` — 4s turn polling, LIVE badge |
 
 ### Architecture
 ```
@@ -229,19 +233,17 @@ Agent A                    ClawttackArena (Base)          Agent B
 - `submitTurn` (miss → settle): ~194K gas
 - **Full 20-turn battle: ~$0.02-0.20 total**
 
-### NEXT TASK: BIP39 Wordlist for Challenge Words
+### NEXT TASK: Run a Live Spectated LLM Battle
 
-**Goal:** Replace 64 hand-picked 4-letter words with BIP39 standard wordlist (2048 words, 3-8 letters).
-
-**Design options (awaiting Egor's decision):**
-1. Separate `BIP39Words.sol` library contract (cleanest, reusable, pure bytecode lookup)
-2. Expand inline array in Arena contract (limited by 24KB contract size)
+**Goal:** Run a full LLM battle with Waku broadcasting enabled while watching it live on clawttack.com.
 
 **Acceptance criteria:**
-1. Challenge words drawn from BIP39 English wordlist
-2. On-chain verification preserved (contract can check word inclusion)
-3. Arena v3 deployment with Basescan verification
-4. All existing tests updated + passing
+1. nwaku running, `NWAKU_REST_URL` set, `VITE_NWAKU_REST_URL` in web env
+2. Start LLM battle via `arena-battle-llm.ts`
+3. Open `/arena/:id` on clawttack.com during the battle
+4. See turns appear in <2s via Waku (⚡ indicator active)
+5. On-chain poll verifies turns at 4s
+6. Battle settles, LIVE badge disappears, replay works
 
 ---
 
@@ -330,19 +332,21 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **291 tests** (209 Bun + 82 Forge) | **512 expect() calls** | **0 failures**
-- **4 Arena battles** on Base Sepolia (1 timeout win ClawnJr, 1 draw, 1 LLM battle draw, 2 orphaned)
+- **306 tests** (212 Bun + 94 Forge) | **518 expect() calls** | **0 failures**
+- **5 Arena battles** on Base Sepolia (inc. 1 LLM battle, 2 orphaned reclaimed)
 - **1 LLM-powered battle** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
-- **6 contracts** deployed (only Arena v2 active on Base Sepolia)
+- **3 Arena deployments** (v2, v3 BIP39, v4 word boundary fix — all Basescan verified)
 - **25 battle logs on IPFS** (Pinata) with correct CID mapping
-- **22 challenge reviews** completed
-- **45+ commits** on 2026-02-19
+- **23 challenge reviews** completed
+- **54+ commits** on 2026-02-19
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
-- **ClawttackArena v2:** `0x5c49fE29Dd3896234324C6D055A58A86cE930f04` (Sourcify + Basescan verified ✅)
+- **BIP39 Data (SSTORE2):** `0xeb2b285cf117a35df07affc2e0c9ebaa77bd6dd9`
+- **BIP39Words:** `0xd5c760aa0e8af1036d7f85e093d5a84a62e0b461` ✅ Basescan verified
+- **ClawttackArena v4:** `0xf7caed5eb794fa193c400efef40083acfaae184e` ✅ Basescan verified
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 - **ClawnJr wallet:** `0x2020B0F3BCa556380f39C63D44255502dE13C0D0`
-- Old contracts (Registry, InjectionCTF, PrisonersDilemma, SpyVsSpy, ChallengeWordBattle) — no code at addresses, deprecated
+- Old contracts (Arena v2/v3, Registry, scenarios) — deprecated
 
 ### Red Team Score
-**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 8/10** (v2 deployed + verified) | **ArenaFighter SDK: 8/10** | **Web UI Arena: 8/10** | **getLogsChunked: 8/10** | **IPFS: 7/10** | **E2E Script: 7/10** | **Pentest attacker: 5/10** | **Overall: 7.5/10**
+**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 9/10** (v4 + word boundary fix) | **ArenaFighter SDK: 8/10** | **Web UI Arena: 8/10** | **getLogsChunked: 8/10** | **IPFS: 7/10** | **E2E Script: 7/10** | **Pentest attacker: 5/10** | **Overall: 8/10**
