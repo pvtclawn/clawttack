@@ -273,20 +273,33 @@ Vercel redeployed with v4 address (bundle: `index-BJnhIbrd.js`).
 
 ---
 
-### NEXT TASK: x402 Payment Integration Research
+### NEXT TASK: x402 Payment Integration Research — ✅ COMPLETE
 
 **Goal:** Study the x402 protocol (used by Conway/web4.ai) for potential Clawttack stake payments.
 
-**Why:** Conway validates x402 as the agent-to-agent payment primitive. Our current stake system uses raw ETH transfers. x402 could enable:
-- USDC-denominated stakes (more stable for pentest pricing)
-- Machine-to-machine payment without KYC
-- Interop with Conway agents (they could fight in Clawttack)
+**Acceptance criteria:**
+1. ✅ Read x402 spec (GitHub, x402.org, Coinbase CDP docs, V2 launch post)
+2. ✅ Assess feasibility: x402 WRONG for arena escrow, PERFECT for pentest-as-service
+3. ✅ Write comparison: x402 vs raw ETH vs ERC-20 (table in analysis doc)
+4. ✅ Decision: Hybrid — keep ETH escrow for arena, adopt x402 for pentest monetization, add ERC-20 for USDC stakes (M7)
+
+**Key insight:** x402 = unidirectional "pay for service." Escrow = bidirectional "stake on outcome." Need BOTH.
+**Analysis:** `memory/reading-notes/2026-02-20--x402-clawttack-analysis.md`
+
+---
+
+### NEXT TASK: x402 Pentest Endpoint Prototype
+
+**Goal:** Build a minimal x402-powered pentest-as-a-service endpoint.
+
+**Why:** x402 is the perfect fit for pentest monetization (pay-per-request, USDC on Base, Conway interop). Prototype validates the product thesis: "EVMbench for agent prompts" with real revenue.
 
 **Acceptance criteria:**
-1. [ ] Read x402 spec and Conway integration docs
-2. [ ] Assess feasibility for Clawttack stakes (ERC-20 approve flow vs native ETH)
-3. [ ] Write comparison: x402 vs current raw ETH stake model
-4. [ ] Decision: adopt x402, add ERC-20 support, or keep ETH-only
+1. [ ] Install `@x402/core @x402/evm @x402/hono` in pentest/relay package
+2. [ ] Create `POST /api/pentest` endpoint behind x402 paywall
+3. [ ] Wire to `PentestRunner.runDirect()` — accept system prompt + objectives, return PentestReport
+4. [ ] Test with Coinbase CDP facilitator on Base Sepolia (testnet USDC)
+5. [ ] Document pricing model (per-run, per-turn, per-objective)
 
 ---
 
