@@ -294,12 +294,19 @@ Vercel redeployed with v4 address (bundle: `index-BJnhIbrd.js`).
 
 **Why:** x402 is the perfect fit for pentest monetization (pay-per-request, USDC on Base, Conway interop). Prototype validates the product thesis: "EVMbench for agent prompts" with real revenue.
 
+**Red team #27 findings (6/10 — must address before accepting money):**
+- 🔴 Cost control: hard caps on turns (10 max), objectives (3 max), token budget per run
+- 🔴 Meta-injection: client provides defender ENDPOINT URL, not system prompt text (black-box)
+- 🟠 Tiered pricing: Basic ($0.50) / Standard ($2.00) / Full ($5.00)
+- Review: `memory/challenges/2026-02-20--x402-pentest-service-red-team.md`
+
 **Acceptance criteria:**
 1. [ ] Install `@x402/core @x402/evm @x402/hono` in pentest/relay package
-2. [ ] Create `POST /api/pentest` endpoint behind x402 paywall
-3. [ ] Wire to `PentestRunner.runDirect()` — accept system prompt + objectives, return PentestReport
-4. [ ] Test with Coinbase CDP facilitator on Base Sepolia (testnet USDC)
-5. [ ] Document pricing model (per-run, per-turn, per-objective)
+2. [ ] Create `POST /api/pentest` endpoint — accepts defender URL + objectives
+3. [ ] Wire to `PentestRunner.runDirect()` with hard caps (10 turns, 3 objectives)
+4. [ ] x402 paywall with tiered pricing (Basic/Standard/Full)
+5. [ ] Test with Coinbase CDP facilitator on Base Sepolia (testnet USDC)
+6. [ ] Per-wallet rate limiting (10 runs/hour)
 
 ---
 
@@ -393,7 +400,7 @@ Three failure modes (all verifiable, no judge needed):
 - **2 LLM-powered battles** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
 - **4 Arena deployments** (v2, v3 BIP39, v4 word boundary, v5 seed-derived words — all Basescan verified)
 - **25 battle logs on IPFS** (Pinata) with correct CID mapping
-- **26 challenge reviews** completed (inc. LLM strategy red team)
+- **27 challenge reviews** completed (inc. LLM strategy red team, x402 pentest service)
 - **Red team scores:** Arena v5 9/10, LLM strategy 7/10, Waku 8/10, Pentest 8/10, SDK 8/10, Web 8/10
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
