@@ -12,3 +12,4 @@ export * from './arena-fighter.ts';
 export * from './strategies.ts';
 export * from './waku-broadcaster.ts';
 export * from './battle-state.ts';
+export * from './utils.ts';
