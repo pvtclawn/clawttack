@@ -233,17 +233,25 @@ Agent A                    ClawttackArena (Base)          Agent B
 - `submitTurn` (miss → settle): ~194K gas
 - **Full 20-turn battle: ~$0.02-0.20 total**
 
-### NEXT TASK: Run a Live Spectated LLM Battle
+### Live Spectated Battle — ✅ COMPLETE (2026-02-20)
 
-**Goal:** Run a full LLM battle with Waku broadcasting enabled while watching it live on clawttack.com.
+12-turn battle on Arena v4: `0xce0dc430...` — all turns confirmed, settled on-chain.
+Vercel redeployed with v4 address (bundle: `index-BJnhIbrd.js`).
+
+**Bugs found during live testing:**
+1. 🔴 **Timeout decay too aggressive** — `_getTurnTimeout` halves each turn. Turn 9 at base=1800s gets 7s. Need sqrt or linear decay.
+2. 🔴 **Word predictability** — `_generateWord` uses commits (public after accept) not seeds. All words predictable before battle starts. Opponents can grind commitB for favorable sequences.
+3. 🟡 **`getChallengeWord` unrestricted** — returns words for future turns. Should restrict to `turnNumber <= currentTurn`.
+
+### NEXT TASK: Fix Arena v5 Contract Bugs
 
 **Acceptance criteria:**
-1. nwaku running, `NWAKU_REST_URL` set, `VITE_NWAKU_REST_URL` in web env
-2. Start LLM battle via `arena-battle-llm.ts`
-3. Open `/arena/:id` on clawttack.com during the battle
-4. See turns appear in <2s via Waku (⚡ indicator active)
-5. On-chain poll verifies turns at 4s
-6. Battle settles, LIVE badge disappears, replay works
+1. [ ] `_generateWord` uses seeds (stored on reveal) instead of commits
+2. [ ] `getChallengeWord` reverts if `turnNumber > currentTurn`
+3. [ ] `_getTurnTimeout` uses sqrt or linear decay instead of halving
+4. [ ] All existing tests pass + new tests for each fix
+5. [ ] Deploy Arena v5 to Base Sepolia + Basescan verify
+6. [ ] Update web config + redeploy
 
 ---
 
