@@ -15,6 +15,9 @@
  *   # Accept a specific challenge
  *   PRIVATE_KEY=0x... BATTLE_ID=0x... bun run packages/protocol/scripts/fight.ts
  *
+ *   # Resume an interrupted battle
+ *   PRIVATE_KEY=0x... RESUME=1 bun run packages/protocol/scripts/fight.ts
+ *
  * Env:
  *   PRIVATE_KEY    — Your wallet private key (required)
  *   LLM_API_KEY    — OpenAI-compatible API key (optional, uses template strategy if absent)
@@ -25,6 +28,8 @@
  *   MAX_TURNS      — Max turns if creating (default: 8)
  *   BASE_TIMEOUT   — Turn timeout in seconds if creating (default: 1800)
  *   PERSONA        — Custom persona for LLM strategy (optional)
+ *   RESUME         — Set to 1 to resume an interrupted battle from state file
+ *   STATE_FILE     — Path to state file (default: .clawttack-state.json)
  *   RPC_URL        — Base Sepolia RPC (default: https://sepolia.base.org)
  *   ARENA_ADDRESS  — Arena contract address (default: current deployment)
  */
@@ -43,6 +48,7 @@ import { baseSepolia } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { ArenaFighter, BattlePhase, type TurnStrategy } from '../src/arena-fighter';
 import { createLLMStrategy, templateStrategy } from '../src/strategies';
+import { BattleStateManager, type BattleStateEntry } from '../src/battle-state';
 
 // --- Config ---
 
@@ -67,6 +73,8 @@ if (!PRIVATE_KEY) {
 const RPC_URL = process.env.RPC_URL ?? 'https://sepolia.base.org';
 const ARENA_ADDRESS = (process.env.ARENA_ADDRESS ?? '0xC20f694dEDa74fa2f4bCBB9f77413238862ba9f7') as Address;
 const DEPLOY_BLOCK = 37_880_000n;
+const STATE_FILE = process.env.STATE_FILE ?? '.clawttack-state.json';
+const RESUME = process.env.RESUME === '1' || process.env.RESUME === 'true' || process.argv.includes('--resume');
 
 const account = privateKeyToAccount(PRIVATE_KEY as `0x${string}`);
 const transport = http(RPC_URL);
@@ -79,6 +87,8 @@ const fighter = new ArenaFighter({
   contractAddress: ARENA_ADDRESS,
   deployBlock: DEPLOY_BLOCK,
 });
+
+const stateManager = new BattleStateManager(STATE_FILE);
 
 // --- Strategy ---
 
@@ -337,6 +347,7 @@ async function main() {
   console.log(`   Strategy: ${label}`);
   console.log(`   Arena:    ${ARENA_ADDRESS}`);
   console.log(`   Chain:    Base Sepolia`);
+  console.log(`   State:    ${stateManager.getFilePath()}`);
   console.log('');
 
   // Check balance
@@ -355,11 +366,87 @@ async function main() {
     process.exit(1);
   }
 
+  // Handle SIGINT/SIGTERM gracefully
+  let shuttingDown = false;
+  const handleShutdown = () => {
+    if (shuttingDown) {
+      console.log('\n⚠️  Force quit. State saved.');
+      process.exit(1);
+    }
+    shuttingDown = true;
+    console.log('\n🛑 Shutting down gracefully... (press Ctrl+C again to force)');
+    console.log(`   State saved to ${stateManager.getFilePath()}`);
+    process.exit(0);
+  };
+  process.on('SIGINT', handleShutdown);
+  process.on('SIGTERM', handleShutdown);
+
   console.log('');
 
   let battleId: Hex;
   let mySeed: string;
   let myRole: 'challenger' | 'opponent';
+
+  // Route 0: Resume an interrupted battle
+  if (RESUME) {
+    const resumable = stateManager.findResumable(account.address, ARENA_ADDRESS);
+
+    if (resumable.length === 0) {
+      console.log('📂 No resumable battles found in state file.');
+      console.log('   Starting fresh...');
+      console.log('');
+    } else {
+      // Pick the most recent resumable battle
+      const entry = resumable[resumable.length - 1];
+      console.log(`📂 Resuming battle: ${entry.battleId.slice(0, 18)}...`);
+      console.log(`   Role: ${entry.role} | Phase: ${entry.phase}`);
+      console.log('');
+
+      battleId = entry.battleId as Hex;
+      mySeed = entry.seed;
+      myRole = entry.role;
+
+      // Verify on-chain state
+      const core = await fighter.getBattleCore(battleId);
+      const onChainPhase = ['open', 'committed', 'active', 'settled', 'cancelled'][core.phase] ?? 'unknown';
+      stateManager.updatePhase(battleId, onChainPhase as BattleStateEntry['phase']);
+
+      if (core.phase === BattlePhase.Settled) {
+        console.log('   ℹ️  Battle already settled.');
+        stateManager.updatePhase(battleId, 'settled');
+        process.exit(0);
+      }
+      if (core.phase === BattlePhase.Cancelled) {
+        console.log('   ℹ️  Battle was cancelled.');
+        stateManager.updatePhase(battleId, 'cancelled');
+        process.exit(0);
+      }
+
+      // Resume from current phase
+      if (core.phase === BattlePhase.Open && myRole === 'challenger') {
+        await waitForOpponentAndReveal(battleId, mySeed);
+      } else if (core.phase === BattlePhase.Committed) {
+        console.log('🔑 Revealing our seed...');
+        try {
+          await fighter.revealSeed(battleId, mySeed);
+          console.log('   ✅ Seed revealed');
+        } catch (err: any) {
+          // Already revealed — that's fine
+          if (!err.message?.includes('InvalidSeed')) {
+            console.log('   ℹ️  Seed already revealed or error (continuing)');
+          }
+        }
+        await waitForActive(battleId);
+        stateManager.updatePhase(battleId, 'active');
+      }
+      // If Active, go straight to playBattle
+
+      await playBattle(battleId, strategy);
+      stateManager.updatePhase(battleId, 'settled');
+      showFinalStats();
+      return;
+    }
+  }
 
   // Route 1: Accept a specific battle
   const specifiedBattle = process.env.BATTLE_ID as Hex | undefined;
@@ -383,23 +470,63 @@ async function main() {
     mySeed = result.seed;
     myRole = 'opponent';
 
+    // Save state immediately
+    stateManager.saveBattle({
+      battleId, seed: mySeed, commit: result.commit, role: myRole,
+      agent: account.address, arena: ARENA_ADDRESS,
+      createdAt: new Date().toISOString(), phase: 'committed',
+      stakeWei: core.stake.toString(),
+    });
+
   } else {
     // Route 2: Find an open challenge or create one
     console.log('🔍 Scanning for open challenges...');
     const openChallenges = await findOpenChallenges();
 
     if (openChallenges.length > 0) {
-      // Accept the most recent open challenge
-      const best = openChallenges[openChallenges.length - 1];
-      console.log(`   Found ${openChallenges.length} open challenge(s)`);
-      console.log(`   Accepting: ${best.battleId.slice(0, 18)}... (${formatEther(best.stake)} ETH stake)`);
-      console.log('');
+      // Filter by stake: only accept challenges with stake <= our configured stake
+      const affordable = openChallenges.filter((c) => c.stake <= stake);
 
-      const result = await fighter.acceptChallenge(best.battleId, best.stake);
-      console.log(`✅ Accepted! tx: ${result.txHash.slice(0, 14)}...`);
-      battleId = best.battleId;
-      mySeed = result.seed;
-      myRole = 'opponent';
+      if (affordable.length > 0) {
+        const best = affordable[affordable.length - 1];
+        console.log(`   Found ${openChallenges.length} open challenge(s) (${affordable.length} within stake limit)`);
+        console.log(`   Accepting: ${best.battleId.slice(0, 18)}... (${formatEther(best.stake)} ETH stake)`);
+        console.log('');
+
+        const result = await fighter.acceptChallenge(best.battleId, best.stake);
+        console.log(`✅ Accepted! tx: ${result.txHash.slice(0, 14)}...`);
+        battleId = best.battleId;
+        mySeed = result.seed;
+        myRole = 'opponent';
+
+        // Save state immediately
+        stateManager.saveBattle({
+          battleId, seed: mySeed, commit: result.commit, role: myRole,
+          agent: account.address, arena: ARENA_ADDRESS,
+          createdAt: new Date().toISOString(), phase: 'committed',
+          stakeWei: best.stake.toString(),
+        });
+      } else {
+        console.log(`   Found ${openChallenges.length} open challenge(s) but none within stake limit (${formatEther(stake)} ETH)`);
+        console.log('   Creating our own...');
+
+        const result = await fighter.createChallenge({ stake, maxTurns, baseTimeout });
+        console.log(`✅ Challenge created! tx: ${result.txHash.slice(0, 14)}...`);
+        console.log(`   Battle ID: ${result.battleId}`);
+        battleId = result.battleId;
+        mySeed = result.seed;
+        myRole = 'challenger';
+
+        // Save state immediately
+        stateManager.saveBattle({
+          battleId, seed: mySeed, commit: result.commit, role: myRole,
+          agent: account.address, arena: ARENA_ADDRESS,
+          createdAt: new Date().toISOString(), phase: 'open',
+          stakeWei: stake.toString(),
+        });
+
+        await waitForOpponentAndReveal(battleId, mySeed);
+      }
     } else {
       // No open challenges — create one
       console.log('   No open challenges found. Creating one...');
@@ -413,36 +540,58 @@ async function main() {
       mySeed = result.seed;
       myRole = 'challenger';
 
+      // Save state immediately
+      stateManager.saveBattle({
+        battleId, seed: mySeed, commit: result.commit, role: myRole,
+        agent: account.address, arena: ARENA_ADDRESS,
+        createdAt: new Date().toISOString(), phase: 'open',
+        stakeWei: stake.toString(),
+      });
+
       // Wait for opponent, then reveal our seed
       await waitForOpponentAndReveal(battleId, mySeed);
     }
   }
 
   // If we're the opponent, reveal our seed and wait for active
-  if (myRole === 'opponent') {
-    const core = await fighter.getBattleCore(battleId);
+  if (myRole! === 'opponent') {
+    const core = await fighter.getBattleCore(battleId!);
     if (core.phase === BattlePhase.Committed) {
       console.log('🔑 Revealing our seed...');
-      await fighter.revealSeed(battleId, mySeed);
+      await fighter.revealSeed(battleId!, mySeed!);
       console.log('   ✅ Seed revealed');
-      await waitForActive(battleId);
+      stateManager.updatePhase(battleId!, 'committed');
+      await waitForActive(battleId!);
+      stateManager.updatePhase(battleId!, 'active');
     }
   }
 
   // Ensure battle is active
-  const core = await fighter.getBattleCore(battleId);
+  const core = await fighter.getBattleCore(battleId!);
   if (core.phase === BattlePhase.Committed) {
-    await waitForActive(battleId);
+    await waitForActive(battleId!);
+    stateManager.updatePhase(battleId!, 'active');
   }
 
   // Play!
-  await playBattle(battleId, strategy);
+  await playBattle(battleId!, strategy);
+  stateManager.updatePhase(battleId!, 'settled');
 
+  await showFinalStats();
+}
+
+async function showFinalStats(): Promise<void> {
   // Show final stats
   const stats = await fighter.getAgentStats(account.address);
   if (stats.elo > 0) {
     console.log('');
     console.log(`📈 Your stats: Elo ${stats.elo} | W${stats.wins}/L${stats.losses}/D${stats.draws}`);
+  }
+
+  // Prune completed battles from state
+  const pruned = stateManager.pruneCompleted();
+  if (pruned > 0) {
+    console.log(`🗑️  Pruned ${pruned} completed battle(s) from state`);
   }
 }
 

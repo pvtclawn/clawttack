@@ -11,3 +11,4 @@ export * from './ipfs.ts';
 export * from './arena-fighter.ts';
 export * from './strategies.ts';
 export * from './waku-broadcaster.ts';
+export * from './battle-state.ts';
