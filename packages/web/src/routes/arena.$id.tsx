@@ -9,47 +9,90 @@ import {
   useArenaTurns,
   useArenaSettlements,
   useArenaTiming,
+  useArenaBattleCore,
 } from '../hooks/useChain'
 import { useWakuTurns } from '../hooks/useWakuTurns'
 
-/** Countdown timer — shows time remaining until turnDeadline */
-function TurnCountdown({ deadline }: { deadline: bigint }) {
-  const [secondsLeft, setSecondsLeft] = useState<number>(0)
+/**
+ * Turn timer bar — shows who's up, time draining green→red, blinks near 0.
+ * Sits below the last turn bubble, above "Waiting for next turn…"
+ */
+function TurnTimerBar({
+  deadline,
+  baseTimeout,
+  currentTurn,
+  whoseTurn,
+  isChallenger,
+}: {
+  deadline: bigint
+  baseTimeout: bigint
+  currentTurn: number
+  whoseTurn: `0x${string}`
+  isChallenger: boolean
+}) {
+  const [secondsLeft, setSecondsLeft] = useState(0)
 
   useEffect(() => {
     const update = () => {
       const now = Math.floor(Date.now() / 1000)
-      const remaining = Number(deadline) - now
-      setSecondsLeft(Math.max(0, remaining))
+      setSecondsLeft(Math.max(0, Number(deadline) - now))
     }
     update()
-    const interval = setInterval(update, 1000)
-    return () => clearInterval(interval)
+    const id = setInterval(update, 500)
+    return () => clearInterval(id)
   }, [deadline])
+
+  // Turn timeout decreases linearly: base - (base/20)*(turn-1), floor MIN_TIMEOUT=5
+  const turnTimeout = useMemo(() => {
+    const base = Number(baseTimeout)
+    if (currentTurn <= 1) return base
+    const decrement = Math.floor(base / 20)
+    const reduced = base - decrement * (currentTurn - 1)
+    return Math.max(5, reduced)
+  }, [baseTimeout, currentTurn])
+
+  const pct = Math.max(0, Math.min(100, (secondsLeft / turnTimeout) * 100))
+  const isCritical = secondsLeft < 10
+  const isUrgent = secondsLeft < 30
 
   const mins = Math.floor(secondsLeft / 60)
   const secs = secondsLeft % 60
-  const isUrgent = secondsLeft < 60
-  const isCritical = secondsLeft < 15
+  const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`
 
-  if (secondsLeft === 0) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-900/70 px-3 py-1 text-xs font-mono font-bold text-red-300">
-        ⏰ TIMEOUT
-      </span>
-    )
-  }
+  // Color: green → yellow → orange → red
+  const barColor = isCritical
+    ? 'bg-red-500'
+    : isUrgent
+      ? 'bg-orange-500'
+      : pct > 60
+        ? 'bg-green-500'
+        : 'bg-yellow-500'
 
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-mono font-bold ${
-      isCritical
-        ? 'bg-red-900/70 text-red-300 animate-pulse'
-        : isUrgent
-          ? 'bg-orange-900/70 text-orange-300'
-          : 'bg-[var(--surface)] text-[var(--fg)] border border-[var(--border)]'
-    }`}>
-      ⏱ {mins}:{secs.toString().padStart(2, '0')}
-    </span>
+    <div className={`mx-4 my-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 ${isCritical ? 'animate-pulse' : ''}`}>
+      <div className="mb-2 flex items-center justify-between text-xs">
+        <span className="flex items-center gap-1.5">
+          <span className={isChallenger ? 'text-red-400' : 'text-blue-400'}>
+            {isChallenger ? '🗡️' : '🛡️'}
+          </span>
+          <span className="text-[var(--muted)]">Waiting for</span>
+          <span className="font-medium text-[var(--fg)]">{agentName(whoseTurn)}</span>
+          <span className="text-[var(--muted)]">· Turn {currentTurn}</span>
+        </span>
+        <span className={`font-mono font-bold tabular-nums ${
+          isCritical ? 'text-red-400' : isUrgent ? 'text-orange-400' : 'text-[var(--fg)]'
+        }`}>
+          ⏱ {timeStr}
+        </span>
+      </div>
+      {/* Progress bar — drains left to right */}
+      <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--border)]">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
   )
 }
 
@@ -72,6 +115,7 @@ function ArenaBattlePage() {
 
   const { data: turns, isLoading: loadingT } = useArenaTurns(battleId, isLive)
   const { data: timing } = useArenaTiming(battleId, isLive)
+  const { data: battleCore } = useArenaBattleCore(battleId, isLive)
 
   // Waku live subscription — near-instant turn delivery
   const { wakuTurns, connected: wakuConnected } = useWakuTurns({
@@ -223,17 +267,12 @@ function ArenaBattlePage() {
           {phase}
         </span>
         {isLive && (
-          <>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-900/50 px-3 py-1 text-xs font-medium text-red-400">
-              <span className="animate-pulse">●</span> LIVE
-              {wakuConnected && (
-                <span className="text-[10px] text-green-400 ml-1" title="Waku P2P connected">⚡</span>
-              )}
-            </span>
-            {timing && timing.turnDeadline > 0n && (
-              <TurnCountdown deadline={timing.turnDeadline} />
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-900/50 px-3 py-1 text-xs font-medium text-red-400">
+            <span className="animate-pulse">●</span> LIVE
+            {wakuConnected && (
+              <span className="text-[10px] text-green-400 ml-1" title="Waku P2P connected">⚡</span>
             )}
-          </>
+          </span>
         )}
         {challenge && (
           <span className="text-xs text-[var(--muted)]">
@@ -326,13 +365,37 @@ function ArenaBattlePage() {
             </div>
           </div>
         )}
-        {isLive && !isReplaying && visibleTurns >= sortedTurns.length && (
-          <div className="flex justify-center py-4">
-            <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
-              <span className="animate-pulse text-red-400">●</span> Waiting for next turn…
+        {isLive && !isReplaying && visibleTurns >= sortedTurns.length && (() => {
+          // Determine whose turn it is
+          const turnNum = battleCore?.currentTurn ?? sortedTurns.length + 1
+          const isEvenTurn = turnNum % 2 === 0
+          // Turn 1 = challenger, turn 2 = opponent, alternating
+          const whoseTurn = challenge
+            ? (isEvenTurn ? accept?.opponent : challenge.challenger) ?? challenge.challenger
+            : null
+
+          if (timing && timing.turnDeadline > 0n && whoseTurn && battleCore) {
+            const isChallenger = whoseTurn.toLowerCase() === challenge?.challenger.toLowerCase()
+            return (
+              <TurnTimerBar
+                deadline={timing.turnDeadline}
+                baseTimeout={timing.baseTimeout}
+                currentTurn={turnNum}
+                whoseTurn={whoseTurn}
+                isChallenger={isChallenger}
+              />
+            )
+          }
+
+          // Fallback if timing not yet loaded
+          return (
+            <div className="flex justify-center py-4">
+              <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
+                <span className="animate-pulse text-red-400">●</span> Waiting for next turn…
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
       </div>
 
       {/* On-chain timeline */}
