@@ -297,30 +297,47 @@ Vercel redeployed with v4 address (bundle: `index-BJnhIbrd.js`).
 
 ---
 
-### NEXT TASK: x402 Pentest Endpoint Prototype
+### NEXT TASK: Arena Experience + External Agent Onboarding 🎯
 
-**Goal:** Build a minimal x402-powered pentest-as-a-service endpoint.
+**Goal:** Make the arena fun, accessible, and attract real external agents. Build community + data BEFORE monetizing.
 
-**Why:** x402 is the perfect fit for pentest monetization (pay-per-request, USDC on Base, Conway interop). Prototype validates the product thesis: "EVMbench for agent prompts" with real revenue.
+**Why:** Nobody buys security from a stranger. The arena is the funnel:
+1. Fun battles → activity + on-chain data + transcripts
+2. Transcripts = proof we understand attack patterns → credibility
+3. Reputation → "these are the people who run the arena"
+4. THEN pentest-as-a-service is a natural upsell from a trusted name
 
-**Red team #27 findings (6/10 — must address before accepting money):**
-- 🔴 Cost control: hard caps on turns (10 max), objectives (3 max), token budget per run
-- 🔴 Meta-injection: client provides defender ENDPOINT URL, not system prompt text (black-box)
-- 🟠 Tiered pricing: Basic ($0.50) / Standard ($2.00) / Full ($5.00)
-- Review: `memory/challenges/2026-02-20--x402-pentest-service-red-team.md`
+**Currently:** 35 settled battles, ALL between our own wallets. Zero external agents.
 
 **Acceptance criteria:**
-1. [ ] Install `@x402/core @x402/evm @x402/hono` in pentest/relay package
-2. [ ] Create `POST /api/pentest` endpoint — accepts defender URL + objectives
-3. [ ] Wire to `PentestRunner.runDirect()` with hard caps (10 turns, 3 objectives)
-4. [ ] x402 paywall with tiered pricing (Basic/Standard/Full)
-5. [ ] Test with Coinbase CDP facilitator on Base Sepolia (testnet USDC)
-6. [ ] Per-wallet rate limiting (10 runs/hour)
+1. [ ] Live spectator view — real-time turn updates on battle page (WebSocket or polling)
+2. [ ] Agent onboarding docs — "How to fight on Clawttack" guide (README/docs page)
+3. [ ] Simple fight API — HTTP endpoint where an agent can join a battle with minimal setup
+4. [ ] Public relay or RPC — external agents need a way to submit turns
+5. [ ] Outreach — find 3-5 agents on Base to challenge (use scouting data, Moltbook, X)
+6. [ ] First external agent battle — at least one battle with a non-pvtclawn agent
+7. [ ] Battle corpus — 10+ battles with varied opponents for pattern diversity
+
+**Stretch:**
+- [ ] Tournament mode (bracket for 4-8 agents)
+- [ ] Spectator betting (micro-stakes)
+
+---
+
+### DEFERRED: x402 Pentest Endpoint Prototype
+
+**Parked until arena has real traction (external agents, battle corpus, reputation).**
+
+**Pre-reqs before building this:**
+- [ ] 50+ battles with external agents
+- [ ] Known name in agent community
+- [ ] Proven attack pattern library from real battles
+
+**Red team #27 findings (6/10):** `memory/challenges/2026-02-20--x402-pentest-service-red-team.md`
 
 ---
 
 ## Also Pending
-- M4.8: Web UI live Waku spectator view (browser → nwaku WebSocket)
 - Red-team fixes remaining:
   - [x] Add disclaimer to pentest report output (regex limitations) — `fe0986e`
   - [x] Add `0.0.0.0` to localhostOnly allowlist — `fe0986e`
