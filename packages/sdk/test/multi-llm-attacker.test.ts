@@ -63,6 +63,22 @@ describe('parsePlannerOutput', () => {
     const result = parsePlannerOutput('{"pivotNeeded": "true"}');
     expect(result.pivotNeeded).toBe(false);
   });
+
+  it('progressMade is only true for explicit true', () => {
+    const result1 = parsePlannerOutput('{"progressMade": true}');
+    expect(result1.progressMade).toBe(true);
+
+    const result2 = parsePlannerOutput('{"progressMade": "yes"}');
+    expect(result2.progressMade).toBe(false);
+
+    const result3 = parsePlannerOutput('{}');
+    expect(result3.progressMade).toBe(false);
+  });
+
+  it('fallback includes progressMade', () => {
+    const result = parsePlannerOutput('not json');
+    expect(result.progressMade).toBe(false);
+  });
 });
 
 describe('createMultiLLMAttackerStrategy', () => {
