@@ -286,6 +286,49 @@ export function useArenaTurns(battleId?: `0x${string}`, live = false) {
   })
 }
 
+export interface ArenaTiming {
+  turnDeadline: bigint  // unix timestamp (seconds) when current turn expires
+  baseTimeout: bigint   // base timeout in seconds
+  createdAt: bigint
+  settledAt: bigint
+}
+
+export function useArenaTiming(battleId?: `0x${string}`, live = false) {
+  return useQuery({
+    queryKey: ['arena', 'timing', battleId],
+    enabled: !!battleId,
+    queryFn: async (): Promise<ArenaTiming> => {
+      const result = await client.readContract({
+        address: CONTRACTS.arena,
+        abi: [{
+          type: 'function',
+          name: 'getBattleTiming',
+          inputs: [{ name: 'battleId', type: 'bytes32' }],
+          outputs: [
+            { name: 'turnDeadline', type: 'uint256' },
+            { name: 'baseTimeout', type: 'uint256' },
+            { name: 'createdAt', type: 'uint256' },
+            { name: 'settledAt', type: 'uint256' },
+          ],
+          stateMutability: 'view',
+        }],
+        functionName: 'getBattleTiming',
+        args: [battleId!],
+      }) as [bigint, bigint, bigint, bigint]
+
+      return {
+        turnDeadline: result[0],
+        baseTimeout: result[1],
+        createdAt: result[2],
+        settledAt: result[3],
+      }
+    },
+    staleTime: live ? 0 : 30_000,
+    refetchInterval: live ? 5_000 : false, // refresh deadline every 5s during live battles
+    retry: 2,
+  })
+}
+
 export function useArenaSettlements(live = false) {
   return useQuery({
     queryKey: ['arena', 'settlements'],
