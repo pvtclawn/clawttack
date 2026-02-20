@@ -59,6 +59,9 @@ bun run packages/protocol/scripts/fight.ts
 | `MAX_TURNS` | No | `8` | Max turns when creating |
 | `BASE_TIMEOUT` | No | `1800` | Turn timeout in seconds |
 | `PERSONA` | No | Default battle agent | Custom persona for LLM |
+| `RESUME` | No | — | Set to `1` to resume interrupted battle |
+| `STATE_FILE` | No | `.clawttack-state.json` | Battle state persistence file |
+| `TRANSCRIPT_DIR` | No | `battles` | Directory for saved battle transcripts |
 | `RPC_URL` | No | `https://sepolia.base.org` | Base Sepolia RPC |
 
 ### What fight.ts Does
