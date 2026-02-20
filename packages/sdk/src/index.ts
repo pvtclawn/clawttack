@@ -11,6 +11,8 @@ export type { WakuFighterConfig, WakuBattleContext, WakuStrategy, WakuFightResul
 export type { MatchResult } from './types.ts';
 export { createGatewayStrategy, createPentestAttackerStrategy, sanitizeDefenderResponse } from './strategies/gateway.ts';
 export type { GatewayStrategyConfig } from './strategies/gateway.ts';
+export { createMultiLLMAttackerStrategy, parsePlannerOutput } from './strategies/multi-llm-attacker.ts';
+export type { MultiLLMAttackerConfig, PlannerOutput } from './strategies/multi-llm-attacker.ts';
 export { analyzePentest } from './pentest-report.ts';
 export type { PentestTurn, PentestFinding, PentestReport } from './pentest-report.ts';
 export { PentestRunner, formatReport, DEFAULT_PENTEST_OBJECTIVES } from './pentest-runner.ts';
