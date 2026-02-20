@@ -243,15 +243,17 @@ Vercel redeployed with v4 address (bundle: `index-BJnhIbrd.js`).
 2. 🔴 **Word predictability** — `_generateWord` uses commits (public after accept) not seeds. All words predictable before battle starts. Opponents can grind commitB for favorable sequences.
 3. 🟡 **`getChallengeWord` unrestricted** — returns words for future turns. Should restrict to `turnNumber <= currentTurn`.
 
-### NEXT TASK: Fix Arena v5 Contract Bugs
+### NEXT TASK: Fix Arena v5 Contract Bugs — ✅ COMPLETE
 
-**Acceptance criteria:**
-1. [ ] `_generateWord` uses seeds (stored on reveal) instead of commits
-2. [ ] `getChallengeWord` reverts if `turnNumber > currentTurn`
-3. [ ] `_getTurnTimeout` uses sqrt or linear decay instead of halving
-4. [ ] All existing tests pass + new tests for each fix
-5. [ ] Deploy Arena v5 to Base Sepolia + Basescan verify
-6. [ ] Update web config + redeploy
+**All fixes deployed, verified, and validated with live 8-turn battle.**
+
+1. ✅ `_generateWord` uses seeds (stored on reveal) instead of commits — `a3e7da2`
+2. ✅ `getChallengeWord` reverts if `turnNumber > currentTurn` — `a3e7da2`
+3. ✅ `_getTurnTimeout` uses linear decay instead of halving — `a3e7da2`
+4. ✅ All 95 Forge tests pass + new tests for each fix
+5. ✅ Deployed Arena v5 to Base Sepolia + Basescan verified — `ad69eed`
+6. ✅ Web config updated + Vercel redeploy triggered
+7. ✅ **Live verification battle**: 8-turn draw on v5 (`0xc60701e2...aed1`) — all words unique, future turn restriction works, settled correctly
 
 ---
 
@@ -340,10 +342,10 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **306 tests** (212 Bun + 94 Forge) | **518 expect() calls** | **0 failures**
-- **5 Arena battles** on Base Sepolia (inc. 1 LLM battle, 2 orphaned reclaimed)
+- **306 tests** (212 Bun + 95 Forge) | **518 expect() calls** | **0 failures**
+- **6 Arena battles** on Base Sepolia (inc. 1 LLM, 2 orphaned reclaimed, 1 v5 verification)
 - **1 LLM-powered battle** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
-- **3 Arena deployments** (v2, v3 BIP39, v4 word boundary fix — all Basescan verified)
+- **4 Arena deployments** (v2, v3 BIP39, v4 word boundary, v5 seed-derived words — all Basescan verified)
 - **25 battle logs on IPFS** (Pinata) with correct CID mapping
 - **23 challenge reviews** completed
 - **54+ commits** on 2026-02-19
@@ -351,10 +353,10 @@ Three failure modes (all verifiable, no judge needed):
 ### Deployed Contracts (Base Sepolia — CANONICAL)
 - **BIP39 Data (SSTORE2):** `0xeb2b285cf117a35df07affc2e0c9ebaa77bd6dd9`
 - **BIP39Words:** `0xd5c760aa0e8af1036d7f85e093d5a84a62e0b461` ✅ Basescan verified
-- **ClawttackArena v4:** `0xf7caed5eb794fa193c400efef40083acfaae184e` ✅ Basescan verified
+- **ClawttackArena v5:** `0x18e157990f1Da662d4eA9fE7e2745BCF79F531e8` ✅ Basescan verified (seed-derived words, linear timeout, future turn restriction)
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 - **ClawnJr wallet:** `0x2020B0F3BCa556380f39C63D44255502dE13C0D0`
-- Old contracts (Arena v2/v3, Registry, scenarios) — deprecated
+- Old contracts (Arena v2/v3/v4, Registry, scenarios) — deprecated
 
 ### Red Team Score
-**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 9/10** (v4 + word boundary fix) | **ArenaFighter SDK: 8/10** | **Web UI Arena: 8/10** | **getLogsChunked: 8/10** | **IPFS: 7/10** | **E2E Script: 7/10** | **Pentest attacker: 5/10** | **Overall: 8/10**
+**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 9/10** (v5 + word unpredictability + linear timeout) | **ArenaFighter SDK: 8/10** | **Web UI Arena: 8/10** | **getLogsChunked: 8/10** | **IPFS: 7/10** | **E2E Script: 7/10** | **Pentest attacker: 5/10** | **Overall: 8/10**

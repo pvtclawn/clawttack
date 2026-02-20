@@ -12,7 +12,7 @@ import { baseSepolia } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { ArenaFighter } from '../src/arena-fighter';
 
-const ARENA_ADDRESS = '0xf7caed5eb794fa193c400efef40083acfaae184e' as const;
+const ARENA_ADDRESS = '0x18e157990f1Da662d4eA9fE7e2745BCF79F531e8' as const;
 const RPC_URL = 'https://sepolia.base.org';
 
 async function main() {
