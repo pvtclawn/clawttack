@@ -105,8 +105,18 @@ async function main() {
     console.log();
   }
 
+  // Fund Agent B if needed (temp wallet support)
+  const balB = await publicClient.getBalance({ address: accountB.address });
+  if (balB < parseEther('0.001')) {
+    console.log(`💰 Funding Agent B (${formatEther(balB)} ETH → sending 0.003 ETH)...`);
+    const fundTx = await walletA.sendTransaction({ to: accountB.address, value: parseEther('0.003') });
+    await publicClient.waitForTransactionReceipt({ hash: fundTx });
+    console.log(`   ✅ Funded`);
+    console.log();
+  }
+
   // Step 1: Create challenge
-  const stake = parseEther('0.0001');
+  const stake = 0n; // 0-stake for verification battles
   const maxTurns = 6;
   console.log(`1️⃣  Agent A creates challenge (stake: ${formatEther(stake)} ETH, ${maxTurns} turns)...`);
   const { battleId, seed: seedA } = await fighterA.createChallenge({
