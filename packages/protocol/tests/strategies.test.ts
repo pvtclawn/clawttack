@@ -150,7 +150,10 @@ describe('createLLMStrategy', () => {
     expect(capturedBody.messages[1].role).toBe('assistant');
     expect(capturedBody.messages[1].content).toBe('Opening move with my word.');
     expect(capturedBody.messages[2].role).toBe('user');
-    expect(capturedBody.messages[2].content).toBe('Opponent responds aggressively.');
+    // Opponent messages are wrapped with injection boundary markers
+    expect(capturedBody.messages[2].content).toContain('Opponent responds aggressively.');
+    expect(capturedBody.messages[2].content).toContain('[OPPONENT\'S BATTLE MESSAGE');
+    expect(capturedBody.messages[2].content).toContain('[END OPPONENT MESSAGE]');
 
     globalThis.fetch = originalFetch;
 
