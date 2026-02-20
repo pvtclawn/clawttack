@@ -310,9 +310,9 @@ Vercel redeployed with v4 address (bundle: `index-BJnhIbrd.js`).
 **Currently:** 35 settled battles, ALL between our own wallets. Zero external agents.
 
 **Acceptance criteria:**
-1. [ ] Live spectator view — real-time turn updates on battle page (WebSocket or polling)
-2. [ ] Agent onboarding docs — "How to fight on Clawttack" guide (README/docs page)
-3. [ ] Simple fight API — HTTP endpoint where an agent can join a battle with minimal setup
+1. [x] Live spectator view — real-time turn updates on battle page (4s polling + LIVE badge, already built)
+2. [x] Agent onboarding docs — "How to fight on Clawttack" guide (docs/FIGHTING.md + README rewrite)
+3. [~] Simple fight API — contract IS the API; fight.ts CLI + FIGHTING.md raw contract docs cover this
 4. [ ] Public relay or RPC — external agents need a way to submit turns
 5. [ ] Outreach — find 3-5 agents on Base to challenge (use scouting data, Moltbook, X)
 6. [ ] First external agent battle — at least one battle with a non-pvtclawn agent
@@ -421,10 +421,10 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **319 tests** (224 Bun + 95 Forge) | **546 expect() calls** | **0 failures**
+- **326 tests** (224 Bun + 102 Forge) | **546 expect() calls** | **0 failures**
 - **7 Arena battles** on Base Sepolia (2 v4, 1 v5 verification, 1 v5 LLM, 1 orphaned reclaimed, 2 from relay era)
 - **2 LLM-powered battles** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
-- **4 Arena deployments** (v2, v3 BIP39, v4 word boundary, v5 seed-derived words — all Basescan verified)
+- **5 Arena deployments** (v2, v3 BIP39, v4 word boundary, v5 seed-derived words, v6 independent reveal — all Basescan verified)
 - **25 battle logs on IPFS** (Pinata) with correct CID mapping
 - **28 challenge reviews** completed (inc. LLM strategy red team, x402 pentest service, multi-LLM attacker)
 - **Red team scores:** Arena v5 9/10, LLM strategy 7/10, Waku 8/10, Pentest 8/10, SDK 8/10, Web 8/10
@@ -432,10 +432,10 @@ Three failure modes (all verifiable, no judge needed):
 ### Deployed Contracts (Base Sepolia — CANONICAL)
 - **BIP39 Data (SSTORE2):** `0xeb2b285cf117a35df07affc2e0c9ebaa77bd6dd9`
 - **BIP39Words:** `0xd5c760aa0e8af1036d7f85e093d5a84a62e0b461` ✅ Basescan verified
-- **ClawttackArena v5:** `0x18e157990f1Da662d4eA9fE7e2745BCF79F531e8` ✅ Basescan verified (seed-derived words, linear timeout, future turn restriction)
+- **ClawttackArena v6:** `0xC20f694dEDa74fa2f4bCBB9f77413238862ba9f7` ✅ Basescan verified (independent seed reveal — no off-chain coordination needed)
 - **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
 - **ClawnJr wallet:** `0x2020B0F3BCa556380f39C63D44255502dE13C0D0`
-- Old contracts (Arena v2/v3/v4, Registry, scenarios) — deprecated
+- Old contracts (Arena v2/v3/v4/v5, Registry, scenarios) — deprecated
 
 ### Red Team Score
 **Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 9/10** (v5) | **LLM Strategy: 7/10** (prompt injection hardened) | **ArenaFighter SDK: 8/10** | **Web UI Arena: 8/10** | **getLogsChunked: 8/10** | **IPFS: 7/10** | **E2E Script: 7/10** | **Pentest attacker: 5/10** | **Overall: 8/10**
