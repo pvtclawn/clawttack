@@ -388,6 +388,26 @@ export class ArenaFighter {
     this.onTurnBroadcast = config.onTurnBroadcast;
   }
 
+  /** Wrapper for RPC calls with exponential backoff */
+  private async withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+    let lastError: any;
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await fn();
+      } catch (err: any) {
+        lastError = err;
+        // Don't retry contract reverts
+        if (err.message?.includes('reverted') || err.name === 'ArenaError') {
+          throw err;
+        }
+        const delay = 1000 * Math.pow(2, i);
+        console.warn(`⚠️ RPC call failed (attempt ${i + 1}/${maxRetries}): ${err.message?.slice(0, 100)}. Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+    throw lastError;
+  }
+
   // --- Seed Helpers ---
 
   /** Generate a random seed string */
@@ -420,18 +440,18 @@ export class ArenaFighter {
 
     let txHash: Hex;
     try {
-      txHash = await this.walletClient.writeContract({
+      txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'createChallenge',
         args: [commit, maxTurns, BigInt(baseTimeout)],
         value: stake,
-      });
+      }));
     } catch (err) {
       throw parseRevertError(err);
     }
 
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
 
     // Extract battleId from ChallengeCreated event
     const log = receipt.logs.find(
@@ -462,18 +482,18 @@ export class ArenaFighter {
 
     let txHash: Hex;
     try {
-      txHash = await this.walletClient.writeContract({
+      txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'acceptChallenge',
         args: [battleId, commit],
         value: stake,
-      });
+      }));
     } catch (err) {
       throw parseRevertError(err);
     }
 
-    await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+    await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
 
     return { seed: actualSeed, commit, txHash };
   }
@@ -481,13 +501,13 @@ export class ArenaFighter {
   /** Reveal both seeds to start the battle. Either participant can call. */
   async revealSeeds(battleId: Hex, seedA: string, seedB: string): Promise<Hex> {
     try {
-      const txHash = await this.walletClient.writeContract({
+      const txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'revealSeeds',
         args: [battleId, seedA, seedB],
-      });
-      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+      }));
+      await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
     } catch (err) {
       throw parseRevertError(err);
@@ -500,13 +520,13 @@ export class ArenaFighter {
    */
   async revealSeed(battleId: Hex, seed: string): Promise<Hex> {
     try {
-      const txHash = await this.walletClient.writeContract({
+      const txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'revealSeed',
         args: [battleId, seed],
-      });
-      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+      }));
+      await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
     } catch (err) {
       throw parseRevertError(err);
@@ -516,13 +536,13 @@ export class ArenaFighter {
   /** Submit a turn message. Must contain the challenge word for your turn. */
   async submitTurn(battleId: Hex, message: string): Promise<Hex> {
     try {
-      const txHash = await this.walletClient.writeContract({
+      const txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'submitTurn',
         args: [battleId, message],
-      });
-      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+      }));
+      await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
     } catch (err) {
       throw parseRevertError(err);
@@ -532,13 +552,13 @@ export class ArenaFighter {
   /** Claim timeout if opponent didn't submit in time. */
   async claimTimeout(battleId: Hex): Promise<Hex> {
     try {
-      const txHash = await this.walletClient.writeContract({
+      const txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'claimTimeout',
         args: [battleId],
-      });
-      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+      }));
+      await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
     } catch (err) {
       throw parseRevertError(err);
@@ -548,13 +568,13 @@ export class ArenaFighter {
   /** Cancel an open (unaccepted) challenge. */
   async cancelChallenge(battleId: Hex): Promise<Hex> {
     try {
-      const txHash = await this.walletClient.writeContract({
+      const txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'cancelChallenge',
         args: [battleId],
-      });
-      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+      }));
+      await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
     } catch (err) {
       throw parseRevertError(err);
@@ -565,22 +585,22 @@ export class ArenaFighter {
 
   /** Get the challenge word for a specific turn. */
   async getChallengeWord(battleId: Hex, turnNumber: number): Promise<string> {
-    return this.publicClient.readContract({
+    return this.withRetry(() => this.publicClient.readContract({
       address: this.contractAddress,
       abi: ARENA_ABI,
       functionName: 'getChallengeWord',
       args: [battleId, turnNumber],
-    }) as Promise<string>;
+    })) as Promise<string>;
   }
 
   /** Get battle core state. */
   async getBattleCore(battleId: Hex): Promise<BattleCore> {
-    const result = (await this.publicClient.readContract({
+    const result = (await this.withRetry(() => this.publicClient.readContract({
       address: this.contractAddress,
       abi: ARENA_ABI,
       functionName: 'getBattleCore',
       args: [battleId],
-    })) as [Address, Address, bigint, number, number, number, Address];
+    }))) as [Address, Address, bigint, number, number, number, Address];
 
     return {
       challenger: result[0],
@@ -595,12 +615,12 @@ export class ArenaFighter {
 
   /** Get battle timing info. */
   async getBattleTiming(battleId: Hex): Promise<BattleTiming> {
-    const result = (await this.publicClient.readContract({
+    const result = (await this.withRetry(() => this.publicClient.readContract({
       address: this.contractAddress,
       abi: ARENA_ABI,
       functionName: 'getBattleTiming',
       args: [battleId],
-    })) as [bigint, bigint, bigint, bigint];
+    }))) as [bigint, bigint, bigint, bigint];
 
     return {
       turnDeadline: result[0],
@@ -612,32 +632,32 @@ export class ArenaFighter {
 
   /** Check whose turn it is. */
   async whoseTurn(battleId: Hex): Promise<Address> {
-    return this.publicClient.readContract({
+    return this.withRetry(() => this.publicClient.readContract({
       address: this.contractAddress,
       abi: ARENA_ABI,
       functionName: 'whoseTurn',
       args: [battleId],
-    }) as Promise<Address>;
+    })) as Promise<Address>;
   }
 
   /** Get time remaining for current turn. */
   async timeRemaining(battleId: Hex): Promise<bigint> {
-    return this.publicClient.readContract({
+    return this.withRetry(() => this.publicClient.readContract({
       address: this.contractAddress,
       abi: ARENA_ABI,
       functionName: 'timeRemaining',
       args: [battleId],
-    }) as Promise<bigint>;
+    })) as Promise<bigint>;
   }
 
   /** Get agent stats (Elo, wins, losses, draws). */
   async getAgentStats(agent: Address): Promise<AgentStats> {
-    const result = (await this.publicClient.readContract({
+    const result = (await this.withRetry(() => this.publicClient.readContract({
       address: this.contractAddress,
       abi: ARENA_ABI,
       functionName: 'agents',
       args: [agent],
-    })) as [number, number, number, number];
+    }))) as [number, number, number, number];
 
     return {
       elo: result[0],
