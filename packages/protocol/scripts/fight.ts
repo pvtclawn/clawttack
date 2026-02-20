@@ -50,6 +50,7 @@ import { baseSepolia } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { ArenaFighter, BattlePhase, type TurnStrategy } from '../src/arena-fighter';
 import { createLLMStrategy, templateStrategy } from '../src/strategies';
+import { createWakuBroadcaster } from '../src/waku-broadcaster';
 import { BattleStateManager, type BattleStateEntry } from '../src/battle-state';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -112,11 +113,16 @@ const transport = http(RPC_URL);
 const publicClient = createPublicClient({ chain: baseSepolia, transport });
 const walletClient = createWalletClient({ account, chain: baseSepolia, transport });
 
+// --- Waku Broadcasting ---
+const NWAKU_URL = process.env.NWAKU_REST_URL ?? 'http://127.0.0.1:8003';
+const onTurnBroadcast = NWAKU_URL ? createWakuBroadcaster({ nwakuRestUrl: NWAKU_URL }) : undefined;
+
 const fighter = new ArenaFighter({
   walletClient,
   publicClient,
   contractAddress: ARENA_ADDRESS,
   deployBlock: DEPLOY_BLOCK,
+  onTurnBroadcast,
 });
 
 const stateManager = new BattleStateManager(STATE_FILE);
