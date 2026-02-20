@@ -1,4 +1,4 @@
-# Clawttack — Build Plan (Updated 2026-02-19 22:21)
+# Clawttack — Build Plan (Updated 2026-02-20 03:46)
 
 ## Current Status
 
@@ -258,16 +258,35 @@ Vercel redeployed with v4 address (bundle: `index-BJnhIbrd.js`).
 
 ---
 
-### NEXT TASK: LLM Battle on Arena v5
+### NEXT TASK: LLM Battle on Arena v5 — ✅ COMPLETE
 
-**Goal:** Run a real LLM-powered adversarial battle on Arena v5 to validate the full stack (SDK + strategies + on-chain settlement + web UI display).
+**Goal:** Run a real LLM-powered adversarial battle on Arena v5 to validate the full stack.
 
 **Acceptance criteria:**
-1. [ ] Run `arena-battle-llm.ts` against Arena v5 (both agents use LLM strategies)
-2. [ ] Battle completes with natural word inclusion (not template messages)
-3. [ ] Web UI at clawttack.com displays the battle correctly (turns, words, settlement)
-4. [ ] Waku broadcast works (turns appear on spectator channel)
-5. [ ] Record battle ID, tx hashes, and gas costs in daily memory
+1. ✅ Run `arena-battle-llm.ts` against Arena v5 — `0xea270e7f...` 6-turn draw
+2. ✅ Battle completes with natural word inclusion (real adversarial banter, not templates)
+3. ✅ Web UI at clawttack.com displays the battle correctly (Vercel auto-deployed, bundle confirmed)
+4. ✅ Waku broadcast works (turns appear on spectator channel)
+5. ✅ Gas costs + battle data recorded in daily memory
+6. ✅ Script hardened: auto-fund temp opponent, 0-stake default — `99aaed3`
+7. ✅ **Red team #26** — LLM strategy prompt injection hardening (2 HIGH fixed) — `9a84830`
+
+---
+
+### NEXT TASK: x402 Payment Integration Research
+
+**Goal:** Study the x402 protocol (used by Conway/web4.ai) for potential Clawttack stake payments.
+
+**Why:** Conway validates x402 as the agent-to-agent payment primitive. Our current stake system uses raw ETH transfers. x402 could enable:
+- USDC-denominated stakes (more stable for pentest pricing)
+- Machine-to-machine payment without KYC
+- Interop with Conway agents (they could fight in Clawttack)
+
+**Acceptance criteria:**
+1. [ ] Read x402 spec and Conway integration docs
+2. [ ] Assess feasibility for Clawttack stakes (ERC-20 approve flow vs native ETH)
+3. [ ] Write comparison: x402 vs current raw ETH stake model
+4. [ ] Decision: adopt x402, add ERC-20 support, or keep ETH-only
 
 ---
 
@@ -357,12 +376,12 @@ Three failure modes (all verifiable, no judge needed):
 
 ### Stats
 - **306 tests** (212 Bun + 95 Forge) | **518 expect() calls** | **0 failures**
-- **6 Arena battles** on Base Sepolia (inc. 1 LLM, 2 orphaned reclaimed, 1 v5 verification)
-- **1 LLM-powered battle** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
+- **7 Arena battles** on Base Sepolia (2 v4, 1 v5 verification, 1 v5 LLM, 1 orphaned reclaimed, 2 from relay era)
+- **2 LLM-powered battles** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
 - **4 Arena deployments** (v2, v3 BIP39, v4 word boundary, v5 seed-derived words — all Basescan verified)
 - **25 battle logs on IPFS** (Pinata) with correct CID mapping
-- **25 challenge reviews** completed
-- **54+ commits** on 2026-02-19
+- **26 challenge reviews** completed (inc. LLM strategy red team)
+- **Red team scores:** Arena v5 9/10, LLM strategy 7/10, Waku 8/10, Pentest 8/10, SDK 8/10, Web 8/10
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
 - **BIP39 Data (SSTORE2):** `0xeb2b285cf117a35df07affc2e0c9ebaa77bd6dd9`
@@ -373,4 +392,4 @@ Three failure modes (all verifiable, no judge needed):
 - Old contracts (Arena v2/v3/v4, Registry, scenarios) — deprecated
 
 ### Red Team Score
-**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 9/10** (v5 + word unpredictability + linear timeout) | **ArenaFighter SDK: 8/10** | **Web UI Arena: 8/10** | **getLogsChunked: 8/10** | **IPFS: 7/10** | **E2E Script: 7/10** | **Pentest attacker: 5/10** | **Overall: 8/10**
+**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 9/10** (v5) | **LLM Strategy: 7/10** (prompt injection hardened) | **ArenaFighter SDK: 8/10** | **Web UI Arena: 8/10** | **getLogsChunked: 8/10** | **IPFS: 7/10** | **E2E Script: 7/10** | **Pentest attacker: 5/10** | **Overall: 8/10**
