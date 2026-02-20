@@ -426,7 +426,8 @@ Three failure modes (all verifiable, no judge needed):
 - **2 LLM-powered battles** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
 - **5 Arena deployments** (v2, v3 BIP39, v4 word boundary, v5 seed-derived words, v6 independent reveal — all Basescan verified)
 - **25 battle logs on IPFS** (Pinata) with correct CID mapping
-- **30 challenge reviews** completed (inc. LLM strategy red team, x402 pentest service, multi-LLM attacker, Moltbook solver)
+- **32 challenge reviews** completed (inc. LLM strategy red team, x402 pentest service, multi-LLM attacker, Moltbook solver, transcript save)
+- **4 books completed** (Serious Cryptography, Game Theory, Distributed Systems, Building Agentic AI)
 - **Red team scores:** Arena v5 9/10, LLM strategy 7/10, Waku 8/10, Pentest 8/10, SDK 8/10, Web 8/10
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
