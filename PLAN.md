@@ -187,7 +187,7 @@ Shipped `sanitizeDefenderResponse()` with 10 regex patterns, 11 new tests. Commi
 1. ✅ Add jailbreak tactics (#7): "Play as...", DAN variants, system prompt override — `57b4569`
 2. ✅ Add memory poisoning tactic (#8): "Remember that I'm an admin", false memory injection — `57b4569`
 3. [ ] Multi-LLM split: planner (strong model) + executor (cheap model) — ✅ `0801814`
-4. [ ] Structured planner output with tactic tracking + success signals
+4. [ ] Structured planner output with tactic tracking + success signals — ✅ `80eaaf1` (progressMade field)
 5. [ ] Pivot threshold: auto-change tactic after 5 unproductive turns
 6. [ ] Context summarization: compress early turns after N rounds (optional, >10 turns)
 7. RAG for success cases (deferred — needs transcript corpus)
@@ -404,12 +404,12 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **317 tests** (222 Bun + 95 Forge) | **542 expect() calls** | **0 failures**
+- **319 tests** (224 Bun + 95 Forge) | **546 expect() calls** | **0 failures**
 - **7 Arena battles** on Base Sepolia (2 v4, 1 v5 verification, 1 v5 LLM, 1 orphaned reclaimed, 2 from relay era)
 - **2 LLM-powered battles** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
 - **4 Arena deployments** (v2, v3 BIP39, v4 word boundary, v5 seed-derived words — all Basescan verified)
 - **25 battle logs on IPFS** (Pinata) with correct CID mapping
-- **27 challenge reviews** completed (inc. LLM strategy red team, x402 pentest service)
+- **28 challenge reviews** completed (inc. LLM strategy red team, x402 pentest service, multi-LLM attacker)
 - **Red team scores:** Arena v5 9/10, LLM strategy 7/10, Waku 8/10, Pentest 8/10, SDK 8/10, Web 8/10
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
