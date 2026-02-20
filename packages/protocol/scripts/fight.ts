@@ -65,7 +65,7 @@ if (!PRIVATE_KEY) {
 }
 
 const RPC_URL = process.env.RPC_URL ?? 'https://sepolia.base.org';
-const ARENA_ADDRESS = (process.env.ARENA_ADDRESS ?? '0x18e157990f1Da662d4eA9fE7e2745BCF79F531e8') as Address;
+const ARENA_ADDRESS = (process.env.ARENA_ADDRESS ?? '0xC20f694dEDa74fa2f4bCBB9f77413238862ba9f7') as Address;
 const DEPLOY_BLOCK = 37_880_000n;
 
 const account = privateKeyToAccount(PRIVATE_KEY as `0x${string}`);
