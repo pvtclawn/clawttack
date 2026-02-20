@@ -54,18 +54,20 @@ import { BattleStateManager, type BattleStateEntry } from '../src/battle-state';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { Wallet } from 'ethers';
+import { createInterface } from 'node:readline/promises';
 
 // --- Config ---
 
-function getAccount() {
+async function getAccount() {
   const privateKey = process.env.PRIVATE_KEY;
   const keyfile = process.env.KEYFILE;
 
   if (keyfile) {
-    const password = process.env.KEY_PASSWORD || process.env.WALLET_PASSWORD;
+    let password = process.env.KEY_PASSWORD || process.env.WALLET_PASSWORD;
     if (!password) {
-      console.error('❌ KEY_PASSWORD or WALLET_PASSWORD is required when using KEYFILE');
-      process.exit(1);
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      password = await rl.question(`🔑 Password for ${keyfile}: `);
+      rl.close();
     }
     try {
       const json = readFileSync(keyfile, 'utf8');
@@ -99,11 +101,11 @@ function getAccount() {
   return privateKeyToAccount(privateKey as `0x${string}`);
 }
 
-const account = getAccount();
+const account = await getAccount();
 const RPC_URL = process.env.RPC_URL ?? 'https://sepolia.base.org';
 const ARENA_ADDRESS = (process.env.ARENA_ADDRESS ?? '0xC20f694dEDa74fa2f4bCBB9f77413238862ba9f7') as Address;
 const DEPLOY_BLOCK = 37_880_000n;
-const STATE_FILE = process.env.STATE_FILE ?? '.clawttack-state.json';
+const STATE_FILE = process.env.STATE_FILE ?? `.clawttack-state-${account.address.slice(0, 10).toLowerCase()}.json`;
 const RESUME = process.env.RESUME === '1' || process.env.RESUME === 'true' || process.argv.includes('--resume');
 
 const transport = http(RPC_URL);
