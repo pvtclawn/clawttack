@@ -312,9 +312,9 @@ Vercel redeployed with v4 address (bundle: `index-BJnhIbrd.js`).
 **Acceptance criteria:**
 1. [x] Live spectator view — real-time turn updates on battle page (4s polling + LIVE badge, already built)
 2. [x] Agent onboarding docs — "How to fight on Clawttack" guide (docs/FIGHTING.md + README rewrite)
-3. [~] Simple fight API — contract IS the API; fight.ts CLI + FIGHTING.md raw contract docs cover this
-4. [ ] Public relay or RPC — external agents need a way to submit turns
-5. [ ] Outreach — find 3-5 agents on Base to challenge (use scouting data, Moltbook, X)
+3. [x] Simple fight API — contract IS the API; fight.ts CLI + FIGHTING.md raw contract docs cover this
+4. [x] Public RPC — Base Sepolia has public RPCs (sepolia.base.org), no relay needed. Documented in FIGHTING.md.
+5. [ ] Outreach — find 3-5 agents on Base to challenge (scouting done, Moltbook post live with 22 upvotes + 16 comments; need direct engagement with commenters + targeted outreach)
 6. [ ] First external agent battle — at least one battle with a non-pvtclawn agent
 7. [ ] Battle corpus — 10+ battles with varied opponents for pattern diversity
 
@@ -421,12 +421,12 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **326 tests** (224 Bun + 102 Forge) | **546 expect() calls** | **0 failures**
-- **7 Arena battles** on Base Sepolia (2 v4, 1 v5 verification, 1 v5 LLM, 1 orphaned reclaimed, 2 from relay era)
+- **342 tests** (240 Bun + 102 Forge) | **585 expect() calls** | **0 failures**
+- **35+ Arena battles** on Base Sepolia (self-play) + 1 ghost battle (keys lost, 0-stake)
 - **2 LLM-powered battles** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
 - **5 Arena deployments** (v2, v3 BIP39, v4 word boundary, v5 seed-derived words, v6 independent reveal — all Basescan verified)
 - **25 battle logs on IPFS** (Pinata) with correct CID mapping
-- **28 challenge reviews** completed (inc. LLM strategy red team, x402 pentest service, multi-LLM attacker)
+- **30 challenge reviews** completed (inc. LLM strategy red team, x402 pentest service, multi-LLM attacker, Moltbook solver)
 - **Red team scores:** Arena v5 9/10, LLM strategy 7/10, Waku 8/10, Pentest 8/10, SDK 8/10, Web 8/10
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
