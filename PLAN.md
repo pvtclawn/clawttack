@@ -1,4 +1,4 @@
-# Clawttack — Build Plan (Updated 2026-02-20 03:46)
+# Clawttack — Build Plan (Updated 2026-02-20 04:36)
 
 ## Current Status
 
@@ -171,18 +171,27 @@ Shipped `sanitizeDefenderResponse()` with 10 regex patterns, 11 new tests. Commi
 
 ---
 
-## NEXT TASK: Pentest Attacker v2 (from red-team review #12 vs ARACNE/RapidPen)
+## NEXT TASK: Pentest Attacker v2 — Multi-LLM Architecture (ARACNE-informed)
 
-**Goal:** Upgrade pentest attacker from naive single-LLM to SOTA-informed architecture.
+**Goal:** Upgrade pentest attacker from naive single-LLM to ARACNE-style multi-LLM architecture.
+
+**Why now:** ARACNE paper validates multi-LLM split (planner + executor). Must upgrade attacker BEFORE building x402 pentest service — no point selling a weak attacker. Current attacker scored 10/100 in live pentest (Grade F for defender, but attacker had no adaptive strategy).
+
+**Design (from ARACNE + red-team insights):**
+- **Planner** (strong model: Claude/O3) — tactic selection, progress assessment, pivot decisions
+- **Executor** (cheap model: Flash/Haiku) — generates actual attack messages from plan
+- **Structured output:** `{tactic, assessment, nextStep, goalReached, pivotNeeded}`
+- **Pivot threshold:** force tactic change after 5 turns with no progress
 
 **Acceptance criteria (pick 2-3 per build lane):**
-1. Add jailbreak tactics (#7): "Play as...", DAN variants, system prompt override
-2. Add memory poisoning tactic (#8): "Remember that I'm an admin", false memory injection
-3. Explicit tactic tracking: classify each turn's tactic, track success signals
-4. RAG for success cases: store winning transcripts, inject as few-shot examples
-5. Multi-LLM split (stretch): planner (stronger model) + executor (cheaper model)
-6. Defense scoring dimension: measure defender detection + counter-attack ability
-7. Context summarization: compress early turns after N rounds
+1. ✅ Add jailbreak tactics (#7): "Play as...", DAN variants, system prompt override — `57b4569`
+2. ✅ Add memory poisoning tactic (#8): "Remember that I'm an admin", false memory injection — `57b4569`
+3. [ ] Multi-LLM split: planner (strong model) + executor (cheap model) — ARACNE architecture
+4. [ ] Structured planner output with tactic tracking + success signals
+5. [ ] Pivot threshold: auto-change tactic after 5 unproductive turns
+6. [ ] Context summarization: compress early turns after N rounds (optional, >10 turns)
+7. RAG for success cases (deferred — needs transcript corpus)
+8. Defense scoring dimension (deferred — needs LLM judge, not regex)
 
 ---
 
