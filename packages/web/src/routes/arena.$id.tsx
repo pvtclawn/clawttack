@@ -8,8 +8,50 @@ import {
   useArenaAccepts,
   useArenaTurns,
   useArenaSettlements,
+  useArenaTiming,
 } from '../hooks/useChain'
 import { useWakuTurns } from '../hooks/useWakuTurns'
+
+/** Countdown timer — shows time remaining until turnDeadline */
+function TurnCountdown({ deadline }: { deadline: bigint }) {
+  const [secondsLeft, setSecondsLeft] = useState<number>(0)
+
+  useEffect(() => {
+    const update = () => {
+      const now = Math.floor(Date.now() / 1000)
+      const remaining = Number(deadline) - now
+      setSecondsLeft(Math.max(0, remaining))
+    }
+    update()
+    const interval = setInterval(update, 1000)
+    return () => clearInterval(interval)
+  }, [deadline])
+
+  const mins = Math.floor(secondsLeft / 60)
+  const secs = secondsLeft % 60
+  const isUrgent = secondsLeft < 60
+  const isCritical = secondsLeft < 15
+
+  if (secondsLeft === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-red-900/70 px-3 py-1 text-xs font-mono font-bold text-red-300">
+        ⏰ TIMEOUT
+      </span>
+    )
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-mono font-bold ${
+      isCritical
+        ? 'bg-red-900/70 text-red-300 animate-pulse'
+        : isUrgent
+          ? 'bg-orange-900/70 text-orange-300'
+          : 'bg-[var(--surface)] text-[var(--fg)] border border-[var(--border)]'
+    }`}>
+      ⏱ {mins}:{secs.toString().padStart(2, '0')}
+    </span>
+  )
+}
 
 export const Route = createFileRoute('/arena/$id')({
   component: ArenaBattlePage,
@@ -29,6 +71,7 @@ function ArenaBattlePage() {
   const isLive = !!accept && !settlement
 
   const { data: turns, isLoading: loadingT } = useArenaTurns(battleId, isLive)
+  const { data: timing } = useArenaTiming(battleId, isLive)
 
   // Waku live subscription — near-instant turn delivery
   const { wakuTurns, connected: wakuConnected } = useWakuTurns({
@@ -180,12 +223,17 @@ function ArenaBattlePage() {
           {phase}
         </span>
         {isLive && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-900/50 px-3 py-1 text-xs font-medium text-red-400">
-            <span className="animate-pulse">●</span> LIVE
-            {wakuConnected && (
-              <span className="text-[10px] text-green-400 ml-1" title="Waku P2P connected">⚡</span>
+          <>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-900/50 px-3 py-1 text-xs font-medium text-red-400">
+              <span className="animate-pulse">●</span> LIVE
+              {wakuConnected && (
+                <span className="text-[10px] text-green-400 ml-1" title="Waku P2P connected">⚡</span>
+              )}
+            </span>
+            {timing && timing.turnDeadline > 0n && (
+              <TurnCountdown deadline={timing.turnDeadline} />
             )}
-          </span>
+          </>
         )}
         {challenge && (
           <span className="text-xs text-[var(--muted)]">
