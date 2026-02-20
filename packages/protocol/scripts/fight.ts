@@ -15,11 +15,13 @@
  *   # Accept a specific challenge
  *   PRIVATE_KEY=0x... BATTLE_ID=0x... bun run packages/protocol/scripts/fight.ts
  *
- *   # Resume an interrupted battle
- *   PRIVATE_KEY=0x... RESUME=1 bun run packages/protocol/scripts/fight.ts
+ *   # With encrypted keystore (Foundry-style)
+ *   KEYFILE=~/.foundry/keystores/mykey KEY_PASSWORD=... bun run packages/protocol/scripts/fight.ts
  *
  * Env:
- *   PRIVATE_KEY    — Your wallet private key (required)
+ *   PRIVATE_KEY    — Your wallet private key (alternative to KEYFILE)
+ *   KEYFILE        — Path to an encrypted JSON keystore file
+ *   KEY_PASSWORD   — Password for the keystore (can also use WALLET_PASSWORD)
  *   LLM_API_KEY    — OpenAI-compatible API key (optional, uses template strategy if absent)
  *   LLM_ENDPOINT   — API endpoint (default: https://openrouter.ai/api/v1/chat/completions)
  *   LLM_MODEL      — Model name (default: google/gemini-2.0-flash-001)
@@ -49,36 +51,61 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { ArenaFighter, BattlePhase, type TurnStrategy } from '../src/arena-fighter';
 import { createLLMStrategy, templateStrategy } from '../src/strategies';
 import { BattleStateManager, type BattleStateEntry } from '../src/battle-state';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { Wallet } from 'ethers';
 
 // --- Config ---
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
-if (!PRIVATE_KEY) {
-  console.error('❌ PRIVATE_KEY is required');
-  console.error('');
-  console.error('Usage:');
-  console.error('  PRIVATE_KEY=0x... bun run packages/protocol/scripts/fight.ts');
-  console.error('');
-  console.error('Optional env vars:');
-  console.error('  LLM_API_KEY    — API key for LLM strategy (OpenRouter, OpenAI, etc.)');
-  console.error('  LLM_ENDPOINT   — Chat completions URL');
-  console.error('  LLM_MODEL      — Model name');
-  console.error('  BATTLE_ID      — Accept a specific challenge');
-  console.error('  STAKE          — Stake in ETH (default: 0)');
-  console.error('  MAX_TURNS      — Max turns (default: 8)');
-  console.error('  PERSONA        — Your agent persona');
-  process.exit(1);
+function getAccount() {
+  const privateKey = process.env.PRIVATE_KEY;
+  const keyfile = process.env.KEYFILE;
+
+  if (keyfile) {
+    const password = process.env.KEY_PASSWORD || process.env.WALLET_PASSWORD;
+    if (!password) {
+      console.error('❌ KEY_PASSWORD or WALLET_PASSWORD is required when using KEYFILE');
+      process.exit(1);
+    }
+    try {
+      const json = readFileSync(keyfile, 'utf8');
+      const wallet = Wallet.fromEncryptedJsonSync(json, password);
+      return privateKeyToAccount(wallet.privateKey as Hex);
+    } catch (err: any) {
+      console.error(`❌ Failed to decrypt keystore: ${err.message}`);
+      process.exit(1);
+    }
+  }
+
+  if (!privateKey) {
+    console.error('❌ PRIVATE_KEY or KEYFILE is required');
+    console.error('');
+    console.error('Usage:');
+    console.error('  PRIVATE_KEY=0x... bun run packages/protocol/scripts/fight.ts');
+    console.error('  OR');
+    console.error('  KEYFILE=path/to/keystore KEY_PASSWORD=... bun run packages/protocol/scripts/fight.ts');
+    console.error('');
+    console.error('Optional env vars:');
+    console.error('  LLM_API_KEY    — API key for LLM strategy (OpenRouter, OpenAI, etc.)');
+    console.error('  LLM_ENDPOINT   — Chat completions URL');
+    console.error('  LLM_MODEL      — Model name');
+    console.error('  BATTLE_ID      — Accept a specific challenge');
+    console.error('  STAKE          — Stake in ETH (default: 0)');
+    console.error('  MAX_TURNS      — Max turns (default: 8)');
+    console.error('  PERSONA        — Your agent persona');
+    process.exit(1);
+  }
+
+  return privateKeyToAccount(privateKey as `0x${string}`);
 }
 
+const account = getAccount();
 const RPC_URL = process.env.RPC_URL ?? 'https://sepolia.base.org';
 const ARENA_ADDRESS = (process.env.ARENA_ADDRESS ?? '0xC20f694dEDa74fa2f4bCBB9f77413238862ba9f7') as Address;
 const DEPLOY_BLOCK = 37_880_000n;
 const STATE_FILE = process.env.STATE_FILE ?? '.clawttack-state.json';
 const RESUME = process.env.RESUME === '1' || process.env.RESUME === 'true' || process.argv.includes('--resume');
 
-const account = privateKeyToAccount(PRIVATE_KEY as `0x${string}`);
 const transport = http(RPC_URL);
 const publicClient = createPublicClient({ chain: baseSepolia, transport });
 const walletClient = createWalletClient({ account, chain: baseSepolia, transport });
