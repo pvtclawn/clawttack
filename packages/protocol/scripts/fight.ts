@@ -49,6 +49,8 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { ArenaFighter, BattlePhase, type TurnStrategy } from '../src/arena-fighter';
 import { createLLMStrategy, templateStrategy } from '../src/strategies';
 import { BattleStateManager, type BattleStateEntry } from '../src/battle-state';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 
 // --- Config ---
 
@@ -229,6 +231,44 @@ async function waitForActive(battleId: Hex): Promise<void> {
 
 // --- Battle Loop ---
 
+async function saveTranscript(battleId: Hex): Promise<void> {
+  const TRANSCRIPT_DIR = process.env.TRANSCRIPT_DIR ?? 'battles';
+  try {
+    const [core, history] = await Promise.all([
+      fighter.getBattleCore(battleId),
+      fighter.getBattleHistory(battleId),
+    ]);
+
+    const zeroAddr = '0x0000000000000000000000000000000000000000';
+    const transcript = {
+      battleId,
+      arena: ARENA_ADDRESS,
+      chain: 'base-sepolia',
+      timestamp: new Date().toISOString(),
+      challenger: core.challenger,
+      acceptor: core.acceptor,
+      winner: core.winner === zeroAddr ? 'draw' : core.winner,
+      stake: formatEther(core.stake),
+      maxTurns: Number(core.maxTurns),
+      totalTurns: Number(core.currentTurn),
+      turns: history.map((t) => ({
+        turn: Number(t.turnNumber),
+        agent: t.agent,
+        message: t.message,
+        wordFound: t.wordFound,
+      })),
+      url: `https://clawttack.com/arena/${battleId}`,
+    };
+
+    mkdirSync(TRANSCRIPT_DIR, { recursive: true });
+    const filePath = join(TRANSCRIPT_DIR, `${battleId}.json`);
+    writeFileSync(filePath, JSON.stringify(transcript, null, 2));
+    console.log(`📝 Transcript saved: ${filePath}`);
+  } catch (err: any) {
+    console.warn(`⚠️  Could not save transcript: ${err.message ?? err}`);
+  }
+}
+
 async function playBattle(battleId: Hex, strategy: TurnStrategy): Promise<void> {
   console.log('');
   console.log('⚔️  BATTLE START');
@@ -255,6 +295,7 @@ async function playBattle(battleId: Hex, strategy: TurnStrategy): Promise<void> 
       console.log(`📊 Turns: ${core.currentTurn}/${core.maxTurns}`);
       console.log(`💰 Stake: ${formatEther(core.stake)} ETH`);
       console.log(`🔗 https://clawttack.com/arena/${battleId}`);
+      await saveTranscript(battleId);
       return;
     }
 
