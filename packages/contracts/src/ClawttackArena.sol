@@ -28,6 +28,8 @@ contract ClawttackArena {
         // Commit-reveal
         bytes32 commitA;     // keccak256(seedA)
         bytes32 commitB;     // keccak256(seedB)
+        // Word generation entropy (set on reveal, prevents pre-prediction)
+        bytes32 wordSeed;    // keccak256(seedA, seedB) — unknown until both seeds revealed
         // Battle state
         BattlePhase phase;
         uint8 currentTurn;   // 1-indexed, whose turn it is
@@ -155,6 +157,7 @@ contract ClawttackArena {
             stake: msg.value,
             commitA: commitA,
             commitB: bytes32(0),
+            wordSeed: bytes32(0),
             phase: BattlePhase.Open,
             currentTurn: 0,
             maxTurns: turns,
@@ -216,12 +219,16 @@ contract ClawttackArena {
         if (keccak256(abi.encodePacked(seedA)) != b.commitA) revert InvalidSeed();
         if (keccak256(abi.encodePacked(seedB)) != b.commitB) revert InvalidSeed();
 
+        // Store combined seed entropy for word generation
+        // This is unknown until both seeds are revealed, preventing pre-prediction
+        b.wordSeed = keccak256(abi.encodePacked(seedA, seedB));
+
         // Activate battle — turn 1, challenger goes first
         b.phase = BattlePhase.Active;
         b.currentTurn = 1;
         b.turnDeadline = uint64(block.timestamp) + b.baseTimeout;
 
-        string memory firstWord = _generateWord(b.commitA, b.commitB, 1);
+        string memory firstWord = _generateWord(b.wordSeed, 1);
         emit SeedsRevealed(battleId, firstWord);
     }
 
@@ -241,7 +248,7 @@ contract ClawttackArena {
         if (msg.sender != expectedAgent) revert NotYourTurn();
 
         // Check challenge word inclusion
-        string memory requiredWord = _generateWord(b.commitA, b.commitB, b.currentTurn);
+        string memory requiredWord = _generateWord(b.wordSeed, b.currentTurn);
         bool wordFound = _containsWord(message, requiredWord);
 
         emit TurnSubmitted(battleId, msg.sender, b.currentTurn, message, wordFound);
@@ -331,11 +338,12 @@ contract ClawttackArena {
 
     // --- View Functions ---
 
-    /// @notice Get the challenge word for a turn
+    /// @notice Get the challenge word for a turn (only current or past turns)
     function getChallengeWord(bytes32 battleId, uint8 turnNumber) external view returns (string memory) {
         Battle storage b = battles[battleId];
         require(b.phase == BattlePhase.Active || b.phase == BattlePhase.Settled, "Not active");
-        return _generateWord(b.commitA, b.commitB, turnNumber);
+        require(turnNumber >= 1 && turnNumber <= b.currentTurn, "Invalid turn");
+        return _generateWord(b.wordSeed, turnNumber);
     }
 
     /// @notice Get timeout for a given turn number
@@ -492,20 +500,20 @@ contract ClawttackArena {
     }
 
     function _getTurnTimeout(uint64 baseTimeout, uint8 turnNumber) internal pure returns (uint64) {
-        uint64 timeout = baseTimeout;
-        for (uint8 i = 1; i < turnNumber; i++) {
-            timeout = timeout / 2;
-            if (timeout < MIN_TIMEOUT) return MIN_TIMEOUT;
-        }
-        return timeout;
+        // Linear decrease: each turn reduces timeout by baseTimeout / 20
+        // Floor at MIN_TIMEOUT. Reaches minimum around turn 20 for default settings.
+        if (turnNumber <= 1) return baseTimeout;
+        uint64 decrement = baseTimeout / 20;
+        uint64 reduction = decrement * uint64(turnNumber - 1);
+        if (reduction >= baseTimeout || baseTimeout - reduction < MIN_TIMEOUT) return MIN_TIMEOUT;
+        return baseTimeout - reduction;
     }
 
     function _generateWord(
-        bytes32 commitA,
-        bytes32 commitB,
+        bytes32 wordSeed,
         uint8 turnNumber
     ) internal view returns (string memory) {
-        bytes32 hash = keccak256(abi.encodePacked(turnNumber, commitA, commitB));
+        bytes32 hash = keccak256(abi.encodePacked(turnNumber, wordSeed));
         uint16 index = uint16(uint256(hash) % bip39.WORD_COUNT());
         return bip39.word(index);
     }
