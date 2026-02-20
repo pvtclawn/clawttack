@@ -614,7 +614,151 @@ contract ClawttackArenaTest is Test {
         arena.revealSeeds(battleId, seedA, seedB);
     }
 
-    /// @dev Pack 64 test words in length-prefixed format
+        // --- Independent Seed Reveal ---
+
+    function test_revealSeed_individual() public {
+        // Create + accept
+        vm.prank(challenger);
+        battleId = arena.createChallenge{value: 0.1 ether}(commitA, 10, 120);
+        vm.prank(opponent);
+        arena.acceptChallenge{value: 0.1 ether}(battleId, commitB);
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Committed));
+
+        // Challenger reveals first
+        vm.prank(challenger);
+        arena.revealSeed(battleId, seedA);
+        // Still committed — need both seeds
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Committed));
+
+        // Opponent reveals second — battle activates
+        vm.prank(opponent);
+        arena.revealSeed(battleId, seedB);
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Active));
+        assertEq(_turn(battleId), 1);
+    }
+
+    function test_revealSeed_opponentFirst() public {
+        vm.prank(challenger);
+        battleId = arena.createChallenge{value: 0}(commitA, 10, 120);
+        vm.prank(opponent);
+        arena.acceptChallenge{value: 0}(battleId, commitB);
+
+        // Opponent reveals first this time
+        vm.prank(opponent);
+        arena.revealSeed(battleId, seedB);
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Committed));
+
+        // Challenger reveals — activates
+        vm.prank(challenger);
+        arena.revealSeed(battleId, seedA);
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Active));
+    }
+
+    function test_revealSeed_sameWordsAsRevealSeeds() public {
+        // Create two identical battles to compare word generation
+        vm.prank(challenger);
+        bytes32 id1 = arena.createChallenge{value: 0}(commitA, 10, 120);
+        vm.prank(opponent);
+        arena.acceptChallenge{value: 0}(id1, commitB);
+
+        // Use revealSeeds (batch)
+        vm.prank(challenger);
+        arena.revealSeeds(id1, seedA, seedB);
+
+        string memory word1 = arena.getChallengeWord(id1, 1);
+
+        // Now create another battle with same seeds, use individual reveals
+        string memory seedA2 = "alpha bravo";
+        string memory seedB2 = "charlie delta";
+        bytes32 cA2 = keccak256(abi.encodePacked(seedA2));
+        bytes32 cB2 = keccak256(abi.encodePacked(seedB2));
+
+        vm.prank(challenger);
+        bytes32 id2 = arena.createChallenge{value: 0}(cA2, 10, 120);
+        vm.prank(opponent);
+        arena.acceptChallenge{value: 0}(id2, cB2);
+
+        vm.prank(challenger);
+        arena.revealSeed(id2, seedA2);
+        vm.prank(opponent);
+        arena.revealSeed(id2, seedB2);
+
+        // Both battles should be active
+        assertEq(uint8(_phase(id1)), uint8(ClawttackArena.BattlePhase.Active));
+        assertEq(uint8(_phase(id2)), uint8(ClawttackArena.BattlePhase.Active));
+
+        // Word generation should work for both
+        string memory word2 = arena.getChallengeWord(id2, 1);
+        assertTrue(bytes(word1).length > 0);
+        assertTrue(bytes(word2).length > 0);
+    }
+
+    function test_revealSeed_revert_wrongSeed() public {
+        vm.prank(challenger);
+        battleId = arena.createChallenge{value: 0}(commitA, 10, 120);
+        vm.prank(opponent);
+        arena.acceptChallenge{value: 0}(battleId, commitB);
+
+        vm.prank(challenger);
+        vm.expectRevert(ClawttackArena.InvalidSeed.selector);
+        arena.revealSeed(battleId, "wrong seed");
+    }
+
+    function test_revealSeed_revert_doubleReveal() public {
+        vm.prank(challenger);
+        battleId = arena.createChallenge{value: 0}(commitA, 10, 120);
+        vm.prank(opponent);
+        arena.acceptChallenge{value: 0}(battleId, commitB);
+
+        vm.prank(challenger);
+        arena.revealSeed(battleId, seedA);
+
+        // Try to reveal again
+        vm.prank(challenger);
+        vm.expectRevert(ClawttackArena.InvalidSeed.selector);
+        arena.revealSeed(battleId, seedA);
+    }
+
+    function test_revealSeed_revert_nonParticipant() public {
+        vm.prank(challenger);
+        battleId = arena.createChallenge{value: 0}(commitA, 10, 120);
+        vm.prank(opponent);
+        arena.acceptChallenge{value: 0}(battleId, commitB);
+
+        vm.prank(nobody);
+        vm.expectRevert(ClawttackArena.NotParticipant.selector);
+        arena.revealSeed(battleId, seedA);
+    }
+
+    function test_revealSeed_fullBattle() public {
+        // Full battle using individual reveals
+        vm.prank(challenger);
+        battleId = arena.createChallenge{value: 0}(commitA, 4, 120);
+        vm.prank(opponent);
+        arena.acceptChallenge{value: 0}(battleId, commitB);
+
+        // Independent reveals
+        vm.prank(opponent);
+        arena.revealSeed(battleId, seedB);
+        vm.prank(challenger);
+        arena.revealSeed(battleId, seedA);
+
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Active));
+
+        // Play 4 turns (all with correct words)
+        for (uint8 turn = 1; turn <= 4; turn++) {
+            string memory word = arena.getChallengeWord(battleId, turn);
+            address player = (turn % 2 == 1) ? challenger : opponent;
+            string memory msg_ = string(abi.encodePacked("I say ", word, " in my message"));
+            vm.prank(player);
+            arena.submitTurn(battleId, msg_);
+        }
+
+        // Should settle as draw (max turns reached)
+        assertEq(uint8(_phase(battleId)), uint8(ClawttackArena.BattlePhase.Settled));
+    }
+
+/// @dev Pack 64 test words in length-prefixed format
     function _packTestWords() internal pure returns (bytes memory) {
         bytes memory result;
         string[64] memory words = [

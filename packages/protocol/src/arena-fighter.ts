@@ -55,6 +55,16 @@ export const ARENA_ABI = [
     outputs: [],
   },
   {
+    name: 'revealSeed',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'battleId', type: 'bytes32' },
+      { name: 'seed', type: 'string' },
+    ],
+    outputs: [],
+  },
+  {
     name: 'submitTurn',
     type: 'function',
     stateMutability: 'nonpayable',
@@ -476,6 +486,25 @@ export class ArenaFighter {
         abi: ARENA_ABI,
         functionName: 'revealSeeds',
         args: [battleId, seedA, seedB],
+      });
+      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+      return txHash;
+    } catch (err) {
+      throw parseRevertError(err);
+    }
+  }
+
+  /**
+   * Reveal your own seed independently. No coordination needed.
+   * When both participants have revealed, the battle starts automatically.
+   */
+  async revealSeed(battleId: Hex, seed: string): Promise<Hex> {
+    try {
+      const txHash = await this.walletClient.writeContract({
+        address: this.contractAddress,
+        abi: ARENA_ABI,
+        functionName: 'revealSeed',
+        args: [battleId, seed],
       });
       await this.publicClient.waitForTransactionReceipt({ hash: txHash });
       return txHash;

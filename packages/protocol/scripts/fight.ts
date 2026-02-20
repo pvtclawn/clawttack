@@ -149,10 +149,10 @@ async function findOpenChallenges(): Promise<OpenChallenge[]> {
 // --- Seed Exchange ---
 
 /**
- * Wait for opponent to accept our challenge, then reveal seeds.
+ * Wait for opponent to accept our challenge, then reveal our seed.
  * Polls the contract every 5 seconds.
  */
-async function waitForOpponentAndReveal(battleId: Hex, mySeed: string): Promise<string> {
+async function waitForOpponentAndReveal(battleId: Hex, mySeed: string): Promise<void> {
   console.log('');
   console.log('⏳ Waiting for an opponent to accept...');
   console.log(`   Share this battle ID for someone to accept:`);
@@ -166,27 +166,23 @@ async function waitForOpponentAndReveal(battleId: Hex, mySeed: string): Promise<
       console.log(`✅ Opponent joined: ${core.opponent}`);
       console.log('');
 
-      // We need opponent's seed to reveal. In a real flow, seeds are exchanged
-      // off-chain (via relay, DM, etc.) before calling revealSeeds().
-      //
-      // For now: both agents need each other's seeds. The challenger reveals.
-      // The opponent passed their seed in acceptChallenge (as commit).
-      // We can't extract their actual seed from the commit.
-      //
-      // SOLUTION: The acceptor should also call a helper to coordinate.
-      // For MVP: we use a simple polling + revelation mechanism.
-      //
-      // For now, return a signal that the battle is in Committed phase.
-      return 'committed';
+      // Reveal our seed independently
+      console.log('🔑 Revealing our seed...');
+      await fighter.revealSeed(battleId, mySeed);
+      console.log('   ✅ Seed revealed');
+
+      // Wait for battle to become active (opponent also needs to reveal)
+      await waitForActive(battleId);
+      return;
+    }
+
+    if (core.phase === BattlePhase.Active) {
+      // Already active — someone revealed both seeds
+      return;
     }
 
     if (core.phase === BattlePhase.Cancelled) {
       throw new Error('Challenge was cancelled');
-    }
-
-    if (core.phase === BattlePhase.Active) {
-      // Already active — someone else revealed
-      return 'active';
     }
 
     if (core.phase === BattlePhase.Settled) {
@@ -417,25 +413,23 @@ async function main() {
       mySeed = result.seed;
       myRole = 'challenger';
 
-      // Wait for opponent
-      const phase = await waitForOpponentAndReveal(battleId, mySeed);
-      if (phase === 'committed') {
-        // We're the challenger — we need to coordinate seed reveal.
-        // For now: both sides need to share seeds off-chain.
-        // TODO: Add a p2p seed exchange mechanism.
-        console.log('');
-        console.log('⚠️  Seed exchange needed!');
-        console.log('   Both players need to share seeds to start the battle.');
-        console.log('   This will be automated in a future version.');
-        console.log(`   Your seed: ${mySeed}`);
-        console.log('');
-        console.log('   Waiting for seeds to be revealed...');
-        await waitForActive(battleId);
-      }
+      // Wait for opponent, then reveal our seed
+      await waitForOpponentAndReveal(battleId, mySeed);
     }
   }
 
-  // If we're the opponent and phase is Committed, wait for Active
+  // If we're the opponent, reveal our seed and wait for active
+  if (myRole === 'opponent') {
+    const core = await fighter.getBattleCore(battleId);
+    if (core.phase === BattlePhase.Committed) {
+      console.log('🔑 Revealing our seed...');
+      await fighter.revealSeed(battleId, mySeed);
+      console.log('   ✅ Seed revealed');
+      await waitForActive(battleId);
+    }
+  }
+
+  // Ensure battle is active
   const core = await fighter.getBattleCore(battleId);
   if (core.phase === BattlePhase.Committed) {
     await waitForActive(battleId);
