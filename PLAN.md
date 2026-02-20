@@ -388,7 +388,7 @@ Three failure modes (all verifiable, no judge needed):
 ---
 
 ### Stats
-- **306 tests** (212 Bun + 95 Forge) | **518 expect() calls** | **0 failures**
+- **307 tests** (212 Bun + 95 Forge) | **520 expect() calls** | **0 failures**
 - **7 Arena battles** on Base Sepolia (2 v4, 1 v5 verification, 1 v5 LLM, 1 orphaned reclaimed, 2 from relay era)
 - **2 LLM-powered battles** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
 - **4 Arena deployments** (v2, v3 BIP39, v4 word boundary, v5 seed-derived words — all Basescan verified)
