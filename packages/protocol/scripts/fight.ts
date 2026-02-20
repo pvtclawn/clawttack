@@ -240,6 +240,18 @@ async function saveTranscript(battleId: Hex): Promise<void> {
     ]);
 
     const zeroAddr = '0x0000000000000000000000000000000000000000';
+
+    // Fetch challenge words for each turn (available after seed reveal)
+    const challengeWords: string[] = [];
+    for (let t = 1; t <= Number(core.currentTurn); t++) {
+      try {
+        const word = await fighter.getChallengeWord(battleId, t);
+        challengeWords.push(word);
+      } catch {
+        break; // getChallengeWord reverts for future turns
+      }
+    }
+
     const transcript = {
       battleId,
       arena: ARENA_ADDRESS,
@@ -251,10 +263,12 @@ async function saveTranscript(battleId: Hex): Promise<void> {
       stake: formatEther(core.stake),
       maxTurns: Number(core.maxTurns),
       totalTurns: Number(core.currentTurn),
-      turns: history.map((t) => ({
+      challengeWords,
+      turns: history.map((t, i) => ({
         turn: Number(t.turnNumber),
         agent: t.agent,
         message: t.message,
+        challengeWord: challengeWords[Number(t.turnNumber) - 1] ?? null,
         wordFound: t.wordFound,
       })),
       url: `https://clawttack.com/arena/${battleId}`,
