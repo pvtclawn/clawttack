@@ -41,6 +41,9 @@ contract ClawttackArena {
         uint64 settledAt;
         // Outcome
         address winner;
+        // Seed reveal tracking (for independent reveal)
+        bool seedARevealed;
+        bool seedBRevealed;
     }
 
     // --- Constants ---
@@ -59,6 +62,9 @@ contract ClawttackArena {
 
     mapping(bytes32 => Battle) public battles;
     mapping(address => AgentStats) public agents;
+    // Revealed seeds stored separately (strings are expensive in structs)
+    mapping(bytes32 => string) internal revealedSeedA;
+    mapping(bytes32 => string) internal revealedSeedB;
 
     struct AgentStats {
         uint32 elo;
@@ -92,6 +98,11 @@ contract ClawttackArena {
     event SeedsRevealed(
         bytes32 indexed battleId,
         string firstWord
+    );
+
+    event SeedRevealed(
+        bytes32 indexed battleId,
+        address indexed agent
     );
 
     event TurnSubmitted(
@@ -165,7 +176,9 @@ contract ClawttackArena {
             baseTimeout: timeout,
             createdAt: uint64(block.timestamp),
             settledAt: 0,
-            winner: address(0)
+            winner: address(0),
+            seedARevealed: false,
+            seedBRevealed: false
         });
 
         _ensureRegistered(msg.sender);
@@ -201,8 +214,42 @@ contract ClawttackArena {
         emit ChallengeAccepted(battleId, msg.sender, commitB);
     }
 
-    /// @notice Reveal seeds to start the battle — only participants can call
-    /// @dev Both seeds must be provided. Once revealed, battle starts immediately.
+    /// @notice Reveal your seed — each participant reveals their own independently
+    /// @dev When both seeds are revealed, the battle starts automatically.
+    ///      No coordination needed — each side calls this separately.
+    /// @param battleId The battle
+    /// @param seed Your seed (must hash to your commit)
+    function revealSeed(
+        bytes32 battleId,
+        string calldata seed
+    ) external {
+        Battle storage b = battles[battleId];
+        if (b.phase != BattlePhase.Committed) revert InvalidPhase(BattlePhase.Committed, b.phase);
+        if (msg.sender != b.challenger && msg.sender != b.opponent) revert NotParticipant();
+
+        bytes32 seedHash = keccak256(abi.encodePacked(seed));
+
+        if (msg.sender == b.challenger) {
+            if (seedHash != b.commitA) revert InvalidSeed();
+            if (b.seedARevealed) revert InvalidSeed(); // already revealed
+            revealedSeedA[battleId] = seed;
+            b.seedARevealed = true;
+        } else {
+            if (seedHash != b.commitB) revert InvalidSeed();
+            if (b.seedBRevealed) revert InvalidSeed(); // already revealed
+            revealedSeedB[battleId] = seed;
+            b.seedBRevealed = true;
+        }
+
+        emit SeedRevealed(battleId, msg.sender);
+
+        // If both seeds are now revealed, activate the battle
+        if (b.seedARevealed && b.seedBRevealed) {
+            _activateBattle(battleId, b);
+        }
+    }
+
+    /// @notice Reveal seeds to start the battle — convenience function when you have both seeds
     /// @param battleId The battle
     /// @param seedA Challenger's seed (must hash to commitA)
     /// @param seedB Opponent's seed (must hash to commitB)
@@ -219,17 +266,31 @@ contract ClawttackArena {
         if (keccak256(abi.encodePacked(seedA)) != b.commitA) revert InvalidSeed();
         if (keccak256(abi.encodePacked(seedB)) != b.commitB) revert InvalidSeed();
 
-        // Store combined seed entropy for word generation
-        // This is unknown until both seeds are revealed, preventing pre-prediction
-        b.wordSeed = keccak256(abi.encodePacked(seedA, seedB));
+        revealedSeedA[battleId] = seedA;
+        revealedSeedB[battleId] = seedB;
+        b.seedARevealed = true;
+        b.seedBRevealed = true;
 
-        // Activate battle — turn 1, challenger goes first
+        _activateBattle(battleId, b);
+    }
+
+    /// @dev Activate battle after both seeds are revealed
+    function _activateBattle(bytes32 battleId, Battle storage b) internal {
+        b.wordSeed = keccak256(abi.encodePacked(
+            revealedSeedA[battleId],
+            revealedSeedB[battleId]
+        ));
+
         b.phase = BattlePhase.Active;
         b.currentTurn = 1;
         b.turnDeadline = uint64(block.timestamp) + b.baseTimeout;
 
         string memory firstWord = _generateWord(b.wordSeed, 1);
         emit SeedsRevealed(battleId, firstWord);
+
+        // Clean up stored seeds (save gas on subsequent reads)
+        delete revealedSeedA[battleId];
+        delete revealedSeedB[battleId];
     }
 
     /// @notice Submit your turn — message must contain the challenge word
