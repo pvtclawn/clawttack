@@ -15,7 +15,7 @@ import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { readFileSync } from 'fs';
 import { ArenaFighter, BattlePhase } from '../src/arena-fighter';
 
-const ARENA_ADDRESS = '0x18e157990f1Da662d4eA9fE7e2745BCF79F531e8' as const;
+const ARENA_ADDRESS = '0xC20f694dEDa74fa2f4bCBB9f77413238862ba9f7' as const;
 const DEPLOY_BLOCK = 37_900_000n;
 const RPC_URL = 'https://sepolia.base.org';
 
