@@ -180,8 +180,17 @@ async function waitForOpponentAndReveal(battleId: Hex, mySeed: string): Promise<
 
       // Reveal our seed independently
       console.log('🔑 Revealing our seed...');
-      await fighter.revealSeed(battleId, mySeed);
-      console.log('   ✅ Seed revealed');
+      try {
+        await fighter.revealSeed(battleId, mySeed);
+        console.log('   ✅ Seed revealed');
+      } catch (err: any) {
+        // InvalidSeed = already revealed (race with revealSeeds convenience fn)
+        if (err.reason !== 'InvalidSeed') {
+          console.error(`   ❌ Seed reveal failed: ${err.message ?? err}`);
+          throw err;
+        }
+        console.log('   ℹ️  Seed already revealed (race condition)');
+      }
 
       // Wait for battle to become active (opponent also needs to reveal)
       await waitForActive(battleId);
