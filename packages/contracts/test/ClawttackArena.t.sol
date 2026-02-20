@@ -367,13 +367,15 @@ contract ClawttackArenaTest is Test {
     // --- Decreasing Timer ---
 
     function test_decreasingTimer() public view {
+        // Linear decay: baseTimeout - (baseTimeout/20) * (turn-1)
+        // base=120, decrement=6 per turn
         assertEq(arena.getTurnTimeout(120, 1), 120);
-        assertEq(arena.getTurnTimeout(120, 2), 60);
-        assertEq(arena.getTurnTimeout(120, 3), 30);
-        assertEq(arena.getTurnTimeout(120, 4), 15);
-        assertEq(arena.getTurnTimeout(120, 5), 7);
-        assertEq(arena.getTurnTimeout(120, 6), 5);
-        assertEq(arena.getTurnTimeout(120, 10), 5);
+        assertEq(arena.getTurnTimeout(120, 2), 114);
+        assertEq(arena.getTurnTimeout(120, 3), 108);
+        assertEq(arena.getTurnTimeout(120, 4), 102);
+        assertEq(arena.getTurnTimeout(120, 10), 66);
+        assertEq(arena.getTurnTimeout(120, 20), 6);
+        assertEq(arena.getTurnTimeout(120, 21), 5); // MIN_TIMEOUT
     }
 
     // --- Challenge Word ---
@@ -384,10 +386,14 @@ contract ClawttackArenaTest is Test {
         string memory word1a = arena.getChallengeWord(battleId, 1);
         string memory word1b = arena.getChallengeWord(battleId, 1);
         assertEq(keccak256(bytes(word1a)), keccak256(bytes(word1b)));
-
-        string memory word2 = arena.getChallengeWord(battleId, 2);
         assertTrue(bytes(word1a).length > 0);
-        assertTrue(bytes(word2).length > 0);
+    }
+
+    function test_challengeWordFutureTurnReverts() public {
+        _setupActive();
+        // Turn 1 is current — turn 2 should revert
+        vm.expectRevert("Invalid turn");
+        arena.getChallengeWord(battleId, 2);
     }
 
     function test_containsWordCaseInsensitive() public {
