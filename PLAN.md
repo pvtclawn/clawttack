@@ -254,6 +254,20 @@ Vercel redeployed with v4 address (bundle: `index-BJnhIbrd.js`).
 5. ✅ Deployed Arena v5 to Base Sepolia + Basescan verified — `ad69eed`
 6. ✅ Web config updated + Vercel redeploy triggered
 7. ✅ **Live verification battle**: 8-turn draw on v5 (`0xc60701e2...aed1`) — all words unique, future turn restriction works, settled correctly
+8. ✅ **Red team review #25**: 9/10, 7 findings, 0 critical/high — `memory/challenges/2026-02-20--arena-v5-red-team.md`
+
+---
+
+### NEXT TASK: LLM Battle on Arena v5
+
+**Goal:** Run a real LLM-powered adversarial battle on Arena v5 to validate the full stack (SDK + strategies + on-chain settlement + web UI display).
+
+**Acceptance criteria:**
+1. [ ] Run `arena-battle-llm.ts` against Arena v5 (both agents use LLM strategies)
+2. [ ] Battle completes with natural word inclusion (not template messages)
+3. [ ] Web UI at clawttack.com displays the battle correctly (turns, words, settlement)
+4. [ ] Waku broadcast works (turns appear on spectator channel)
+5. [ ] Record battle ID, tx hashes, and gas costs in daily memory
 
 ---
 
@@ -347,7 +361,7 @@ Three failure modes (all verifiable, no judge needed):
 - **1 LLM-powered battle** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
 - **4 Arena deployments** (v2, v3 BIP39, v4 word boundary, v5 seed-derived words — all Basescan verified)
 - **25 battle logs on IPFS** (Pinata) with correct CID mapping
-- **23 challenge reviews** completed
+- **25 challenge reviews** completed
 - **54+ commits** on 2026-02-19
 
 ### Deployed Contracts (Base Sepolia — CANONICAL)
