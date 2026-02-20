@@ -293,6 +293,16 @@ export interface ArenaTiming {
   settledAt: bigint
 }
 
+export interface ArenaBattleCore {
+  challenger: `0x${string}`
+  opponent: `0x${string}`
+  stake: bigint
+  phase: number
+  currentTurn: number
+  maxTurns: number
+  winner: `0x${string}`
+}
+
 export function useArenaTiming(battleId?: `0x${string}`, live = false) {
   return useQuery({
     queryKey: ['arena', 'timing', battleId],
@@ -324,7 +334,49 @@ export function useArenaTiming(battleId?: `0x${string}`, live = false) {
       }
     },
     staleTime: live ? 0 : 30_000,
-    refetchInterval: live ? 5_000 : false, // refresh deadline every 5s during live battles
+    refetchInterval: live ? 4_000 : false,
+    retry: 2,
+  })
+}
+
+export function useArenaBattleCore(battleId?: `0x${string}`, live = false) {
+  return useQuery({
+    queryKey: ['arena', 'core', battleId],
+    enabled: !!battleId,
+    queryFn: async (): Promise<ArenaBattleCore> => {
+      const result = await client.readContract({
+        address: CONTRACTS.arena,
+        abi: [{
+          type: 'function',
+          name: 'getBattleCore',
+          inputs: [{ name: 'battleId', type: 'bytes32' }],
+          outputs: [
+            { name: 'challenger', type: 'address' },
+            { name: 'opponent', type: 'address' },
+            { name: 'stake', type: 'uint256' },
+            { name: 'phase', type: 'uint8' },
+            { name: 'currentTurn', type: 'uint8' },
+            { name: 'maxTurns', type: 'uint8' },
+            { name: 'winner', type: 'address' },
+          ],
+          stateMutability: 'view',
+        }],
+        functionName: 'getBattleCore',
+        args: [battleId!],
+      }) as [`0x${string}`, `0x${string}`, bigint, number, number, number, `0x${string}`]
+
+      return {
+        challenger: result[0],
+        opponent: result[1],
+        stake: result[2],
+        phase: result[3],
+        currentTurn: result[4],
+        maxTurns: result[5],
+        winner: result[6],
+      }
+    },
+    staleTime: live ? 0 : 30_000,
+    refetchInterval: live ? 4_000 : false,
     retry: 2,
   })
 }
