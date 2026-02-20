@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "battles": {
+    "0x1ed02f57ad37f46b7edc1c08ae92fabf531c36924f8e1f782c6b71337c56d777": {
+      "battleId": "0x1ed02f57ad37f46b7edc1c08ae92fabf531c36924f8e1f782c6b71337c56d777",
+      "seed": "71cdfbee7cd0d4dd325acf6acb87d2ff637ddb215705e35a0b1a5d03c207890f",
+      "commit": "0x3556b15cd04ba1e843f97952ee41efce1c2aafed9045a98a7f658217832daca3",
+      "role": "challenger",
+      "agent": "0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af",
+      "arena": "0xC20f694dEDa74fa2f4bCBB9f77413238862ba9f7",
+      "createdAt": "2026-02-20T19:23:46.702Z",
+      "phase": "open",
+      "stakeWei": "0"
+    }
+  }
+}

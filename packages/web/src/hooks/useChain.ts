@@ -211,7 +211,7 @@ export interface ArenaSettledEvent {
   txHash: `0x${string}`
 }
 
-export function useArenaChallenges() {
+export function useArenaChallenges(live = false) {
   return useQuery({
     queryKey: ['arena', 'challenges'],
     queryFn: async (): Promise<ArenaChallengeEvent[]> => {
@@ -229,13 +229,13 @@ export function useArenaChallenges() {
         }),
       })
     },
-    staleTime: 5 * 60_000,
-    gcTime: 60 * 60_000, // historical events are immutable — cache 1h
+    staleTime: live ? 0 : 5 * 60_000,
+    refetchInterval: live ? 10_000 : false, // Check for new challenges every 10s if live
     retry: 2,
   })
 }
 
-export function useArenaAccepts() {
+export function useArenaAccepts(live = false) {
   return useQuery({
     queryKey: ['arena', 'accepts'],
     queryFn: async (): Promise<ArenaAcceptEvent[]> => {
@@ -252,8 +252,8 @@ export function useArenaAccepts() {
         }),
       })
     },
-    staleTime: 5 * 60_000,
-    gcTime: 60 * 60_000, // historical events are immutable — cache 1h
+    staleTime: live ? 0 : 5 * 60_000,
+    refetchInterval: live ? 5_000 : false, // Check for accepts every 5s if live
     retry: 2,
   })
 }

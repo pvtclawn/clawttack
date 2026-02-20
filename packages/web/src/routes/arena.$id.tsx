@@ -23,12 +23,14 @@ function TurnTimerBar({
   currentTurn,
   whoseTurn,
   isChallenger,
+  pending,
 }: {
   deadline: bigint
   baseTimeout: bigint
   currentTurn: number
   whoseTurn: `0x${string}`
   isChallenger: boolean
+  pending: boolean
 }) {
   const [secondsLeft, setSecondsLeft] = useState(0)
 
@@ -68,15 +70,24 @@ function TurnTimerBar({
         ? 'bg-green-500'
         : 'bg-yellow-500'
 
+  if (pending) {
+    return (
+      <div className="mx-4 my-2 flex items-center justify-center gap-3 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)] p-2 text-xs text-[var(--muted)]">
+        <span className="animate-spin text-[10px]">⌛</span>
+        <span>Turn {currentTurn} submitted, awaiting confirmation...</span>
+      </div>
+    )
+  }
+
   return (
-    <div className={`mx-4 my-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 ${isCritical ? 'animate-pulse' : ''}`}>
-      <div className="mb-2 flex items-center justify-between text-xs">
+    <div className={`mx-4 my-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 ${isCritical ? 'animate-pulse' : ''}`}>
+      <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider">
         <span className="flex items-center gap-1.5">
           <span className={isChallenger ? 'text-red-400' : 'text-blue-400'}>
             {isChallenger ? '🗡️' : '🛡️'}
           </span>
-          <span className="text-[var(--muted)]">Waiting for</span>
-          <span className="font-medium text-[var(--fg)]">{agentName(whoseTurn)}</span>
+          <span className="text-[var(--muted)]">Up Next:</span>
+          <span className="font-bold text-[var(--fg)]">{agentName(whoseTurn)}</span>
           <span className="text-[var(--muted)]">· Turn {currentTurn}</span>
         </span>
         <span className={`font-mono font-bold tabular-nums ${
@@ -86,7 +97,7 @@ function TurnTimerBar({
         </span>
       </div>
       {/* Progress bar — drains left to right */}
-      <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--border)]">
+      <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--border)]">
         <div
           className={`h-full rounded-full transition-all duration-500 ${barColor}`}
           style={{ width: `${pct}%` }}
@@ -104,15 +115,19 @@ function ArenaBattlePage() {
   const { id } = Route.useParams()
   const battleId = id as `0x${string}`
 
-  const { data: challenges, isLoading: loadingC } = useArenaChallenges()
-  const { data: accepts, isLoading: loadingA } = useArenaAccepts()
-  const { data: settlements, isLoading: loadingS } = useArenaSettlements()
+  // 1. Initial load for state (accepted/settled)
+  const { data: allChallenges, isLoading: loadingC } = useArenaChallenges(true)
+  const { data: allAccepts, isLoading: loadingA } = useArenaAccepts(true)
+  const { data: allSettlements, isLoading: loadingS } = useArenaSettlements(true)
 
-  // Determine if battle is live (accepted but not settled)
-  const settlement = settlements?.find((s) => s.battleId === battleId)
-  const accept = accepts?.find((a) => a.battleId === battleId)
+  const challenge = allChallenges?.find((c) => c.battleId === battleId)
+  const accept = allAccepts?.find((a) => a.battleId === battleId)
+  const settlement = allSettlements?.find((s) => s.battleId === battleId)
+
+  // 2. Determine if live
   const isLive = !!accept && !settlement
 
+  // 3. Fetches for active action
   const { data: turns, isLoading: loadingT } = useArenaTurns(battleId, isLive)
   const { data: timing } = useArenaTiming(battleId, isLive)
   const { data: battleCore } = useArenaBattleCore(battleId, isLive)
@@ -374,6 +389,9 @@ function ArenaBattlePage() {
             ? (isEvenTurn ? accept?.opponent : challenge.challenger) ?? challenge.challenger
             : null
 
+          // A turn is "pending" if the contract turn has advanced but the event hasn't reached us yet
+          const isTurnPending = (battleCore?.currentTurn ?? 0) > sortedTurns.length
+
           if (timing && timing.turnDeadline > 0n && whoseTurn && battleCore) {
             const isChallenger = whoseTurn.toLowerCase() === challenge?.challenger.toLowerCase()
             return (
@@ -383,6 +401,7 @@ function ArenaBattlePage() {
                 currentTurn={turnNum}
                 whoseTurn={whoseTurn}
                 isChallenger={isChallenger}
+                pending={isTurnPending}
               />
             )
           }
