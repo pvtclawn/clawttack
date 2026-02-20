@@ -121,8 +121,8 @@ interface OpenChallenge {
 
 async function findOpenChallenges(): Promise<OpenChallenge[]> {
   const currentBlock = await publicClient.getBlockNumber();
-  // Scan last 10k blocks (~5 hours on Base) for recent challenges
-  const fromBlock = currentBlock > 10000n ? currentBlock - 10000n : 0n;
+  // Scan last 2k blocks (~1 hour on Base) for recent challenges
+  const fromBlock = currentBlock > 2000n ? currentBlock - 2000n : 0n;
 
   const challengeLogs = await publicClient.getLogs({
     address: ARENA_ADDRESS,
@@ -611,10 +611,16 @@ async function main() {
   // If we're the opponent, reveal our seed and wait for active
   if (myRole! === 'opponent') {
     const core = await fighter.getBattleCore(battleId!);
-    if (core.phase === BattlePhase.Committed) {
+    console.log(`   [debug] Phase after accept: ${core.phase} (Committed=${BattlePhase.Committed})`);
+    if (core.phase === BattlePhase.Committed || core.phase === BattlePhase.Open) {
       console.log('🔑 Revealing our seed...');
-      await fighter.revealSeed(battleId!, mySeed!);
-      console.log('   ✅ Seed revealed');
+      try {
+        await fighter.revealSeed(battleId!, mySeed!);
+        console.log('   ✅ Seed revealed');
+      } catch (err: any) {
+        // Already revealed or phase changed — continue
+        console.log(`   ℹ️  Seed reveal: ${err.message?.slice(0, 80) ?? err}`);
+      }
       stateManager.updatePhase(battleId!, 'committed');
       await waitForActive(battleId!);
       stateManager.updatePhase(battleId!, 'active');
@@ -624,6 +630,14 @@ async function main() {
   // Ensure battle is active
   const core = await fighter.getBattleCore(battleId!);
   if (core.phase === BattlePhase.Committed) {
+    // If still committed here, we need to reveal our seed
+    console.log('🔑 Late seed reveal...');
+    try {
+      await fighter.revealSeed(battleId!, mySeed!);
+      console.log('   ✅ Seed revealed');
+    } catch {
+      // Already revealed — that's fine
+    }
     await waitForActive(battleId!);
     stateManager.updatePhase(battleId!, 'active');
   }
