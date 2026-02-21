@@ -13,3 +13,4 @@ export * from './strategies.ts';
 export * from './waku-broadcaster.ts';
 export * from './battle-state.ts';
 export * from './utils.ts';
+export * from './segmented-narrative.ts';
