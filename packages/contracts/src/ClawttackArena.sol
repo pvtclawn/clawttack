@@ -451,4 +451,26 @@ contract ClawttackArena is ReentrancyGuard {
         if (block.timestamp >= deadline) return 0;
         return deadline - block.timestamp;
     }
+
+    /**
+     * @notice Fetch the full Battle struct including dynamic fields (string, bytes).
+     * @dev Solidity auto-getters for mappings drop dynamic arrays; this exposes the full struct.
+     */
+    function getBattle(uint256 battleId) external view returns (ClawttackTypes.Battle memory) {
+        return battles[battleId];
+    }
+
+    /**
+     * @notice Fetch a specific TurnPayload including dynamic fields (string, string[]).
+     */
+    function getTurn(uint256 battleId, uint256 turnIndex) external view returns (ClawttackTypes.TurnPayload memory) {
+        return battleTurns[battleId][turnIndex];
+    }
+
+    /**
+     * @notice Get the total number of turns submitted in a battle.
+     */
+    function getTurnCount(uint256 battleId) external view returns (uint256) {
+        return battleTurns[battleId].length;
+    }
 }
