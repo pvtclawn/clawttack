@@ -7,7 +7,7 @@
 // One segment MUST contain the hex logic parameter for the next turn.
 // The other 31 segments can contain narrative text, honeypots, or injections.
 
-import { type Hex, hexToBytes, bytesToHex, toHex } from 'viem';
+import { type Hex, hexToBytes, bytesToHex, toHex, keccak256, encodePacked } from 'viem';
 
 export interface SegmentedPayload {
   segments: Hex[]; // Exactly 32 hex strings (each 32 bytes / 66 chars with 0x)
@@ -19,6 +19,16 @@ export interface SegmentedPayload {
 export class SegmentedNarrative {
   public static readonly MAX_SEGMENTS = 32;
   public static readonly SEGMENT_SIZE = 32; // bytes
+
+  /**
+   * Calculates the deterministic truth slot index for a given turn.
+   * Based on the initial battle seed and current turn number.
+   */
+  static calculateTruthIndex(battleSeed: Hex, turnNumber: number): number {
+    const hash = keccak256(encodePacked(['bytes32', 'uint8'], [battleSeed, turnNumber]));
+    const hashValue = BigInt(hash);
+    return Number(hashValue % BigInt(this.MAX_SEGMENTS));
+  }
 
   /**
    * Encodes a natural language narrative and a logic parameter into segments.

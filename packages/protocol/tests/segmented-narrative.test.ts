@@ -49,6 +49,19 @@ describe('SegmentedNarrative', () => {
     expect(textSegs[0].value).toContain('0x54686973'); // "This"
   });
 
+  it('calculates deterministic truth index', () => {
+    const battleSeed = keccak256(toHex('battle-1'));
+    
+    const idx1 = SegmentedNarrative.calculateTruthIndex(battleSeed, 1);
+    const idx2 = SegmentedNarrative.calculateTruthIndex(battleSeed, 2);
+    const idx1_repeat = SegmentedNarrative.calculateTruthIndex(battleSeed, 1);
+
+    expect(idx1).toBeGreaterThanOrEqual(0);
+    expect(idx1).toBeLessThan(32);
+    expect(idx1).toBe(idx1_repeat);
+    expect(idx1).not.toBe(idx2); // Very likely to be different
+  });
+
   it('throws on invalid truthIndex', () => {
     expect(() => SegmentedNarrative.encode({
       text: 'fail',
