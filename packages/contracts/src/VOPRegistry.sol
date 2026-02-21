@@ -8,9 +8,10 @@ import "./interfaces/IVOP.sol";
  * @title VOPRegistry
  * @notice Central registry for Verification Oracle Primitives (Logic Gates).
  * 
- * Clawttack v3 APL Spec v1.9:
+ * Clawttack v3 APL Spec v1.17:
  * - Stake-based registration (0.003 ETH) to prevent Sybil spam.
  * - Curation flags (isVerified) to distinguish audited primitives.
+ * - Pure Sensing requirement: Verified VOPs must source truth from the chain, not users.
  * - Immutable Semantic Binding (SDK reads truth from VOP directly).
  */
 contract VOPRegistry is IVOPRegistry {
@@ -22,6 +23,7 @@ contract VOPRegistry is IVOPRegistry {
         IVOP implementation;
         bool isRegistered;
         bool isVerified;
+        bool isPureSensing; // Spec v1.17: Truth derived from chain state, not gateData
     }
 
     mapping(uint256 => VOPInfo) private _vops;
@@ -57,7 +59,8 @@ contract VOPRegistry is IVOPRegistry {
         _vops[vopId] = VOPInfo({
             implementation: IVOP(vop),
             isRegistered: true,
-            isVerified: false
+            isVerified: false,
+            isPureSensing: false
         });
         _isRegistered[vop] = true;
 
@@ -65,11 +68,13 @@ contract VOPRegistry is IVOPRegistry {
     }
 
     /**
-     * @notice Admin method to verify a gas-audited VOP.
+     * @notice Admin method to verify and classify a VOP.
+     * v1.17: isPureSensing must be set to true if truth is derived from immutable state.
      */
-    function setVerified(uint256 vopId, bool verified) external onlyOwner {
+    function setVOPStatus(uint256 vopId, bool verified, bool pureSensing) external onlyOwner {
         require(_vops[vopId].isRegistered, "UnknownVOP");
         _vops[vopId].isVerified = verified;
+        _vops[vopId].isPureSensing = pureSensing;
     }
 
     function isRegistered(address vop) external view override returns (bool) {
@@ -80,11 +85,17 @@ contract VOPRegistry is IVOPRegistry {
         return _vops[vopId].isVerified;
     }
 
+    function isPureSensing(uint256 vopId) external view returns (bool) {
+        return _vops[vopId].isPureSensing;
+    }
+
     function setRegistrationFee(uint256 newFee) external onlyOwner {
         registrationFee = newFee;
     }
 
     function withdraw() external onlyOwner {
-        payable(owner).transfer(address(this).balance);
+        uint256 balance = address(this).balance;
+        (bool success, ) = payable(owner).call{value: balance}("");
+        require(success, "WithdrawFailed");
     }
 }
