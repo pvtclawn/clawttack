@@ -69,31 +69,15 @@ contract ClawttackArenaV3Test is Test {
         arena.acceptBattle{value: 0.1 ether}(battleId, 2);
         
         // Let's inspect the returned battle
-        (
-            uint256 bId,
-            uint256 bAgentA,
-            uint256 bAgentB,
-            address bOwnerA,
-            address bOwnerB,
-            uint256 bStake,
-            uint256 bPot,
-            uint256 bTimestamp,
-            uint256 bTurn,
-            bytes32 bSequenceHash,
-            ClawttackTypes.BattleState bState,
-            uint256 bWinner,
-            address bCurrentVOP,
-            bytes memory bCurrentVOPParams,
-            string memory bExpectedTargetWord
-        ) = arena.battles(battleId);
+        ClawttackTypes.Battle memory b = arena.getBattle(battleId);
         
-        assertEq(bAgentA, 1);
-        assertEq(bAgentB, 2);
-        assertEq(bStake, 0.1 ether);
-        assertEq(uint8(bState), uint8(ClawttackTypes.BattleState.Active));
-        assertEq(bTurn, 0); // Hasn't advanced past turn 0 yet
+        assertEq(b.agentA, 1);
+        assertEq(b.agentB, 2);
+        assertEq(b.stakePerAgent, 0.1 ether);
+        assertEq(uint8(b.state), uint8(ClawttackTypes.BattleState.Active));
+        assertEq(b.currentTurn, 0); // Hasn't advanced past turn 0 yet
 
-        assertTrue(uint256(bSequenceHash) != 0);
+        assertTrue(uint256(b.sequenceHash) != 0);
     }
 
     function test_submitTurn() public {
@@ -103,7 +87,8 @@ contract ClawttackArenaV3Test is Test {
         vm.prank(opponent);
         arena.acceptBattle{value: 0.1 ether}(battleId, 2);
         
-        (, , , , , , , , , , , , , , string memory targetWord) = arena.battles(battleId);
+        ClawttackTypes.Battle memory b = arena.getBattle(battleId);
+        string memory targetWord = b.expectedTargetWord;
         
         string memory narrative = string(abi.encodePacked("This is a story about the word ", targetWord, " and some other things."));
         bytes memory nextParams = abi.encode(bytes32("next_salt"), uint8(4));
@@ -118,7 +103,8 @@ contract ClawttackArenaV3Test is Test {
             poisonWords: poisonWords
         });
         
-        (, , , , , , , , , bytes32 currentSequenceHash, , , , , ) = arena.battles(battleId);
+        ClawttackTypes.Battle memory b2 = arena.getBattle(battleId);
+        bytes32 currentSequenceHash = b2.sequenceHash;
 
         bytes32 turnHash = keccak256(abi.encode(
             block.chainid,
@@ -138,8 +124,8 @@ contract ClawttackArenaV3Test is Test {
         vm.prank(challenger);
         arena.submitTurn(battleId, payload, signature);
         
-        (, , , , , , , , uint256 currentTurn, , , , , , ) = arena.battles(battleId);
-        assertEq(currentTurn, 1);
+        ClawttackTypes.Battle memory b3 = arena.getBattle(battleId);
+        assertEq(b3.currentTurn, 1);
     }
 
     function test_cancelBattle() public {
@@ -159,8 +145,8 @@ contract ClawttackArenaV3Test is Test {
         
         assertEq(balanceAfter, balanceBefore + 0.1 ether);
         
-        (, , , , , , , , , , ClawttackTypes.BattleState state, , , , ) = arena.battles(battleId);
-        assertEq(uint8(state), uint8(ClawttackTypes.BattleState.Cancelled));
+        ClawttackTypes.Battle memory b = arena.getBattle(battleId);
+        assertEq(uint8(b.state), uint8(ClawttackTypes.BattleState.Cancelled));
         
         // Cannot cancel twice
         vm.prank(challenger);

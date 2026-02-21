@@ -11,9 +11,9 @@ pragma solidity ^0.8.34;
  */
 library Glicko2Math {
     uint256 constant SCALE = 10_000;
-    uint256 constant DEFAULT_RATING = 1500;
-    uint256 constant DEFAULT_RD = 350;
-    uint256 constant MIN_RD = 30;
+    uint32 constant DEFAULT_RATING = 1500;
+    uint32 constant DEFAULT_RD = 350;
+    uint32 constant MIN_RD = 30;
 
     /**
      * @notice Checks if two agents are within a valid matchmaking window.
@@ -24,17 +24,17 @@ library Glicko2Math {
      * @return True if they overlap, False otherwise.
      */
     function isMatchable(
-        uint256 ratingA,
-        uint256 rdA,
-        uint256 ratingB,
-        uint256 rdB
+        uint32 ratingA,
+        uint32 rdA,
+        uint32 ratingB,
+        uint32 rdB
     ) internal pure returns (bool) {
         // Calculate ranges (R +/- 2*RD)
-        uint256 minA = ratingA > (2 * rdA) ? ratingA - (2 * rdA) : 0;
-        uint256 maxA = ratingA + (2 * rdA);
+        uint32 minA = ratingA > (2 * rdA) ? ratingA - (2 * rdA) : 0;
+        uint32 maxA = ratingA + (2 * rdA);
         
-        uint256 minB = ratingB > (2 * rdB) ? ratingB - (2 * rdB) : 0;
-        uint256 maxB = ratingB + (2 * rdB);
+        uint32 minB = ratingB > (2 * rdB) ? ratingB - (2 * rdB) : 0;
+        uint32 maxB = ratingB + (2 * rdB);
 
         // Check for overlap
         return (minA <= maxB) && (minB <= maxA);
@@ -45,17 +45,17 @@ library Glicko2Math {
     // For the MVP, we will implement a simplified ELO update step here.
     
     function updateSimplifiedELO(
-        uint256 winnerRating,
-        uint256 loserRating,
-        uint256 kFactor
-    ) internal pure returns (uint256 newWinnerRating, uint256 newLoserRating) {
+        uint32 winnerRating,
+        uint32 loserRating,
+        uint32 kFactor
+    ) internal pure returns (uint32 newWinnerRating, uint32 newLoserRating) {
         // Simplified ELO update for MVP.
         // Expected score E_A = 1 / (1 + 10^((R_B - R_A)/400))
         // Simulated using scaled integers.
         
         // If winner > loser, gain is smaller. If winner < loser, gain is larger.
-        uint256 maxDiff = 400;
-        uint256 diff;
+        uint32 maxDiff = 400;
+        uint32 diff;
         bool winnerHigher;
         
         if (winnerRating >= loserRating) {
@@ -71,10 +71,10 @@ library Glicko2Math {
         // Base gain is K/2. Adjust based on difference.
         // If winner was higher, gain is less than K/2.
         // If winner was lower, gain is more than K/2.
-        uint256 baseGain = kFactor / 2;
-        uint256 adjustment = (diff * baseGain) / maxDiff;
+        uint32 baseGain = kFactor / 2;
+        uint32 adjustment = (diff * baseGain) / maxDiff;
         
-        uint256 gain = winnerHigher ? (baseGain - adjustment) : (baseGain + adjustment);
+        uint32 gain = winnerHigher ? (baseGain - adjustment) : (baseGain + adjustment);
         
         // Ensure minimum gain of 1
         if (gain == 0) gain = 1;
