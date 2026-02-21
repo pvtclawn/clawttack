@@ -26,6 +26,7 @@ contract ClawttackArena is ReentrancyGuard {
     uint256 public constant MIN_STAKE = 0.001 ether;
     uint256 public constant TURN_TIMEOUT = 5 minutes;
     uint256 public constant K_FACTOR = 32;
+    uint256 public constant MAX_NARRATIVE_LENGTH = 280;
 
     uint256 public nextBattleId = 1;
 
@@ -143,7 +144,7 @@ contract ClawttackArena is ReentrancyGuard {
         if(battle.state != ClawttackTypes.BattleState.Active) revert ClawttackErrors.BattleNotActive();
         
         // Gas-Bomb Protection: Cap the string length to limit O(N*M) loop execution
-        if(bytes(payload.narrative).length > 280) revert ClawttackErrors.NarrativeTooLong();
+        if(bytes(payload.narrative).length > MAX_NARRATIVE_LENGTH) revert ClawttackErrors.NarrativeTooLong();
 
         // Verify whose turn it is
         bool isPlayerA = battle.currentTurn % 2 == 0;
@@ -288,26 +289,58 @@ contract ClawttackArena is ReentrancyGuard {
     }
 
     /**
-     * @dev Simple substring check helper.
+     * @dev Optimized substring check using bitwise XOR over a 32-byte sliding window.
+     * Guaranteed O(N) execution rather than the standard O(N*M) nested loop search.
      */
-    function _containsWord(string memory source, string memory search) internal pure returns (bool) {
+    function _containsWord(string memory source, string memory search) internal pure returns (bool found) {
         bytes memory src = bytes(source);
         bytes memory tgt = bytes(search);
         
-        if (tgt.length == 0) return true;
-        if (tgt.length > src.length) return false;
+        uint256 srcLen = src.length;
+        uint256 tgtLen = tgt.length;
+        
+        if (tgtLen == 0) return true;
+        if (tgtLen > srcLen) return false;
 
-        for (uint256 i = 0; i <= src.length - tgt.length; i++) {
-            bool found = true;
-            for (uint256 j = 0; j < tgt.length; j++) {
-                if (src[i + j] != tgt[j]) {
-                    found = false;
-                    break;
+        // For targets > 32 bytes (which shouldn't happen with our BIP39 dictionary),
+        // fallback to a standard loop to prevent the bitmask from underflowing.
+        if (tgtLen > 32) {
+            for (uint256 i = 0; i <= srcLen - tgtLen; i++) {
+                bool isMatch = true;
+                for (uint256 j = 0; j < tgtLen; j++) {
+                    if (src[i + j] != tgt[j]) {
+                        isMatch = false;
+                        break;
+                    }
+                }
+                if (isMatch) return true;
+            }
+            return false;
+        }
+
+        assembly {
+            // Mask to keep only the top `tgtLen` bytes
+            // e.g. for tgtLen=4, mask = 0xFFFFFFFF000...000
+            let mask := not(shr(mul(tgtLen, 8), 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff))
+            
+            // Load target word and apply mask
+            // Data array contents start 32 bytes after the memory pointer
+            let tWord := and(mload(add(tgt, 0x20)), mask)
+            
+            // Calculate end pointer for sliding window
+            // endPtr = src + 32 + (src.length - tgt.length) + 1
+            let startPtr := add(src, 0x20)
+            let endPtr := add(startPtr, add(sub(srcLen, tgtLen), 1))
+            
+            for { let ptr := startPtr } lt(ptr, endPtr) { ptr := add(ptr, 1) } {
+                let sWord := and(mload(ptr), mask)
+                // XOR eliminates identical bytes, leaving 0 only if they perfectly match
+                if iszero(xor(tWord, sWord)) {
+                    found := 1
+                    break
                 }
             }
-            if (found) return true;
         }
-        return false;
     }
 
     function _settleBattle(uint256 battleId, uint256 winnerId, uint256 loserId) internal {
