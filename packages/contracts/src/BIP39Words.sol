@@ -7,7 +7,7 @@ pragma solidity ^0.8.34;
 ///      Packed format: repeated [1-byte length][word bytes] entries.
 contract BIP39Words {
     /// @notice Number of words in the wordlist
-    uint16 public immutable WORD_COUNT;
+    uint16 public immutable wordCount;
 
     /// @notice Address of the data contract containing packed words
     address public immutable dataContract;
@@ -16,14 +16,14 @@ contract BIP39Words {
     /// @param _wordCount Number of words packed in the data
     constructor(address _dataContract, uint16 _wordCount) {
         dataContract = _dataContract;
-        WORD_COUNT = _wordCount;
+        wordCount = _wordCount;
     }
 
     /// @notice Get a word by index
     /// @param index The word index (0 to WORD_COUNT-1)
     /// @return The word at the given index
     function word(uint16 index) external view returns (string memory) {
-        require(index < WORD_COUNT, "Index out of bounds");
+        require(index < wordCount, "Index out of bounds");
 
         bytes memory packed = _readData();
 

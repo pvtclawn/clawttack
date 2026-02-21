@@ -51,7 +51,7 @@ contract ClawttackArena is ReentrancyGuard {
         bytes32 sequenceHash,
         uint16 expectedTargetWordIndex,
         string narrative,
-        uint16[] poisonWordIndices,
+        uint16 poisonWordIndex,
         bytes nextVOPParams
     );
     event CompromiseExecuted(uint256 indexed battleId, uint256 winnerAgentId);
@@ -137,9 +137,9 @@ contract ClawttackArena is ReentrancyGuard {
             
             winnerAgentId: 0,
             expectedTargetWordIndex: 0,
+            lastPoisonWordIndex: 0,
             
-            currentVOPParams: "",
-            lastPoisonWordIndices: new uint16[](0)
+            currentVOPParams: ""
         });
 
         emit BattleCreated(battleId, agentId, msg.value);
@@ -227,7 +227,7 @@ contract ClawttackArena is ReentrancyGuard {
             payload.solution,
             keccak256(bytes(payload.narrative)),
             keccak256(payload.nextVOPParams),
-            keccak256(abi.encode(payload.poisonWordIndices))
+            payload.poisonWordIndex
         ));
 
         if(usedTurnHashes[turnHash]) revert ClawttackErrors.TurnHashUsed();
@@ -240,12 +240,10 @@ contract ClawttackArena is ReentrancyGuard {
         string memory targetWord = dictionary.word(battle.expectedTargetWordIndex);
         if(!_containsWord(payload.narrative, targetWord)) revert ClawttackErrors.TargetWordMissing();
 
-        // 3. Validate Poison Words evasion
+        // 3. Validate Poison Word evasion
         if (battle.currentTurn > 0) {
-            for (uint256 i = 0; i < battle.lastPoisonWordIndices.length; i++) {
-                string memory poisonWord = dictionary.word(battle.lastPoisonWordIndices[i]);
-                if(_containsWord(payload.narrative, poisonWord)) revert ClawttackErrors.PoisonWordDetected();
-            }
+            string memory poisonWord = dictionary.word(battle.lastPoisonWordIndex);
+            if(_containsWord(payload.narrative, poisonWord)) revert ClawttackErrors.PoisonWordDetected();
         }
 
         // 4. Validate VOP Gate Solution using historical anchoring
@@ -259,7 +257,7 @@ contract ClawttackArena is ReentrancyGuard {
         }
 
         // UPDATE STATE
-        battle.lastPoisonWordIndices = payload.poisonWordIndices;
+        battle.lastPoisonWordIndex = payload.poisonWordIndex;
         
         // Advance Sequence Hash
         battle.sequenceHash = keccak256(abi.encodePacked(
@@ -284,7 +282,7 @@ contract ClawttackArena is ReentrancyGuard {
             battle.sequenceHash,
             previousTargetWordIndex,
             payload.narrative,
-            payload.poisonWordIndices,
+            payload.poisonWordIndex,
             payload.nextVOPParams
         );
     }
@@ -369,8 +367,8 @@ contract ClawttackArena is ReentrancyGuard {
         
         battle.currentVOP = vopRegistry.getRandomVOP(seed);
         
-        uint16 wordCount = dictionary.WORD_COUNT();
-        uint16 wordIndex = uint16(seed % wordCount);
+        uint16 totalWords = dictionary.wordCount();
+        uint16 wordIndex = uint16(seed % totalWords);
         battle.expectedTargetWordIndex = wordIndex;
     }
 

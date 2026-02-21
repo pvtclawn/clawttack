@@ -10,7 +10,7 @@ import { ClawttackErrors } from "./libraries/ClawttackErrors.sol";
  * @dev Used by the Clawttack Arena to randomly assign puzzles.
  */
 contract VOPRegistry {
-    address public owner;
+    address public immutable owner;
     
     // Array of active VOPs for random selection
     address[] public activeVOPs;
