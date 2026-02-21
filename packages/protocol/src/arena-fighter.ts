@@ -18,6 +18,7 @@ import {
   parseEther,
   parseAbiItem,
 } from 'viem';
+import { MempoolWatcher } from './mempool';
 
 // --- ABI (minimal, only the functions we call) ---
 
@@ -295,7 +296,11 @@ export interface ArenaFighterConfig {
   publicClient: PublicClient;
   walletClient: WalletClient;
   contractAddress: Address;
+  mempoolWatcher?: MempoolWatcher;
+  /** Number of block confirmations to wait for before submitting a turn. Default: 1 */
+  finalityDepth?: number;
   /** Block number the Arena contract was deployed at. Used for event queries. Default: 0 */
+  deployBlock?: bigint;
   deployBlock?: bigint;
   /**
    * Optional callback invoked after a turn is confirmed on-chain.
@@ -379,6 +384,8 @@ export class ArenaFighter {
   private contractAddress: Address;
   private deployBlock: bigint;
   private onTurnBroadcast?: (turn: ArenaTurnBroadcast) => void | Promise<void>;
+  private mempoolWatcher?: MempoolWatcher;
+  private finalityDepth: number;
 
   constructor(config: ArenaFighterConfig) {
     this.publicClient = config.publicClient;
@@ -386,6 +393,8 @@ export class ArenaFighter {
     this.contractAddress = config.contractAddress;
     this.deployBlock = config.deployBlock ?? 0n;
     this.onTurnBroadcast = config.onTurnBroadcast;
+    this.mempoolWatcher = config.mempoolWatcher;
+    this.finalityDepth = config.finalityDepth ?? 1;
   }
 
   /** Wrapper for RPC calls with exponential backoff */
@@ -750,27 +759,39 @@ export class ArenaFighter {
 
   /**
    * Play a turn using a strategy function.
+   * Supports Spec v1.11 Tentative/Finality Split.
    *
    * 1. Fetches the challenge word for this turn
    * 2. Fetches all previous turn messages from on-chain events
    * 3. Calls the strategy to generate a response
    * 4. Validates the response contains the challenge word
-   * 5. Submits the turn on-chain
+   * 5. WAITS for at least 1 block confirmation of previous turn (if tentative)
+   * 6. Submits the turn on-chain
    *
    * @throws if strategy returns a message without the challenge word
    * @throws ArenaError on contract revert
    */
-  async playTurn(battleId: Hex, strategy: TurnStrategy): Promise<{ message: string; txHash: Hex }> {
+  async playTurn(battleId: Hex, strategy: TurnStrategy, opts: { tentativeTxHash?: Hex } = {}): Promise<{ message: string; txHash: Hex }> {
     const [account] = await this.walletClient.getAddresses();
-    const core = await this.getBattleCore(battleId);
+    let core = await this.getBattleCore(battleId);
 
-    if (core.phase !== BattlePhase.Active) {
-      throw new ArenaError('InvalidPhase', `Battle is not active (phase: ${core.phase})`);
+    // If it's not our turn yet, check if there's a pending transaction for opponent
+    if (core.phase === BattlePhase.Active) {
+      const currentTurnAddress = await this.whoseTurn(battleId);
+      if (currentTurnAddress.toLowerCase() !== account.toLowerCase()) {
+        // Not our turn... check for tentative tx
+        if (!opts.tentativeTxHash) {
+          throw new ArenaError('NotYourTurn', `Not your turn (current: ${currentTurnAddress})`);
+        }
+
+        // We have a tentative hash! Wait for it to confirm before submitting,
+        // but we can start reasoning now.
+        console.log(`⏳ Opponent turn pending (${opts.tentativeTxHash}). Starting tentative reasoning...`);
+      }
     }
 
-    const currentTurnAddress = await this.whoseTurn(battleId);
-    if (currentTurnAddress.toLowerCase() !== account.toLowerCase()) {
-      throw new ArenaError('NotYourTurn', `Not your turn (current: ${currentTurnAddress})`);
+    if (core.phase !== BattlePhase.Active && core.phase !== BattlePhase.Committed) {
+      throw new ArenaError('InvalidPhase', `Battle is not active (phase: ${core.phase})`);
     }
 
     const turnNumber = core.currentTurn;
@@ -792,6 +813,7 @@ export class ArenaFighter {
       maxTurns: core.maxTurns,
     };
 
+    // --- PHASE 1: REASONING (TENTATIVE) ---
     const message = await strategy(ctx);
 
     // Validate: strategy must include the challenge word
@@ -800,6 +822,19 @@ export class ArenaFighter {
         `Strategy returned message without challenge word "${challengeWord}". ` +
         `This would cause a loss. Message: "${message.slice(0, 100)}..."`
       );
+    }
+
+    // --- PHASE 2: SUBMISSION (FINALIZED) ---
+    
+    // If we started from a tentative hash, wait for configured block confirmation
+    if (opts.tentativeTxHash) {
+      console.log(`⚓ Anchoring finality. Waiting for ${this.finalityDepth} confirmation(s) of ${opts.tentativeTxHash}...`);
+      await this.publicClient.waitForTransactionReceipt({ 
+        hash: opts.tentativeTxHash,
+        confirmations: this.finalityDepth 
+      });
+      // Refresh state after confirmation
+      core = await this.getBattleCore(battleId);
     }
 
     const txHash = await this.submitTurn(battleId, message);
