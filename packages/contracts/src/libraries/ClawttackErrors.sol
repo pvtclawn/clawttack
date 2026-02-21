@@ -27,6 +27,7 @@ library ClawttackErrors {
     error DeadlineNotExpired();
     error TransferFailed();
     error NarrativeTooLong();
+    error BattleNotCancellable();
     
     // VOP Registry Errors
     error OnlyOwner();

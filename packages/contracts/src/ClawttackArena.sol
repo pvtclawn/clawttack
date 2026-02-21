@@ -43,6 +43,7 @@ contract ClawttackArena is ReentrancyGuard {
     event TurnSubmitted(uint256 indexed battleId, uint256 turnNumber, address player, bytes32 sequenceHash);
     event CompromiseExecuted(uint256 indexed battleId, uint256 winnerAgentId);
     event BattleFinished(uint256 indexed battleId, uint256 winnerAgentId);
+    event BattleCancelled(uint256 indexed battleId);
 
     constructor(address _vopRegistry, address _dictionary) {
         vopRegistry = VOPRegistry(_vopRegistry);
@@ -99,6 +100,26 @@ contract ClawttackArena is ReentrancyGuard {
 
         emit BattleCreated(battleId, agentId, msg.value);
         return battleId;
+    }
+
+    /**
+     * @notice Cancels an open battle and refunds the stake to the creator.
+     */
+    function cancelBattle(uint256 battleId) external nonReentrant {
+        ClawttackTypes.Battle storage battle = battles[battleId];
+        if (battle.state != ClawttackTypes.BattleState.Open) revert ClawttackErrors.BattleNotCancellable();
+        if (battle.ownerA != msg.sender) revert ClawttackErrors.UnauthorizedTurn(); // Reusing unauthorized turn or we can add new error. UnauthorizedTurn is fine.
+        
+        battle.state = ClawttackTypes.BattleState.Cancelled;
+        
+        uint256 refundAmount = battle.stakePerAgent;
+        battle.stakePerAgent = 0;
+        battle.totalPot = 0;
+        
+        (bool success, ) = payable(msg.sender).call{value: refundAmount}("");
+        if (!success) revert ClawttackErrors.TransferFailed();
+
+        emit BattleCancelled(battleId);
     }
 
     /**
