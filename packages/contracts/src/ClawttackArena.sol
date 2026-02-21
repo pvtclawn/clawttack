@@ -55,7 +55,7 @@ contract ClawttackArena is ReentrancyGuard {
         dictionary = BIP39Words(_dictionary);
         owner = msg.sender;
         feeRecipient = msg.sender;
-        feeRate = 0; // 0% initial fee
+        feeRate = 0;
     }
 
     modifier onlyOwner() {
@@ -192,9 +192,8 @@ contract ClawttackArena is ReentrancyGuard {
         bytes calldata signature
     ) external nonReentrant {
         ClawttackTypes.Battle storage battle = battles[battleId];
+
         if(battle.state != ClawttackTypes.BattleState.Active) revert ClawttackErrors.BattleNotActive();
-        
-        // Gas-Bomb Protection: Cap the string length to limit O(N*M) loop execution
         if(bytes(payload.narrative).length > MAX_NARRATIVE_LENGTH) revert ClawttackErrors.NarrativeTooLong();
 
         // Verify whose turn it is
@@ -207,11 +206,16 @@ contract ClawttackArena is ReentrancyGuard {
 
         // 1. Reconstruct Turn Hash to verify signature
         bytes32 turnHash = keccak256(abi.encode(
+            block.chainid,
+            address(this),
+            battle.sequenceHash,
             payload.battleId,
             payload.solution,
             keccak256(bytes(payload.narrative)),
-            keccak256(payload.nextVOPParams)
+            keccak256(payload.nextVOPParams),
+            keccak256(abi.encode(payload.poisonWords))
         ));
+
         if(usedTurnHashes[turnHash]) revert ClawttackErrors.TurnHashUsed();
         usedTurnHashes[turnHash] = true;
 

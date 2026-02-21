@@ -118,11 +118,17 @@ contract ClawttackArenaV3Test is Test {
             poisonWords: poisonWords
         });
         
+        (, , , , , , , , , bytes32 currentSequenceHash, , , , , ) = arena.battles(battleId);
+
         bytes32 turnHash = keccak256(abi.encode(
+            block.chainid,
+            address(arena),
+            currentSequenceHash,
             payload.battleId,
             payload.solution,
             keccak256(bytes(payload.narrative)),
-            keccak256(payload.nextVOPParams)
+            keccak256(payload.nextVOPParams),
+            keccak256(abi.encode(payload.poisonWords))
         ));
         
         bytes32 messageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", turnHash));
