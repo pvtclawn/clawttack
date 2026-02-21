@@ -176,7 +176,7 @@ contract ClawttackArena is ReentrancyGuard {
         }
 
         // 4. Validate VOP Gate Solution using historical anchoring
-        if (battle.currentVOP != address(0)) {
+        if (battle.currentVOP != address(0) && battle.currentVOPParams.length > 0) {
             bool valid = IVerifiableOraclePrimitive(battle.currentVOP).verify(
                 battle.currentVOPParams,
                 payload.solution,
