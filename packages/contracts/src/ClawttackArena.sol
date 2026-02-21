@@ -37,7 +37,6 @@ contract ClawttackArena is ReentrancyGuard {
 
     mapping(uint256 => ClawttackTypes.AgentProfile) public agents;
     mapping(uint256 => ClawttackTypes.Battle) public battles;
-    mapping(uint256 => ClawttackTypes.TurnPayload[]) public battleTurns;
     
     // Anti-frontrunning
     mapping(bytes32 => bool) public usedTurnHashes;
@@ -45,7 +44,16 @@ contract ClawttackArena is ReentrancyGuard {
     event AgentRegistered(uint256 indexed agentId, address owner, address vaultKey);
     event BattleCreated(uint256 indexed battleId, uint256 agentA, uint256 stake);
     event BattleAccepted(uint256 indexed battleId, uint256 agentB);
-    event TurnSubmitted(uint256 indexed battleId, uint256 turnNumber, address player, bytes32 sequenceHash);
+    event TurnSubmitted(
+        uint256 indexed battleId, 
+        uint32 turnNumber, 
+        address player, 
+        bytes32 sequenceHash,
+        string expectedTargetWord,
+        string narrative,
+        string[] poisonWords,
+        bytes nextVOPParams
+    );
     event CompromiseExecuted(uint256 indexed battleId, uint256 winnerAgentId);
     event BattleFinished(uint256 indexed battleId, uint256 winnerAgentId);
     event BattleCancelled(uint256 indexed battleId);
@@ -112,20 +120,26 @@ contract ClawttackArena is ReentrancyGuard {
         
         battles[battleId] = ClawttackTypes.Battle({
             battleId: battleId,
-            agentA: agentId,
-            agentB: 0,
-            ownerA: msg.sender,
-            ownerB: address(0),
             stakePerAgent: msg.value,
             totalPot: msg.value,
-            lastTurnTimestamp: 0,
-            currentTurn: 0,
             sequenceHash: keccak256(abi.encodePacked(battleId, agentId)),
+            
+            ownerA: msg.sender,
+            agentA: uint64(agentId),
             state: ClawttackTypes.BattleState.Open,
-            winnerAgentId: 0,
+            
+            ownerB: address(0),
+            agentB: 0,
+            
             currentVOP: address(0),
+            currentTurn: 0,
+            lastTurnTimestamp: 0,
+            
+            winnerAgentId: 0,
+            
             currentVOPParams: "",
-            expectedTargetWord: ""
+            expectedTargetWord: "",
+            lastPoisonWords: new string[](0)
         });
 
         emit BattleCreated(battleId, agentId, msg.value);
@@ -171,11 +185,11 @@ contract ClawttackArena is ReentrancyGuard {
         );
         if(!isMatchable) revert ClawttackErrors.EloRatingMismatch();
 
-        battle.agentB = agentB;
+        battle.agentB = uint64(agentB);
         battle.ownerB = msg.sender;
         battle.totalPot += msg.value;
         battle.state = ClawttackTypes.BattleState.Active;
-        battle.lastTurnTimestamp = block.timestamp;
+        battle.lastTurnTimestamp = uint64(block.timestamp);
         
         // Generate the random puzzle for Turn 1
         _assignNextPuzzle(battleId, battle.sequenceHash);
@@ -229,9 +243,8 @@ contract ClawttackArena is ReentrancyGuard {
 
         // 3. Validate Poison Words evasion
         if (battle.currentTurn > 0) {
-            ClawttackTypes.TurnPayload memory lastPayload = battleTurns[battleId][battle.currentTurn - 1];
-            for (uint256 i = 0; i < lastPayload.poisonWords.length; i++) {
-                if(_containsWord(payload.narrative, lastPayload.poisonWords[i])) revert ClawttackErrors.PoisonWordDetected();
+            for (uint256 i = 0; i < battle.lastPoisonWords.length; i++) {
+                if(_containsWord(payload.narrative, battle.lastPoisonWords[i])) revert ClawttackErrors.PoisonWordDetected();
             }
         }
 
@@ -246,7 +259,7 @@ contract ClawttackArena is ReentrancyGuard {
         }
 
         // UPDATE STATE
-        battleTurns[battleId].push(payload);
+        battle.lastPoisonWords = payload.poisonWords;
         
         // Advance Sequence Hash
         battle.sequenceHash = keccak256(abi.encodePacked(
@@ -255,14 +268,25 @@ contract ClawttackArena is ReentrancyGuard {
             block.timestamp
         ));
 
+        string memory previousTargetWord = battle.expectedTargetWord;
+        
         // Generate the Next Puzzle for the Opponent
         _assignNextPuzzle(battleId, battle.sequenceHash);
         battle.currentVOPParams = payload.nextVOPParams; // Difficulty configured by current player
 
         battle.currentTurn++;
-        battle.lastTurnTimestamp = block.timestamp;
+        battle.lastTurnTimestamp = uint64(block.timestamp);
 
-        emit TurnSubmitted(battleId, battle.currentTurn, expectedSigner, battle.sequenceHash);
+        emit TurnSubmitted(
+            battleId, 
+            battle.currentTurn, 
+            expectedSigner, 
+            battle.sequenceHash,
+            previousTargetWord,
+            payload.narrative,
+            payload.poisonWords,
+            payload.nextVOPParams
+        );
     }
 
     /**
@@ -294,7 +318,14 @@ contract ClawttackArena is ReentrancyGuard {
         }
 
         // Verify the signature is actually from the victim's vault key
-        bytes32 messageHash = MessageHashUtils.toEthSignedMessageHash(keccak256(compromiseMessage));
+        bytes32 protectedHash = keccak256(abi.encode(
+            block.chainid,
+            address(this),
+            battleId,
+            keccak256(compromiseMessage)
+        ));
+        
+        bytes32 messageHash = MessageHashUtils.toEthSignedMessageHash(protectedHash);
         if(messageHash.recover(signature) != targetVault) revert ClawttackErrors.InvalidCompromiseSignature();
 
         emit CompromiseExecuted(battleId, winnerId);
@@ -343,11 +374,21 @@ contract ClawttackArena is ReentrancyGuard {
         battle.expectedTargetWord = dictionary.word(wordIndex);
     }
 
+    function _toLower(bytes1 b) internal pure returns (bytes1) {
+        if (b >= 0x41 && b <= 0x5A) {
+            return bytes1(uint8(b) + 32);
+        }
+        return b;
+    }
+
+    function _isLetter(bytes1 b) internal pure returns (bool) {
+        return (b >= 0x41 && b <= 0x5A) || (b >= 0x61 && b <= 0x7A);
+    }
+
     /**
-     * @dev Optimized substring check using bitwise XOR over a 32-byte sliding window.
-     * Guaranteed O(N) execution rather than the standard O(N*M) nested loop search.
+     * @dev Linguistically enforces exact word boundary matching and case-insensitivity. 
      */
-    function _containsWord(string memory source, string memory search) internal pure returns (bool found) {
+    function _containsWord(string memory source, string memory search) internal pure returns (bool) {
         bytes memory src = bytes(source);
         bytes memory tgt = bytes(search);
         
@@ -357,51 +398,32 @@ contract ClawttackArena is ReentrancyGuard {
         if (tgtLen == 0) return true;
         if (tgtLen > srcLen) return false;
 
-        // For targets > 32 bytes (which shouldn't happen with our BIP39 dictionary),
-        // fallback to a standard loop to prevent the bitmask from underflowing.
-        if (tgtLen > 32) {
-            for (uint256 i = 0; i <= srcLen - tgtLen; i++) {
-                bool isMatch = true;
-                for (uint256 j = 0; j < tgtLen; j++) {
-                    if (src[i + j] != tgt[j]) {
-                        isMatch = false;
-                        break;
-                    }
+        for (uint256 i = 0; i <= srcLen - tgtLen; i++) {
+            bool isMatch = true;
+            for (uint256 j = 0; j < tgtLen; j++) {
+                if (_toLower(src[i + j]) != _toLower(tgt[j])) {
+                    isMatch = false;
+                    break;
                 }
-                if (isMatch) return true;
             }
-            return false;
-        }
 
-        assembly {
-            // Mask to keep only the top `tgtLen` bytes
-            // e.g. for tgtLen=4, mask = 0xFFFFFFFF000...000
-            let mask := not(shr(mul(tgtLen, 8), 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff))
-            
-            // Load target word and apply mask
-            // Data array contents start 32 bytes after the memory pointer
-            let tWord := and(mload(add(tgt, 0x20)), mask)
-            
-            // Calculate end pointer for sliding window
-            // endPtr = src + 32 + (src.length - tgt.length) + 1
-            let startPtr := add(src, 0x20)
-            let endPtr := add(startPtr, add(sub(srcLen, tgtLen), 1))
-            
-            for { let ptr := startPtr } lt(ptr, endPtr) { ptr := add(ptr, 1) } {
-                let sWord := and(mload(ptr), mask)
-                // XOR eliminates identical bytes, leaving 0 only if they perfectly match
-                if iszero(xor(tWord, sWord)) {
-                    found := 1
-                    break
+            if (isMatch) {
+                // Check word boundaries
+                bool leftBoundaryOk = (i == 0) || !_isLetter(src[i - 1]);
+                bool rightBoundaryOk = (i + tgtLen == srcLen) || !_isLetter(src[i + tgtLen]);
+                
+                if (leftBoundaryOk && rightBoundaryOk) {
+                    return true;
                 }
             }
         }
+        return false;
     }
 
     function _settleBattle(uint256 battleId, uint256 winnerId, uint256 loserId) internal {
         ClawttackTypes.Battle storage battle = battles[battleId];
         battle.state = ClawttackTypes.BattleState.Completed;
-        battle.winnerAgentId = winnerId;
+        battle.winnerAgentId = uint64(winnerId);
         
         ClawttackTypes.AgentProfile storage winner = agents[winnerId];
         ClawttackTypes.AgentProfile storage loser = agents[loserId];
@@ -413,7 +435,7 @@ contract ClawttackArena is ReentrancyGuard {
         (winner.eloRating, loser.eloRating) = Glicko2Math.updateSimplifiedELO(
             winner.eloRating, 
             loser.eloRating, 
-            K_FACTOR
+            uint32(K_FACTOR)
         );
 
         // Disburse Pot
@@ -462,19 +484,5 @@ contract ClawttackArena is ReentrancyGuard {
      */
     function getBattle(uint256 battleId) external view returns (ClawttackTypes.Battle memory) {
         return battles[battleId];
-    }
-
-    /**
-     * @notice Fetch a specific TurnPayload including dynamic fields (string, string[]).
-     */
-    function getTurn(uint256 battleId, uint256 turnIndex) external view returns (ClawttackTypes.TurnPayload memory) {
-        return battleTurns[battleId][turnIndex];
-    }
-
-    /**
-     * @notice Get the total number of turns submitted in a battle.
-     */
-    function getTurnCount(uint256 battleId) external view returns (uint256) {
-        return battleTurns[battleId].length;
     }
 }
