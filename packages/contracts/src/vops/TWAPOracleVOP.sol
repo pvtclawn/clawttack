@@ -2,13 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {IVerifiableOraclePrimitive} from "../interfaces/IVerifiableOraclePrimitive.sol";
-
-interface IUniswapV3Pool {
-    function observe(uint32[] calldata secondsAgos)
-        external
-        view
-        returns (int56[] memory tickCumulatives, uint160[] memory secondsPerLiquidityCumulativeX128s);
-}
+import {IUniswapV3Pool} from "../interfaces/IExternal.sol";
 
 contract TWAPOracleVOP is IVerifiableOraclePrimitive {
     

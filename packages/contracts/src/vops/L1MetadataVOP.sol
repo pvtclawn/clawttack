@@ -2,11 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {IVerifiableOraclePrimitive} from "../interfaces/IVerifiableOraclePrimitive.sol";
-
-interface IL1Block {
-    function number() external view returns (uint64);
-    function basefee() external view returns (uint256);
-}
+import {IL1Block} from "../interfaces/IExternal.sol";
 
 contract L1MetadataVOP is IVerifiableOraclePrimitive {
     address constant L1_BLOCK_PREDEPLOY = 0x4200000000000000000000000000000000000015;
