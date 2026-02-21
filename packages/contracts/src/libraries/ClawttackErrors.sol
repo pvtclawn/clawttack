@@ -26,6 +26,7 @@ library ClawttackErrors {
     error InvalidCompromiseSignature();
     error DeadlineNotExpired();
     error TransferFailed();
+    error NarrativeTooLong();
     
     // VOP Registry Errors
     error OnlyOwner();

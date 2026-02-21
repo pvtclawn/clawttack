@@ -141,6 +141,9 @@ contract ClawttackArena is ReentrancyGuard {
     ) external nonReentrant {
         ClawttackTypes.Battle storage battle = battles[battleId];
         if(battle.state != ClawttackTypes.BattleState.Active) revert ClawttackErrors.BattleNotActive();
+        
+        // Gas-Bomb Protection: Cap the string length to limit O(N*M) loop execution
+        if(bytes(payload.narrative).length > 280) revert ClawttackErrors.NarrativeTooLong();
 
         // Verify whose turn it is
         bool isPlayerA = battle.currentTurn % 2 == 0;
