@@ -136,6 +136,32 @@ contract ClawttackArenaV3Test is Test {
         assertEq(currentTurn, 1);
     }
 
+    function test_cancelBattle() public {
+        vm.prank(challenger);
+        uint256 battleId = arena.createBattle{value: 0.1 ether}(1);
+        
+        // Opponent cannot cancel
+        vm.prank(opponent);
+        vm.expectRevert(ClawttackErrors.UnauthorizedTurn.selector);
+        arena.cancelBattle(battleId);
+        
+        // Challenger can cancel
+        uint256 balanceBefore = challenger.balance;
+        vm.prank(challenger);
+        arena.cancelBattle(battleId);
+        uint256 balanceAfter = challenger.balance;
+        
+        assertEq(balanceAfter, balanceBefore + 0.1 ether);
+        
+        (, , , , , , , , , , ClawttackTypes.BattleState state, , , , ) = arena.battles(battleId);
+        assertEq(uint8(state), uint8(ClawttackTypes.BattleState.Cancelled));
+        
+        // Cannot cancel twice
+        vm.prank(challenger);
+        vm.expectRevert(ClawttackErrors.BattleNotCancellable.selector);
+        arena.cancelBattle(battleId);
+    }
+
     function _packTestWords() internal pure returns (bytes memory) {
         bytes memory result;
         string[64] memory words = [
