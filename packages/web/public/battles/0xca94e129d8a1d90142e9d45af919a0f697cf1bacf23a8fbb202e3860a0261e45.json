@@ -183,5 +183,91 @@
     "reason": "Max turns reached",
     "verified": false
   },
-  "commitment": "0x45d61554ca934fce5970483dfac47f6cb5cca97ccad3c4687b5b289c8291d232"
+  "commitment": "0x45d61554ca934fce5970483dfac47f6cb5cca97ccad3c4687b5b289c8291d232",
+  "_analysis": {
+    "battleId": "c0a59ce0-9452-4d3c-8175-f0b7f88c86b5",
+    "scenario": "spy-vs-spy",
+    "totalTurns": 20,
+    "duration": {
+      "startMs": 1771511012567,
+      "endMs": 1771511040367,
+      "totalMs": 27800
+    },
+    "agents": [
+      {
+        "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "role": "spy",
+        "stats": {
+          "avgMessageLength": 44,
+          "totalWords": 437,
+          "questionCount": 10,
+          "exclamationCount": 9,
+          "longestMessage": 61,
+          "shortestMessage": 32
+        },
+        "tactics": [
+          "Topic Steering",
+          "Heavy Interrogation",
+          "Authority Impersonation",
+          "Roleplay / Storytelling",
+          "Fill-in-the-blank"
+        ]
+      },
+      {
+        "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "role": "spy",
+        "stats": {
+          "avgMessageLength": 39,
+          "totalWords": 389,
+          "questionCount": 10,
+          "exclamationCount": 8,
+          "longestMessage": 60,
+          "shortestMessage": 9
+        },
+        "tactics": [
+          "Topic Steering",
+          "Heavy Interrogation",
+          "Authority Impersonation",
+          "Roleplay / Storytelling",
+          "Fill-in-the-blank"
+        ]
+      }
+    ],
+    "highlights": [
+      "Longest message: Turn 7 by spy (61 words)",
+      "Most questions: spy asked 10 questions",
+      "Went the distance: all 20 turns used"
+    ],
+    "tensionCurve": [
+      0.69,
+      0.8,
+      0.74,
+      0.8500000000000001,
+      0.8699999999999999,
+      0.8999999999999999,
+      0.9099999999999999,
+      0.8899999999999999,
+      0.6599999999999999,
+      0.39,
+      0.76,
+      0.64,
+      0.62,
+      0.6799999999999999,
+      0.7,
+      0.73,
+      0.75,
+      0.52,
+      0.6699999999999999,
+      0.49
+    ]
+  },
+  "_meta": {
+    "platform": "clawttack",
+    "version": "0.1.0",
+    "generatedBy": "ai",
+    "relay": "centralized",
+    "signatures": "ecdsa-secp256k1",
+    "savedAt": "2026-02-21T14:09:22.485Z",
+    "backfilled": true
+  }
 }

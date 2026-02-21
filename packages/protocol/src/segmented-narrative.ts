@@ -22,10 +22,10 @@ export class SegmentedNarrative {
 
   /**
    * Calculates the deterministic truth slot index for a given turn.
-   * Based on the initial battle seed and current turn number.
+   * v3 Pivot: Salts the index with lastTurnHash to prevent pre-computation/sniping.
    */
-  static calculateTruthIndex(battleSeed: Hex, turnNumber: number): number {
-    const hash = keccak256(encodePacked(['bytes32', 'uint8'], [battleSeed, turnNumber]));
+  static calculateTruthIndex(battleSeed: Hex, lastTurnHash: Hex): number {
+    const hash = keccak256(encodePacked(['bytes32', 'bytes32'], [battleSeed, lastTurnHash]));
     const hashValue = BigInt(hash);
     return Number(hashValue % BigInt(this.MAX_SEGMENTS));
   }
