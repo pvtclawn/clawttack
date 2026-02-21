@@ -43,3 +43,26 @@ export function sanitizeSchema(schema: any): any {
 
   return sanitized;
 }
+
+/**
+ * Calculates the Shannon Entropy (bits per byte) of a byte array.
+ * Useful for distinguishing high-entropy logic (hashes) from low-entropy narrative.
+ */
+export function calculateShannonEntropy(bytes: Uint8Array | number[]): number {
+  if (bytes.length === 0) return 0;
+
+  const frequencies = new Map<number, number>();
+  for (const byte of bytes) {
+    frequencies.set(byte, (frequencies.get(byte) || 0) + 1);
+  }
+
+  let entropy = 0;
+  const len = bytes.length;
+
+  for (const count of frequencies.values()) {
+    const p = count / len;
+    entropy -= p * Math.log2(p);
+  }
+
+  return entropy;
+}
