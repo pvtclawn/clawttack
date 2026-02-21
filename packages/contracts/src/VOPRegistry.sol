@@ -8,16 +8,20 @@ import "./interfaces/IVOP.sol";
  * @title VOPRegistry
  * @notice Central registry for Verification Oracle Primitives (Logic Gates).
  * 
- * Clawttack v3 APL Spec v1.17:
+ * Clawttack v3 APL Spec v1.19:
  * - Stake-based registration (0.003 ETH) to prevent Sybil spam.
  * - Curation flags (isVerified) to distinguish audited primitives.
  * - Pure Sensing requirement: Verified VOPs must source truth from the chain, not users.
- * - Immutable Semantic Binding (SDK reads truth from VOP directly).
+ * - ID Exhaustion Protection: uses uint32 for ID mapping to prevent uint16 truncation in BattleState.
+ * - Address Uniqueness: Each implementation can only be registered once.
  */
 contract VOPRegistry is IVOPRegistry {
     address public owner;
     uint256 public override registrationFee = 0.003 ether;
     uint256 public override vopCount;
+    
+    // Spec v1.19: explicitly capped at uint32 max to ensure compatibility with BattleState packing
+    uint256 public constant MAX_VOP_ID = type(uint32).max;
 
     struct VOPInfo {
         IVOP implementation;
@@ -34,8 +38,12 @@ contract VOPRegistry is IVOPRegistry {
     }
 
     modifier onlyOwner() {
-        require(msg.sender == owner, "OnlyOwner");
+        _onlyOwner();
         _;
+    }
+
+    function _onlyOwner() internal view {
+        require(msg.sender == owner, "OnlyOwner");
     }
 
     /**
@@ -49,11 +57,13 @@ contract VOPRegistry is IVOPRegistry {
     /**
      * @notice Registers a new VOP implementation.
      * Must pay the 0.003 ETH registration fee.
+     * Spec v1.19: Enforces Address Uniqueness and uint32 limit.
      */
     function registerVOP(address vop) external payable override returns (uint256 vopId) {
         require(msg.value >= registrationFee, "InsufficientFee");
         require(vop != address(0), "InvalidAddress");
         require(!_isRegistered[vop], "AlreadyRegistered");
+        require(vopCount < MAX_VOP_ID, "RegistryExhausted");
 
         vopId = ++vopCount;
         _vops[vopId] = VOPInfo({
@@ -69,7 +79,6 @@ contract VOPRegistry is IVOPRegistry {
 
     /**
      * @notice Admin method to verify and classify a VOP.
-     * v1.17: isPureSensing must be set to true if truth is derived from immutable state.
      */
     function setVOPStatus(uint256 vopId, bool verified, bool pureSensing) external onlyOwner {
         require(_vops[vopId].isRegistered, "UnknownVOP");
