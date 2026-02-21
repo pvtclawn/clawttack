@@ -8,6 +8,7 @@ import "./IVOP.sol";
  * @notice Central registry for Verification Oracle Primitives (Logic Gates).
  * 
  * Tracks immutable core VOPs (verified by protocol) and community plugin VOPs.
+ * v3 Spec v1.8: Implements Immutable Semantic Binding and Registration Fees.
  */
 interface IVOPRegistry {
     /**
@@ -20,13 +21,21 @@ interface IVOPRegistry {
      * @notice Registers a new VOP implementation.
      * @param vop The address of the IVOP contract.
      * @return vopId The newly assigned unique ID for this gate.
+     * 
+     * Requirements:
+     * - Must pay the registration fee (0.003 ETH).
      */
-    function registerVOP(address vop) external returns (uint256 vopId);
+    function registerVOP(address vop) external payable returns (uint256 vopId);
 
     /**
      * @notice Returns true if the address is a registered VOP.
      */
     function isRegistered(address vop) external view returns (bool);
+
+    /**
+     * @notice Returns the current registration fee in Wei.
+     */
+    function registrationFee() external view returns (uint256);
 
     /**
      * @notice Returns the total number of registered VOPs.
@@ -35,6 +44,7 @@ interface IVOPRegistry {
 
     /**
      * @notice Emitted when a new VOP is registered.
+     * Truth (description) is now read directly from vopAddress.
      */
-    event VOPRegistered(uint256 indexed vopId, address indexed vopAddress, string description);
+    event VOPRegistered(uint256 indexed vopId, address indexed vopAddress);
 }

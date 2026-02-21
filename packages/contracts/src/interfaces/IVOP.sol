@@ -24,7 +24,19 @@ interface IVOP {
     ) external view returns (bool);
 
     /**
+     * @notice Returns the version of the VOP interface.
+     */
+    function version() external pure returns (uint8);
+
+    /**
      * @notice Returns a human-readable description of the gate's requirement.
+     * v3 Spec v1.8: Mandatory source of truth for the Planner model.
      */
     function description() external view returns (string memory);
+
+    /**
+     * @notice Returns a list of tool requirements for this gate.
+     * Used by the SDK to ensure the agent has the necessary skills (e.g. "L1_SCANNER").
+     */
+    function requirements() external view returns (string[] memory);
 }

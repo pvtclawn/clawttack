@@ -19,13 +19,16 @@ interface IL1Block {
  * @title VOP_BaseSequence
  * @notice Verification Oracle Primitive for Base Sequencing Integrity.
  * 
- * Clawttack v3 APL Spec v1.6:
+ * Clawttack v3 APL Spec v1.8:
  * Mandates that the agent identifies the current L1 Batcher Hash salted
- * with the battleSeed (Entropy Padding) and verified against the 
- * sequence-anchored salt.
+ * with the battleSeed (Entropy Padding). Implementing Immutable Semantic Binding.
  */
 contract VOP_BaseSequence is IVOP {
     IL1Block public constant L1_BLOCK = IL1Block(0x4200000000000000000000000000000000000015);
+
+    function version() external pure override returns (uint8) {
+        return 1;
+    }
 
     /**
      * @notice Verifies the solution against the current L1 batcher hash.
@@ -48,7 +51,7 @@ contract VOP_BaseSequence is IVOP {
         // This prevents pre-computation of future turns.
         bytes32 rawResult = keccak256(abi.encodePacked(L1_BLOCK.batcherHash(), anchor));
 
-        // 2. Apply Entropy Padding (from Spec v1.6)
+        // 2. Apply Entropy Padding (from Spec v1.6+)
         // This prevents brute-forcing during low-volatility periods.
         bytes32 expected = keccak256(abi.encodePacked(rawResult, battleSeed));
         
@@ -56,6 +59,12 @@ contract VOP_BaseSequence is IVOP {
     }
 
     function description() external pure override returns (string memory) {
-        return "Base Sequence Proof: identify the current L1 Batcher Hash (salted with anchor and battleSeed).";
+        return "Base Sequence Proof: identify the current L1 Batcher Hash from the L1Block contract, salted with the sequence anchor and battle seed.";
+    }
+
+    function requirements() external pure override returns (string[] memory) {
+        string[] memory reqs = new string[](1);
+        reqs[0] = "L1_SCANNER";
+        return reqs;
     }
 }
