@@ -88,19 +88,19 @@ contract ClawttackArenaV3Test is Test {
         arena.acceptBattle{value: 0.1 ether}(battleId, 2);
         
         ClawttackTypes.Battle memory b = arena.getBattle(battleId);
-        string memory targetWord = b.expectedTargetWord;
+        string memory targetWord = BIP39Words(address(arena.dictionary())).word(b.expectedTargetWordIndex);
         
         string memory narrative = string(abi.encodePacked("This is a story about the word ", targetWord, " and some other things."));
         bytes memory nextParams = abi.encode(bytes32("next_salt"), uint8(4));
-        string[] memory poisonWords = new string[](1);
-        poisonWords[0] = "banned";
+        uint16[] memory poisonWords = new uint16[](1);
+        poisonWords[0] = 5;
         
         ClawttackTypes.TurnPayload memory payload = ClawttackTypes.TurnPayload({
             battleId: battleId,
             solution: 0,
             narrative: narrative,
             nextVOPParams: nextParams,
-            poisonWords: poisonWords
+            poisonWordIndices: poisonWords
         });
         
         ClawttackTypes.Battle memory b2 = arena.getBattle(battleId);
@@ -114,7 +114,7 @@ contract ClawttackArenaV3Test is Test {
             payload.solution,
             keccak256(bytes(payload.narrative)),
             keccak256(payload.nextVOPParams),
-            keccak256(abi.encode(payload.poisonWords))
+            keccak256(abi.encode(payload.poisonWordIndices))
         ));
         
         bytes32 messageHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", turnHash));

@@ -49,9 +49,9 @@ contract ClawttackArena is ReentrancyGuard {
         uint32 turnNumber, 
         address player, 
         bytes32 sequenceHash,
-        string expectedTargetWord,
+        uint16 expectedTargetWordIndex,
         string narrative,
-        string[] poisonWords,
+        uint16[] poisonWordIndices,
         bytes nextVOPParams
     );
     event CompromiseExecuted(uint256 indexed battleId, uint256 winnerAgentId);
@@ -136,10 +136,10 @@ contract ClawttackArena is ReentrancyGuard {
             lastTurnTimestamp: 0,
             
             winnerAgentId: 0,
+            expectedTargetWordIndex: 0,
             
             currentVOPParams: "",
-            expectedTargetWord: "",
-            lastPoisonWords: new string[](0)
+            lastPoisonWordIndices: new uint16[](0)
         });
 
         emit BattleCreated(battleId, agentId, msg.value);
@@ -227,7 +227,7 @@ contract ClawttackArena is ReentrancyGuard {
             payload.solution,
             keccak256(bytes(payload.narrative)),
             keccak256(payload.nextVOPParams),
-            keccak256(abi.encode(payload.poisonWords))
+            keccak256(abi.encode(payload.poisonWordIndices))
         ));
 
         if(usedTurnHashes[turnHash]) revert ClawttackErrors.TurnHashUsed();
@@ -237,14 +237,14 @@ contract ClawttackArena is ReentrancyGuard {
         if(messageHash.recover(signature) != expectedSigner) revert ClawttackErrors.InvalidSignature();
 
         // 2. Validate Target Word (Linguistic Entrapment)
-        if (bytes(battle.expectedTargetWord).length > 0) {
-            if(!_containsWord(payload.narrative, battle.expectedTargetWord)) revert ClawttackErrors.TargetWordMissing();
-        }
+        string memory targetWord = dictionary.word(battle.expectedTargetWordIndex);
+        if(!_containsWord(payload.narrative, targetWord)) revert ClawttackErrors.TargetWordMissing();
 
         // 3. Validate Poison Words evasion
         if (battle.currentTurn > 0) {
-            for (uint256 i = 0; i < battle.lastPoisonWords.length; i++) {
-                if(_containsWord(payload.narrative, battle.lastPoisonWords[i])) revert ClawttackErrors.PoisonWordDetected();
+            for (uint256 i = 0; i < battle.lastPoisonWordIndices.length; i++) {
+                string memory poisonWord = dictionary.word(battle.lastPoisonWordIndices[i]);
+                if(_containsWord(payload.narrative, poisonWord)) revert ClawttackErrors.PoisonWordDetected();
             }
         }
 
@@ -259,7 +259,7 @@ contract ClawttackArena is ReentrancyGuard {
         }
 
         // UPDATE STATE
-        battle.lastPoisonWords = payload.poisonWords;
+        battle.lastPoisonWordIndices = payload.poisonWordIndices;
         
         // Advance Sequence Hash
         battle.sequenceHash = keccak256(abi.encodePacked(
@@ -268,7 +268,7 @@ contract ClawttackArena is ReentrancyGuard {
             block.timestamp
         ));
 
-        string memory previousTargetWord = battle.expectedTargetWord;
+        uint16 previousTargetWordIndex = battle.expectedTargetWordIndex;
         
         // Generate the Next Puzzle for the Opponent
         _assignNextPuzzle(battleId, battle.sequenceHash);
@@ -282,9 +282,9 @@ contract ClawttackArena is ReentrancyGuard {
             battle.currentTurn, 
             expectedSigner, 
             battle.sequenceHash,
-            previousTargetWord,
+            previousTargetWordIndex,
             payload.narrative,
-            payload.poisonWords,
+            payload.poisonWordIndices,
             payload.nextVOPParams
         );
     }
@@ -371,7 +371,7 @@ contract ClawttackArena is ReentrancyGuard {
         
         uint16 wordCount = dictionary.WORD_COUNT();
         uint16 wordIndex = uint16(seed % wordCount);
-        battle.expectedTargetWord = dictionary.word(wordIndex);
+        battle.expectedTargetWordIndex = wordIndex;
     }
 
     function _toLower(bytes1 b) internal pure returns (bytes1) {

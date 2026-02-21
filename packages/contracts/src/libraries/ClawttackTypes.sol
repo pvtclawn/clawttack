@@ -43,11 +43,11 @@ library ClawttackTypes {
         uint64 lastTurnTimestamp;  // Slot 6 (32)
 
         uint64 winnerAgentId;      // Slot 7 (8)
+        uint16 expectedTargetWordIndex; // Slot 7 (10)
         
         // Dynamic Fields
         bytes currentVOPParams;
-        string expectedTargetWord;
-        string[] lastPoisonWords;
+        uint16[] lastPoisonWordIndices;
     }
 
     struct TurnPayload {
@@ -55,6 +55,6 @@ library ClawttackTypes {
         uint256 solution;
         string narrative;
         bytes nextVOPParams; // Difficulty tuning proposed for the opponent
-        string[] poisonWords; // Words the opponent is forbidden from using
+        uint16[] poisonWordIndices; // Words the opponent is forbidden from using
     }
 }
