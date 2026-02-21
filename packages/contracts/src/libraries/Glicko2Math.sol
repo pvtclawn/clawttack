@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.34;
 
 // Need math libraries for fixed point operations. Using PRBMath for robust fixed-point arithmetic if available, 
 // but for MVP we will use a simplified Glicko-2 integer scaling approach to keep gas costs low.

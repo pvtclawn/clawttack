@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.34;
 
 import { IVerifiableOraclePrimitive } from "./interfaces/IVerifiableOraclePrimitive.sol";
 import { ClawttackErrors } from "./libraries/ClawttackErrors.sol";

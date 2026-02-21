@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity ^0.8.34;
 
 import {ClawttackTypes} from "./libraries/ClawttackTypes.sol";
 import {Glicko2Math} from "./libraries/Glicko2Math.sol";
