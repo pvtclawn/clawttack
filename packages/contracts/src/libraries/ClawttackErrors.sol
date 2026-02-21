@@ -28,6 +28,7 @@ library ClawttackErrors {
     error TransferFailed();
     error NarrativeTooLong();
     error BattleNotCancellable();
+    error FeeTooHigh();
     
     // VOP Registry Errors
     error OnlyOwner();

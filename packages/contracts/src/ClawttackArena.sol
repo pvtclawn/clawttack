@@ -27,8 +27,13 @@ contract ClawttackArena is ReentrancyGuard {
     uint256 public constant TURN_TIMEOUT = 5 minutes;
     uint256 public constant K_FACTOR = 32;
     uint256 public constant MAX_NARRATIVE_LENGTH = 280;
+    uint256 public constant MAX_FEE_RATE = 1000; // 10% maximum fee
 
     uint256 public nextBattleId = 1;
+    
+    address public owner;
+    address public feeRecipient;
+    uint256 public feeRate; // measured in basis points (100 = 1%)
 
     mapping(uint256 => ClawttackTypes.AgentProfile) public agents;
     mapping(uint256 => ClawttackTypes.Battle) public battles;
@@ -48,6 +53,14 @@ contract ClawttackArena is ReentrancyGuard {
     constructor(address _vopRegistry, address _dictionary) {
         vopRegistry = VOPRegistry(_vopRegistry);
         dictionary = BIP39Words(_dictionary);
+        owner = msg.sender;
+        feeRecipient = msg.sender;
+        feeRate = 0; // 0% initial fee
+    }
+
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert ClawttackErrors.OnlyOwner();
+        _;
     }
 
     /**
@@ -70,6 +83,23 @@ contract ClawttackArena is ReentrancyGuard {
 
         emit AgentRegistered(agentId, msg.sender, vaultKey);
     }
+
+    // --- ADMIN SETTINGS ---
+
+    function transferOwnership(address newOwner) external onlyOwner {
+        owner = newOwner;
+    }
+
+    function setFeeRate(uint256 newRate) external onlyOwner {
+        if (newRate > MAX_FEE_RATE) revert ClawttackErrors.FeeTooHigh();
+        feeRate = newRate;
+    }
+
+    function setFeeRecipient(address newRecipient) external onlyOwner {
+        feeRecipient = newRecipient;
+    }
+
+    // --- GAME ENGINE ---
 
     /**
      * @notice Initiates a new battle.
@@ -383,13 +413,42 @@ contract ClawttackArena is ReentrancyGuard {
         );
 
         // Disburse Pot
-        uint256 payout = battle.totalPot;
+        uint256 amountToWinner = battle.totalPot;
+        if (feeRate > 0 && feeRecipient != address(0)) {
+            uint256 fee = (amountToWinner * feeRate) / 10000;
+            amountToWinner -= fee;
+            (bool feeSuccess, ) = payable(feeRecipient).call{value: fee}("");
+            if (!feeSuccess) revert ClawttackErrors.TransferFailed();
+        }
+
         address payable winnerAddr = payable(winner.owner);
         battle.totalPot = 0;
         
-        (bool success, ) = winnerAddr.call{value: payout}("");
+        (bool success, ) = winnerAddr.call{value: amountToWinner}("");
         if(!success) revert ClawttackErrors.TransferFailed();
 
         emit BattleFinished(battleId, winnerId);
+    }
+
+    // --- VIEW GETTERS ---
+
+    /**
+     * @notice Returns the address of the player whose turn it currently is.
+     */
+    function whoseTurn(uint256 battleId) external view returns (address) {
+        ClawttackTypes.Battle storage battle = battles[battleId];
+        if (battle.state != ClawttackTypes.BattleState.Active) return address(0);
+        return (battle.currentTurn % 2 == 0) ? battle.ownerA : battle.ownerB;
+    }
+
+    /**
+     * @notice Returns the time remaining in seconds for the current turn.
+     */
+    function timeRemaining(uint256 battleId) external view returns (uint256) {
+        ClawttackTypes.Battle storage battle = battles[battleId];
+        if (battle.state != ClawttackTypes.BattleState.Active) return 0;
+        uint256 deadline = battle.lastTurnTimestamp + TURN_TIMEOUT;
+        if (block.timestamp >= deadline) return 0;
+        return deadline - block.timestamp;
     }
 }
