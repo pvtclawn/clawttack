@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
 import "../src/VOPRegistry.sol";
+import "../src/libraries/ClawttackErrors.sol";
 
 contract VOPRegistryTest is Test {
     VOPRegistry registry;
@@ -30,13 +31,13 @@ contract VOPRegistryTest is Test {
 
     function test_revert_addVOP_notOwner() public {
         vm.prank(notOwner);
-        vm.expectRevert(VOPRegistry.OnlyOwner.selector);
+        vm.expectRevert(ClawttackErrors.OnlyOwner.selector);
         registry.addVOP(vop1);
     }
 
     function test_revert_addVOP_alreadyRegistered() public {
         registry.addVOP(vop1);
-        vm.expectRevert(VOPRegistry.VOPAlreadyRegistered.selector);
+        vm.expectRevert(ClawttackErrors.VOPAlreadyRegistered.selector);
         registry.addVOP(vop1);
     }
 
@@ -51,14 +52,14 @@ contract VOPRegistryTest is Test {
     }
 
     function test_revert_removeVOP_notRegistered() public {
-        vm.expectRevert(VOPRegistry.VOPNotRegistered.selector);
+        vm.expectRevert(ClawttackErrors.VOPNotRegistered.selector);
         registry.removeVOP(vop1);
     }
 
     function test_revert_removeVOP_notOwner() public {
         registry.addVOP(vop1);
         vm.prank(notOwner);
-        vm.expectRevert(VOPRegistry.OnlyOwner.selector);
+        vm.expectRevert(ClawttackErrors.OnlyOwner.selector);
         registry.removeVOP(vop1);
     }
 
@@ -73,7 +74,7 @@ contract VOPRegistryTest is Test {
     }
 
     function test_revert_getRandomVOP_empty() public {
-        vm.expectRevert(VOPRegistry.RegistryEmpty.selector);
+        vm.expectRevert(ClawttackErrors.RegistryEmpty.selector);
         registry.getRandomVOP(10);
     }
 }

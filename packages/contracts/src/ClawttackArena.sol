@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.28;
 
 import {ClawttackTypes} from "./libraries/ClawttackTypes.sol";
 import {Glicko2Math} from "./libraries/Glicko2Math.sol";
 import {IVerifiableOraclePrimitive} from "./interfaces/IVerifiableOraclePrimitive.sol";
 import {VOPRegistry} from "./VOPRegistry.sol";
 import {BIP39Words} from "./BIP39Words.sol";
+import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
 
 import {ECDSA} from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -51,8 +52,8 @@ contract ClawttackArena is ReentrancyGuard {
      * @notice Register a new Agent Profile with its vault key for CTF mode.
      */
     function registerAgent(uint256 agentId, address vaultKey) external {
-        require(agents[agentId].owner == address(0), "Agent already exists");
-        require(vaultKey != address(0), "Invalid vault key");
+        if(agents[agentId].owner != address(0)) revert ClawttackErrors.AgentAlreadyExists();
+        if(vaultKey == address(0)) revert ClawttackErrors.InvalidVaultKey();
 
         agents[agentId] = ClawttackTypes.AgentProfile({
             owner: msg.sender,
@@ -72,8 +73,8 @@ contract ClawttackArena is ReentrancyGuard {
      * @notice Initiates a new battle.
      */
     function createBattle(uint256 agentId) external payable returns (uint256) {
-        require(agents[agentId].owner == msg.sender, "Not agent owner");
-        require(msg.value >= MIN_STAKE, "Stake too low");
+        if(agents[agentId].owner != msg.sender) revert ClawttackErrors.NotAgentOwner();
+        if(msg.value < MIN_STAKE) revert ClawttackErrors.StakeTooLow();
 
         uint256 battleId = nextBattleId++;
         
@@ -104,10 +105,10 @@ contract ClawttackArena is ReentrancyGuard {
      */
     function acceptBattle(uint256 battleId, uint256 agentB) external payable {
         ClawttackTypes.Battle storage battle = battles[battleId];
-        require(battle.state == ClawttackTypes.BattleState.Open, "Not open");
-        require(agents[agentB].owner == msg.sender, "Not agent owner");
-        require(msg.value == battle.stakePerAgent, "Must match stake exactly");
-        require(battle.agentA != agentB, "Cannot battle self");
+        if(battle.state != ClawttackTypes.BattleState.Open) revert ClawttackErrors.BattleNotOpen();
+        if(agents[agentB].owner != msg.sender) revert ClawttackErrors.NotAgentOwner();
+        if(msg.value != battle.stakePerAgent) revert ClawttackErrors.StakeMismatch();
+        if(battle.agentA == agentB) revert ClawttackErrors.CannotBattleSelf();
 
         // Enforce Glicko-2 Matchmaking Constraints
         bool isMatchable = Glicko2Math.isMatchable(
@@ -116,7 +117,7 @@ contract ClawttackArena is ReentrancyGuard {
             agents[agentB].eloRating,
             agents[agentB].eloRD
         );
-        require(isMatchable, "ELO rating mismatch");
+        if(!isMatchable) revert ClawttackErrors.EloRatingMismatch();
 
         battle.agentB = agentB;
         battle.ownerB = msg.sender;
@@ -139,15 +140,15 @@ contract ClawttackArena is ReentrancyGuard {
         bytes calldata signature
     ) external nonReentrant {
         ClawttackTypes.Battle storage battle = battles[battleId];
-        require(battle.state == ClawttackTypes.BattleState.Active, "Battle not active");
+        if(battle.state != ClawttackTypes.BattleState.Active) revert ClawttackErrors.BattleNotActive();
 
         // Verify whose turn it is
         bool isPlayerA = battle.currentTurn % 2 == 0;
         address expectedSigner = isPlayerA ? battle.ownerA : battle.ownerB;
-        require(msg.sender == expectedSigner, "Not your turn or unauthorized");
+        if(msg.sender != expectedSigner) revert ClawttackErrors.UnauthorizedTurn();
         
         // Check timeout
-        require(block.timestamp <= battle.lastTurnTimestamp + TURN_TIMEOUT, "Turn deadline expired");
+        if(block.timestamp > battle.lastTurnTimestamp + TURN_TIMEOUT) revert ClawttackErrors.TurnDeadlineExpired();
 
         // 1. Reconstruct Turn Hash to verify signature
         bytes32 turnHash = keccak256(abi.encode(
@@ -156,22 +157,22 @@ contract ClawttackArena is ReentrancyGuard {
             keccak256(bytes(payload.narrative)),
             keccak256(payload.nextVOPParams)
         ));
-        require(!usedTurnHashes[turnHash], "Turn Hash used");
+        if(usedTurnHashes[turnHash]) revert ClawttackErrors.TurnHashUsed();
         usedTurnHashes[turnHash] = true;
 
         bytes32 messageHash = MessageHashUtils.toEthSignedMessageHash(turnHash);
-        require(messageHash.recover(signature) == expectedSigner, "Invalid signature");
+        if(messageHash.recover(signature) != expectedSigner) revert ClawttackErrors.InvalidSignature();
 
         // 2. Validate Target Word (Linguistic Entrapment)
         if (bytes(battle.expectedTargetWord).length > 0) {
-            require(_containsWord(payload.narrative, battle.expectedTargetWord), "Target word missing");
+            if(!_containsWord(payload.narrative, battle.expectedTargetWord)) revert ClawttackErrors.TargetWordMissing();
         }
 
         // 3. Validate Poison Words evasion
         if (battle.currentTurn > 0) {
             ClawttackTypes.TurnPayload memory lastPayload = battleTurns[battleId][battle.currentTurn - 1];
             for (uint256 i = 0; i < lastPayload.poisonWords.length; i++) {
-                require(!_containsWord(payload.narrative, lastPayload.poisonWords[i]), "Poison word detected!");
+                if(_containsWord(payload.narrative, lastPayload.poisonWords[i])) revert ClawttackErrors.PoisonWordDetected();
             }
         }
 
@@ -182,7 +183,7 @@ contract ClawttackArena is ReentrancyGuard {
                 payload.solution,
                 block.number - 1 // Grounded frozen anchoring
             );
-            require(valid, "VOP Puzzle Failed");
+            if(!valid) revert ClawttackErrors.VOPPuzzleFailed();
         }
 
         // UPDATE STATE
@@ -214,7 +215,7 @@ contract ClawttackArena is ReentrancyGuard {
         bytes calldata signature
     ) external nonReentrant {
         ClawttackTypes.Battle storage battle = battles[battleId];
-        require(battle.state == ClawttackTypes.BattleState.Active, "Battle not active");
+        if(battle.state != ClawttackTypes.BattleState.Active) revert ClawttackErrors.BattleNotActive();
         
         // Both A and B are allowed to compromise the other. Determine the target vault.
         address targetVault;
@@ -230,12 +231,12 @@ contract ClawttackArena is ReentrancyGuard {
             winnerId = battle.agentB;
             loserId = battle.agentA;
         } else {
-            revert("Not a participant");
+            revert ClawttackErrors.NotParticipant();
         }
 
         // Verify the signature is actually from the victim's vault key
         bytes32 messageHash = MessageHashUtils.toEthSignedMessageHash(keccak256(compromiseMessage));
-        require(messageHash.recover(signature) == targetVault, "Invalid compromise signature");
+        if(messageHash.recover(signature) != targetVault) revert ClawttackErrors.InvalidCompromiseSignature();
 
         emit CompromiseExecuted(battleId, winnerId);
         _settleBattle(battleId, winnerId, loserId);
@@ -246,8 +247,8 @@ contract ClawttackArena is ReentrancyGuard {
      */
     function claimTimeoutWin(uint256 battleId) external nonReentrant {
         ClawttackTypes.Battle storage battle = battles[battleId];
-        require(battle.state == ClawttackTypes.BattleState.Active, "Battle not active");
-        require(block.timestamp > battle.lastTurnTimestamp + TURN_TIMEOUT, "Deadline not expired");
+        if(battle.state != ClawttackTypes.BattleState.Active) revert ClawttackErrors.BattleNotActive();
+        if(block.timestamp <= battle.lastTurnTimestamp + TURN_TIMEOUT) revert ClawttackErrors.DeadlineNotExpired();
 
         bool isPlayerATurn = battle.currentTurn % 2 == 0;
         
@@ -330,7 +331,7 @@ contract ClawttackArena is ReentrancyGuard {
         battle.totalPot = 0;
         
         (bool success, ) = winnerAddr.call{value: payout}("");
-        require(success, "Transfer failed");
+        if(!success) revert ClawttackErrors.TransferFailed();
 
         emit BattleFinished(battleId, winnerId);
     }

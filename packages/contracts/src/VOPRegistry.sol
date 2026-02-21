@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.28;
 
 import { IVerifiableOraclePrimitive } from "./interfaces/IVerifiableOraclePrimitive.sol";
+import { ClawttackErrors } from "./libraries/ClawttackErrors.sol";
 
 /**
  * @title VOPRegistry
@@ -20,13 +21,8 @@ contract VOPRegistry {
     event VOPAdded(address indexed vopAddress);
     event VOPRemoved(address indexed vopAddress);
 
-    error OnlyOwner();
-    error VOPAlreadyRegistered();
-    error VOPNotRegistered();
-    error RegistryEmpty();
-
     modifier onlyOwner() {
-        if (msg.sender != owner) revert OnlyOwner();
+        if (msg.sender != owner) revert ClawttackErrors.OnlyOwner();
         _;
     }
 
@@ -39,7 +35,7 @@ contract VOPRegistry {
      * @param vopAddress The contract address of the new VOP.
      */
     function addVOP(address vopAddress) external onlyOwner {
-        if (isVOPRegistered[vopAddress]) revert VOPAlreadyRegistered();
+        if (isVOPRegistered[vopAddress]) revert ClawttackErrors.VOPAlreadyRegistered();
         
         isVOPRegistered[vopAddress] = true;
         activeVOPs.push(vopAddress);
@@ -52,7 +48,7 @@ contract VOPRegistry {
      * @param vopAddress The contract address to remove.
      */
     function removeVOP(address vopAddress) external onlyOwner {
-        if (!isVOPRegistered[vopAddress]) revert VOPNotRegistered();
+        if (!isVOPRegistered[vopAddress]) revert ClawttackErrors.VOPNotRegistered();
         
         isVOPRegistered[vopAddress] = false;
         
@@ -75,7 +71,7 @@ contract VOPRegistry {
      * @return The address of the selected VOP.
      */
     function getRandomVOP(uint256 seed) external view returns (address) {
-        if (activeVOPs.length == 0) revert RegistryEmpty();
+        if (activeVOPs.length == 0) revert ClawttackErrors.RegistryEmpty();
         
         uint256 index = seed % activeVOPs.length;
         return activeVOPs[index];

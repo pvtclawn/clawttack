@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.28;
 
 import {IVerifiableOraclePrimitive} from "../interfaces/IVerifiableOraclePrimitive.sol";
 import {IUniswapV3Pool} from "../interfaces/IExternal.sol";
