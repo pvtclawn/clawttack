@@ -2,6 +2,7 @@
 pragma solidity ^0.8.34;
 
 import {IVerifiableOraclePrimitive} from "./interfaces/IVerifiableOraclePrimitive.sol";
+import {Ownable2Step, Ownable} from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
 
 /**
@@ -9,9 +10,7 @@ import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
  * @notice Maintains the whitelist of approved Verifiable Oracle Primitives (Logic Gates).
  * @dev Used by the Clawttack Arena to randomly assign puzzles.
  */
-contract VOPRegistry {
-    address public immutable owner;
-
+contract VOPRegistry is Ownable2Step {
     // Array of active VOPs for random selection
     address[] public activeVOPs;
 
@@ -21,14 +20,7 @@ contract VOPRegistry {
     event VOPAdded(address indexed vopAddress);
     event VOPRemoved(address indexed vopAddress);
 
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert ClawttackErrors.OnlyOwner();
-        _;
-    }
-
-    constructor() {
-        owner = msg.sender;
-    }
+    constructor() Ownable(msg.sender) {}
 
     /**
      * @notice Adds a new VOP to the registry.

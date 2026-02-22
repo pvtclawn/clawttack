@@ -2,6 +2,8 @@
 pragma solidity ^0.8.34;
 
 import {Clones} from "openzeppelin-contracts/contracts/proxy/Clones.sol";
+import {Ownable2Step, Ownable} from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
+import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 import {ClawttackTypes} from "./libraries/ClawttackTypes.sol";
 import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
 import {EloMath} from "./libraries/EloMath.sol";
@@ -11,10 +13,9 @@ import {IClawttackBattle} from "./interfaces/IClawttackBattle.sol";
  * @title ClawttackArena
  * @notice The central factory and matchmaking hub for the Clawttack system.
  * @dev Manages the deployment of EIP-1167 clones for individual battles, handles protocol fees,
- * and maintains the persistent Agent Elo ratings via Glicko-2 math.
+ * and maintains the persistent Agent Elo ratings.
  */
-contract ClawttackArena {
-    address public owner;
+contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     address public battleImplementation;
     address public vopRegistry;
     address public wordDictionary;
@@ -56,30 +57,22 @@ contract ClawttackArena {
     event BattleCreationFeeUpdated(uint256 oldFee, uint256 newFee);
     event AgentRegistrationFeeUpdated(uint256 oldFee, uint256 newFee);
 
-    constructor() {
-        owner = msg.sender;
-    }
+    constructor() Ownable(msg.sender) {}
 
     receive() external payable {}
 
-    modifier onlyOwner() {
-        _checkOwner();
-        _;
-    }
-
-    function _checkOwner() internal view {
-        if (msg.sender != owner) revert ClawttackErrors.OnlyOwner();
-    }
-
     function setBattleImplementation(address _impl) external onlyOwner {
+        if (_impl == address(0)) revert ClawttackErrors.InvalidCall();
         battleImplementation = _impl;
     }
 
     function setVopRegistry(address _registry) external onlyOwner {
+        if (_registry == address(0)) revert ClawttackErrors.InvalidCall();
         vopRegistry = _registry;
     }
 
     function setWordDictionary(address _dictionary) external onlyOwner {
+        if (_dictionary == address(0)) revert ClawttackErrors.InvalidCall();
         wordDictionary = _dictionary;
     }
 
@@ -101,7 +94,7 @@ contract ClawttackArena {
         protocolFeeRate = _rate;
     }
 
-    function withdrawFees(address payable to) external onlyOwner {
+    function withdrawFees(address payable to) external onlyOwner nonReentrant {
         uint256 balance = address(this).balance;
         if (balance == 0) revert ClawttackErrors.InsufficientValue();
         (bool success,) = to.call{value: balance}("");
@@ -113,7 +106,7 @@ contract ClawttackArena {
      * @dev The owner is set to msg.sender. The agent begins with default Elo ratings.
      * @return agentId The sequential unique identifier assigned to the newly registered agent.
      */
-    function registerAgent() external payable returns (uint256 agentId) {
+    function registerAgent() external payable nonReentrant returns (uint256 agentId) {
         if (msg.value != agentRegistrationFee) revert ClawttackErrors.InsufficientValue();
         unchecked {
             agentId = ++agentsCount;
@@ -139,6 +132,7 @@ contract ClawttackArena {
     function createBattle(uint256 challengerId, ClawttackTypes.BattleConfig calldata config)
         external
         payable
+        nonReentrant
         returns (address battleAddress)
     {
         if (agents[challengerId].owner == address(0)) revert ClawttackErrors.NotParticipant();
@@ -182,6 +176,7 @@ contract ClawttackArena {
      */
     function updateRatings(uint256 battleId, uint256 winnerId, uint256 loserId, uint256 battleStake) external {
         if (battles[battleId] != msg.sender) revert ClawttackErrors.InvalidCall();
+        if (winnerId > agentsCount || loserId > agentsCount) revert ClawttackErrors.InvalidCall();
 
         if (winnerId != 0) {
             unchecked {

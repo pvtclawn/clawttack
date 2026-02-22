@@ -15,6 +15,7 @@ contract TWAPOracleVOP is IVerifiableOraclePrimitive {
         returns (bool)
     {
         (address pool, uint32 secondsAgo) = abi.decode(params, (address, uint32));
+        require(secondsAgo >= 300, "TWAP too short");
 
         uint32[] memory secondsAgos = new uint32[](2);
         secondsAgos[0] = secondsAgo;

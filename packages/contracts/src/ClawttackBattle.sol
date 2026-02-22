@@ -6,6 +6,7 @@ import {ClawttackTypes} from "./libraries/ClawttackTypes.sol";
 import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
 import {LinguisticParser} from "./libraries/LinguisticParser.sol";
 import {ECDSA} from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
 import {IVOPRegistry} from "./interfaces/IVOPRegistry.sol";
 import {IVerifiableOraclePrimitive} from "./interfaces/IVerifiableOraclePrimitive.sol";
 import {IWordDictionary} from "./interfaces/IWordDictionary.sol";
@@ -25,7 +26,6 @@ contract ClawttackBattle is Initializable {
     uint256 public constant MAX_NARRATIVE_LEN = 256;
     uint32 public constant TURNS_UNTIL_HALVING = 5;
     string public constant COMPROMISE_REASON = "COMPROMISE";
-    string public constant ETH_SIGNED_MESSAGE_PREFIX = "\x19Ethereum Signed Message:\n32";
     uint256 public constant BPS_DENOMINATOR = 10000;
 
     uint256 public battleId;
@@ -108,6 +108,9 @@ contract ClawttackBattle is Initializable {
         if (msg.value != config.stake) revert ClawttackErrors.InsufficientValue();
         if (_acceptorId == challengerId) revert ClawttackErrors.CannotBattleSelf();
 
+        (address _agentOwner, , ,) = IClawttackArenaView(arena).agents(_acceptorId);
+        if (_agentOwner != msg.sender) revert ClawttackErrors.NotParticipant();
+
         if (config.targetAgentId != 0) {
             if (_acceptorId != config.targetAgentId) revert ClawttackErrors.WrongTargetAgent();
         }
@@ -183,8 +186,16 @@ contract ClawttackBattle is Initializable {
 
         LinguisticParser.verifyLinguistics(payload.narrative, targetWord, poisonWord);
 
-        bool puzzlePassed =
-            IVerifiableOraclePrimitive(currentVop).verify(currentVopParams, payload.solution, turnDeadlineBlock);
+        bool puzzlePassed;
+        if (currentVopParams.length == 0) {
+            puzzlePassed = true;
+        } else {
+            try IVerifiableOraclePrimitive(currentVop).verify(currentVopParams, payload.solution, turnDeadlineBlock) returns (bool _passed) {
+                puzzlePassed = _passed;
+            } catch {
+                puzzlePassed = true; // Auto-pass if previous player bricked params
+            }
+        }
 
         if (!puzzlePassed) {
             _settleBattle(
@@ -214,7 +225,7 @@ contract ClawttackBattle is Initializable {
         currentVop = IVOPRegistry(IClawttackArenaView(arena).vopRegistry()).getRandomVop(randomness);
         uint16 _wordCount = IWordDictionary(wordDictionary).wordCount();
         targetWordIndex = uint16(randomness % _wordCount);
-        poisonWordIndex = payload.poisonWordIndex;
+        poisonWordIndex = uint16(payload.poisonWordIndex % _wordCount);
         
         // Anti-Trap Security: Prevent RNG from dooming the next player
         if (targetWordIndex == poisonWordIndex) {
@@ -292,7 +303,7 @@ contract ClawttackBattle is Initializable {
         uint256 attackerId = isPlayerA ? challengerId : acceptorId;
 
         bytes32 messageHash = keccak256(abi.encode(block.chainid, address(this), battleId, COMPROMISE_REASON));
-        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked(ETH_SIGNED_MESSAGE_PREFIX, messageHash));
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
 
         address recovered = ECDSA.recover(ethSignedMessageHash, signature);
 
@@ -313,7 +324,7 @@ contract ClawttackBattle is Initializable {
 
         if (totalPot > 0) {
             (bool success,) = challengerOwner.call{value: totalPot}("");
-            if (!success) revert ClawttackErrors.TransferFailed();
+            // Do not revert on failure to prevent permanent un-cancellable state
         }
 
         emit BattleCancelled(battleId);
@@ -331,18 +342,20 @@ contract ClawttackBattle is Initializable {
             address winnerAddress = (winnerId == challengerId) ? challengerOwner : acceptorOwner;
 
             if (fee > 0) {
-                (bool s1,) = IClawttackArenaView(arena).owner().call{value: fee}("");
-                if (!s1) revert ClawttackErrors.TransferFailed();
+                (bool s1,) = arena.call{value: fee}("");
+                if (!s1) {
+                    payout += fee;
+                }
             }
             if (payout > 0 && winnerId != 0) {
                 (bool s2,) = winnerAddress.call{value: payout}("");
-                if (!s2) revert ClawttackErrors.TransferFailed();
+                // Do not revert on failure; state must successfully settle
             } else if (payout > 0 && winnerId == 0) {
                 // It's a draw, refund both
                 uint256 refund = payout / 2;
                 (bool s3,) = challengerOwner.call{value: refund}("");
                 (bool s4,) = acceptorOwner.call{value: payout - refund}("");
-                if (!s3 || !s4) revert ClawttackErrors.TransferFailed();
+                // Do not revert on failure
             }
         }
 

@@ -17,6 +17,7 @@ contract CrossChainSyncVOP is IVerifiableOraclePrimitive {
         returns (bool)
     {
         (address pool, uint32 secondsAgo) = abi.decode(params, (address, uint32));
+        require(secondsAgo >= 300, "TWAP too short");
 
         uint256 l1BaseFee = IL1Block(L1_BLOCK_PREDEPLOY).basefee();
 

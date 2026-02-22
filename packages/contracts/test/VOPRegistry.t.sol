@@ -31,7 +31,7 @@ contract VOPRegistryTest is Test {
 
     function test_revert_addVop_notOwner() public {
         vm.prank(notOwner);
-        vm.expectRevert(ClawttackErrors.OnlyOwner.selector);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", notOwner));
         registry.addVop(vop1);
     }
 
@@ -59,7 +59,7 @@ contract VOPRegistryTest is Test {
     function test_revert_removeVop_notOwner() public {
         registry.addVop(vop1);
         vm.prank(notOwner);
-        vm.expectRevert(ClawttackErrors.OnlyOwner.selector);
+        vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", notOwner));
         registry.removeVop(vop1);
     }
 
