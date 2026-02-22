@@ -12,6 +12,9 @@ export class InternalNonceTracker {
   
   /** Time in ms after which we force a re-sync with the RPC count */
   public static readonly RESYNC_THRESHOLD_MS = 60_000;
+  
+  /** Time in ms after which we check if a submitted tx is visible in the mempool */
+  public static readonly ECHO_TIMEOUT_MS = 5_000;
 
   private constructor() {}
 
@@ -66,5 +69,29 @@ export class InternalNonceTracker {
   reset(address: Address) {
     this.nonces.delete(address);
     this.lastUpdate.delete(address);
+  }
+
+  /**
+   * Challenge #87: Mempool Echo for Nonce Recovery.
+   * Checks if a submitted hash is visible in the mempool.
+   * If not found within the echo timeout, forces a reset.
+   */
+  async verifyEcho(address: Address, txHash: string, publicClient: PublicClient): Promise<boolean> {
+    // Wait for the echo period
+    await new Promise(resolve => setTimeout(resolve, InternalNonceTracker.ECHO_TIMEOUT_MS));
+
+    try {
+      const tx = await publicClient.getTransaction({ hash: txHash as `0x${string}` });
+      if (tx) {
+        return true;
+      }
+    } catch (e) {
+      // Not found or RPC error
+    }
+
+    // Challenge #87: Broadcast failure or RPC drop detected.
+    // Force reset so the next turn doesn't stall in a nonce gap.
+    this.reset(address);
+    return false;
   }
 }

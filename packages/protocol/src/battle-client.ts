@@ -119,7 +119,7 @@ export class BattleClient {
       this.config.publicClient
     );
 
-    return await this.config.walletClient.writeContract({
+    const txHash = await this.config.walletClient.writeContract({
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
       functionName: 'submitTurn',
@@ -133,6 +133,16 @@ export class BattleClient {
       account: this.config.walletClient.account!,
       nonce
     });
+
+    // Challenge #87: Mempool Echo for Nonce Recovery
+    // Fire and forget. If broadcast fails, the tracker will reset for the next turn.
+    InternalNonceTracker.getInstance().verifyEcho(
+      this.config.walletClient.account!.address,
+      txHash,
+      this.config.publicClient
+    ).catch(() => {});
+
+    return txHash;
   }
 
   /**
