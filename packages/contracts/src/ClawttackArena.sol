@@ -1,486 +1,207 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
+import {Clones} from "openzeppelin-contracts/contracts/proxy/Clones.sol";
 import {ClawttackTypes} from "./libraries/ClawttackTypes.sol";
-import {Glicko2Math} from "./libraries/Glicko2Math.sol";
-import {IVerifiableOraclePrimitive} from "./interfaces/IVerifiableOraclePrimitive.sol";
-import {VOPRegistry} from "./VOPRegistry.sol";
-import {BIP39Words} from "./BIP39Words.sol";
 import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
-
-import {ECDSA} from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
-import {MessageHashUtils} from "openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
-import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
+import {EloMath} from "./libraries/EloMath.sol";
+import {IClawttackBattle} from "./interfaces/IClawttackBattle.sol";
 
 /**
  * @title ClawttackArena
- * @notice The core engine for Clawttack V3 Battles.
+ * @notice The central factory and matchmaking hub for the Clawttack system.
+ * @dev Manages the deployment of EIP-1167 clones for individual battles, handles protocol fees,
+ * and maintains the persistent Agent Elo ratings via Glicko-2 math.
  */
-contract ClawttackArena is ReentrancyGuard {
-    using ClawttackTypes for *;
-    using ECDSA for bytes32;
-
-    VOPRegistry public immutable vopRegistry;
-    BIP39Words public immutable dictionary;
-
-    uint256 public constant MIN_STAKE = 0.001 ether;
-    uint256 public constant TURN_TIMEOUT = 5 minutes;
-    uint256 public constant K_FACTOR = 32;
-    uint256 public constant MAX_NARRATIVE_LENGTH = 280;
-    uint256 public constant MAX_FEE_RATE = 1000; // 10% maximum fee
-
-    uint256 public nextBattleId = 1;
-    
+contract ClawttackArena {
     address public owner;
-    address public feeRecipient;
-    uint256 public feeRate; // measured in basis points (100 = 1%)
+    address public battleImplementation;
+    address public vopRegistry;
+    address public wordDictionary;
+
+    uint256 public agentRegistrationFee;
+    uint256 public battleCreationFee;
+    uint256 public protocolFeeRate;
+    
+    uint256 public constant MIN_RATED_STAKE = 0.0001 ether;
+    uint256 public constant MAX_CREATION_FEE = 0.01 ether;
+    uint256 public constant MAX_REGISTRATION_FEE = 0.1 ether;
+    uint256 public constant MAX_PROTOCOL_FEE_RATE = 1_000;
+
+    uint32 public constant DEFAULT_ELO_RATING = 1500;
+    uint32 public constant MAX_ELO_DIFF = 400;
+
+    uint32 public constant MIN_TIMEOUT_BLOCKS = 15;
+    uint32 public constant MAX_TIMEOUT_BLOCKS = 300;
+    uint32 public constant MIN_WARMUP_BLOCKS = 5;
+    uint32 public constant MAX_WARMUP_BLOCKS = 150;
+
+    uint8 public constant MIN_TURNS = 10;
+    uint8 public constant MAX_TURNS = 40;
+    uint8 public constant MAX_JOKERS = 3;
+
+    uint256 public battlesCount;
+    uint256 public agentsCount;
 
     mapping(uint256 => ClawttackTypes.AgentProfile) public agents;
-    mapping(uint256 => ClawttackTypes.Battle) public battles;
-    
-    // Anti-frontrunning
-    mapping(bytes32 => bool) public usedTurnHashes;
+    mapping(uint256 => address) public battles;
 
-    event AgentRegistered(uint256 indexed agentId, address owner, address vaultKey);
-    event BattleCreated(uint256 indexed battleId, uint256 agentA, uint256 stake);
-    event BattleAccepted(uint256 indexed battleId, uint256 agentB);
-    event TurnSubmitted(
-        uint256 indexed battleId, 
-        uint32 turnNumber, 
-        address player, 
-        bytes32 sequenceHash,
-        uint16 expectedTargetWordIndex,
-        string narrative,
-        uint16 poisonWordIndex,
-        bytes nextVOPParams
+    // Events
+    event AgentRegistered(uint256 indexed agentId, address indexed owner);
+    event BattleCreated(
+        uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint32 baseTimeoutBlocks, uint8 maxTurns
     );
-    event CompromiseExecuted(uint256 indexed battleId, uint256 winnerAgentId);
-    event BattleFinished(uint256 indexed battleId, uint256 winnerAgentId);
-    event BattleCancelled(uint256 indexed battleId);
+    event RatingUpdated(uint256 indexed agentId, uint32 newRating);
+    event ProtocolFeeUpdated(uint256 oldRate, uint256 newRate);
+    event BattleCreationFeeUpdated(uint256 oldFee, uint256 newFee);
+    event AgentRegistrationFeeUpdated(uint256 oldFee, uint256 newFee);
 
-    constructor(address _vopRegistry, address _dictionary) {
-        vopRegistry = VOPRegistry(_vopRegistry);
-        dictionary = BIP39Words(_dictionary);
+    constructor() {
         owner = msg.sender;
-        feeRecipient = msg.sender;
-        feeRate = 0;
     }
 
+    receive() external payable {}
+
     modifier onlyOwner() {
-        if (msg.sender != owner) revert ClawttackErrors.OnlyOwner();
+        _checkOwner();
         _;
     }
 
+    function _checkOwner() internal view {
+        if (msg.sender != owner) revert ClawttackErrors.OnlyOwner();
+    }
+
+    function setBattleImplementation(address _impl) external onlyOwner {
+        battleImplementation = _impl;
+    }
+
+    function setVopRegistry(address _registry) external onlyOwner {
+        vopRegistry = _registry;
+    }
+
+    function setWordDictionary(address _dictionary) external onlyOwner {
+        wordDictionary = _dictionary;
+    }
+
+    function setBattleCreationFee(uint256 _fee) external onlyOwner {
+        if (_fee > MAX_CREATION_FEE) revert ClawttackErrors.FeeTooHigh();
+        emit BattleCreationFeeUpdated(battleCreationFee, _fee);
+        battleCreationFee = _fee;
+    }
+
+    function setAgentRegistrationFee(uint256 _fee) external onlyOwner {
+        if (_fee > MAX_REGISTRATION_FEE) revert ClawttackErrors.FeeTooHigh();
+        emit AgentRegistrationFeeUpdated(agentRegistrationFee, _fee);
+        agentRegistrationFee = _fee;
+    }
+
+    function setProtocolFeeRate(uint256 _rate) external onlyOwner {
+        if (_rate > MAX_PROTOCOL_FEE_RATE) revert ClawttackErrors.FeeTooHigh();
+        emit ProtocolFeeUpdated(protocolFeeRate, _rate);
+        protocolFeeRate = _rate;
+    }
+
+    function withdrawFees(address payable to) external onlyOwner {
+        uint256 balance = address(this).balance;
+        if (balance == 0) revert ClawttackErrors.InsufficientValue();
+        (bool success,) = to.call{value: balance}("");
+        if (!success) revert ClawttackErrors.TransferFailed();
+    }
+
     /**
-     * @notice Register a new Agent Profile with its vault key for CTF mode.
+     * @notice Registers a new AI agent and assigns an immutable incremental ID.
+     * @dev The owner is set to msg.sender. The agent begins with default Elo ratings.
+     * @return agentId The sequential unique identifier assigned to the newly registered agent.
      */
-    function registerAgent(uint256 agentId, address vaultKey) external {
-        if(agents[agentId].owner != address(0)) revert ClawttackErrors.AgentAlreadyExists();
-        if(vaultKey == address(0)) revert ClawttackErrors.InvalidVaultKey();
+    function registerAgent() external payable returns (uint256 agentId) {
+        if (msg.value != agentRegistrationFee) revert ClawttackErrors.InsufficientValue();
+        unchecked {
+            agentId = ++agentsCount;
+        }
 
         agents[agentId] = ClawttackTypes.AgentProfile({
             owner: msg.sender,
-            vaultKey: vaultKey,
-            eloRating: Glicko2Math.DEFAULT_RATING,
-            eloRD: Glicko2Math.DEFAULT_RD,
-            eloVolatility: 0,
+            eloRating: DEFAULT_ELO_RATING,
             totalWins: 0,
-            totalLosses: 0,
-            isActive: true
+            totalLosses: 0
         });
 
-        emit AgentRegistered(agentId, msg.sender, vaultKey);
-    }
-
-    // --- ADMIN SETTINGS ---
-
-    function transferOwnership(address newOwner) external onlyOwner {
-        owner = newOwner;
-    }
-
-    function setFeeRate(uint256 newRate) external onlyOwner {
-        if (newRate > MAX_FEE_RATE) revert ClawttackErrors.FeeTooHigh();
-        feeRate = newRate;
-    }
-
-    function setFeeRecipient(address newRecipient) external onlyOwner {
-        feeRecipient = newRecipient;
-    }
-
-    // --- GAME ENGINE ---
-
-    /**
-     * @notice Initiates a new battle.
-     */
-    function createBattle(uint256 agentId) external payable returns (uint256) {
-        if(agents[agentId].owner != msg.sender) revert ClawttackErrors.NotAgentOwner();
-        if(msg.value < MIN_STAKE) revert ClawttackErrors.StakeTooLow();
-
-        uint256 battleId = nextBattleId++;
-        
-        battles[battleId] = ClawttackTypes.Battle({
-            battleId: battleId,
-            stakePerAgent: msg.value,
-            totalPot: msg.value,
-            sequenceHash: keccak256(abi.encodePacked(battleId, agentId)),
-            
-            ownerA: msg.sender,
-            agentA: uint64(agentId),
-            state: ClawttackTypes.BattleState.Open,
-            
-            ownerB: address(0),
-            agentB: 0,
-            
-            currentVOP: address(0),
-            currentTurn: 0,
-            lastTurnTimestamp: 0,
-            
-            winnerAgentId: 0,
-            expectedTargetWordIndex: 0,
-            lastPoisonWordIndex: 0,
-            
-            currentVOPParams: ""
-        });
-
-        emit BattleCreated(battleId, agentId, msg.value);
-        return battleId;
+        emit AgentRegistered(agentId, msg.sender);
     }
 
     /**
-     * @notice Cancels an open battle and refunds the stake to the creator.
+     * @notice Creates a new Battle by cloning the `battleImplementation` and injecting stakes.
+     * @dev Validates constraints and transfers stakes. Only registered agents can initiate battles.
+     * @param challengerId The registered ID of the initiating AI Agent.
+     * @param config The requested game parameters including stakes, timeouts, and targeted opponents.
+     * @return battleAddress The address of the deployed EIP-1167 ClawttackBattle clone.
      */
-    function cancelBattle(uint256 battleId) external nonReentrant {
-        ClawttackTypes.Battle storage battle = battles[battleId];
-        if (battle.state != ClawttackTypes.BattleState.Open) revert ClawttackErrors.BattleNotCancellable();
-        if (battle.ownerA != msg.sender) revert ClawttackErrors.UnauthorizedTurn(); // Reusing unauthorized turn or we can add new error. UnauthorizedTurn is fine.
-        
-        battle.state = ClawttackTypes.BattleState.Cancelled;
-        
-        uint256 refundAmount = battle.stakePerAgent;
-        battle.stakePerAgent = 0;
-        battle.totalPot = 0;
-        
-        (bool success, ) = payable(msg.sender).call{value: refundAmount}("");
-        if (!success) revert ClawttackErrors.TransferFailed();
+    function createBattle(uint256 challengerId, ClawttackTypes.BattleConfig calldata config)
+        external
+        payable
+        returns (address battleAddress)
+    {
+        if (agents[challengerId].owner == address(0)) revert ClawttackErrors.NotParticipant();
+        if (agents[challengerId].owner != msg.sender) revert ClawttackErrors.NotAgentOwner();
 
-        emit BattleCancelled(battleId);
-    }
+        // Bounds checking
+        if (config.baseTimeoutBlocks < MIN_TIMEOUT_BLOCKS || config.baseTimeoutBlocks > MAX_TIMEOUT_BLOCKS) {
+            revert ClawttackErrors.ConfigOutOfBounds();
+        }
+        if (config.maxTurns < MIN_TURNS || config.maxTurns > MAX_TURNS) revert ClawttackErrors.ConfigOutOfBounds();
+        if (config.maxJokers > MAX_JOKERS) revert ClawttackErrors.ConfigOutOfBounds();
+        if (config.warmupBlocks < MIN_WARMUP_BLOCKS || config.warmupBlocks > MAX_WARMUP_BLOCKS) revert ClawttackErrors.ConfigOutOfBounds();
 
-    /**
-     * @notice Opponent accepts an open battle, checking ELO matchmaking constraints.
-     */
-    function acceptBattle(uint256 battleId, uint256 agentB) external payable {
-        ClawttackTypes.Battle storage battle = battles[battleId];
-        if(battle.state != ClawttackTypes.BattleState.Open) revert ClawttackErrors.BattleNotOpen();
-        if(agents[agentB].owner != msg.sender) revert ClawttackErrors.NotAgentOwner();
-        if(msg.value != battle.stakePerAgent) revert ClawttackErrors.StakeMismatch();
-        if(battle.agentA == agentB) revert ClawttackErrors.CannotBattleSelf();
+        if (msg.value != config.stake + battleCreationFee) revert ClawttackErrors.InsufficientValue();
 
-        // Enforce Glicko-2 Matchmaking Constraints
-        bool isMatchable = Glicko2Math.isMatchable(
-            agents[battle.agentA].eloRating,
-            agents[battle.agentA].eloRD,
-            agents[agentB].eloRating,
-            agents[agentB].eloRD
-        );
-        if(!isMatchable) revert ClawttackErrors.EloRatingMismatch();
+        uint256 battleId;
+        unchecked {
+            battleId = ++battlesCount;
+        }
+        battleAddress = Clones.clone(battleImplementation);
+        battles[battleId] = battleAddress;
 
-        battle.agentB = uint64(agentB);
-        battle.ownerB = msg.sender;
-        battle.totalPot += msg.value;
-        battle.state = ClawttackTypes.BattleState.Active;
-        battle.lastTurnTimestamp = uint64(block.timestamp);
-        
-        // Generate the random puzzle for Turn 1
-        _assignNextPuzzle(battleId, battle.sequenceHash);
+        IClawttackBattle(battleAddress).initialize(address(this), battleId, challengerId, msg.sender, config);
 
-        emit BattleAccepted(battleId, agentB);
-    }
-
-    /**
-     * @notice Submit a turn fulfilling the previous narrative puzzle and setting the next one.
-     */
-    function submitTurn(
-        uint256 battleId,
-        ClawttackTypes.TurnPayload calldata payload,
-        bytes calldata signature
-    ) external nonReentrant {
-        ClawttackTypes.Battle storage battle = battles[battleId];
-
-        if(battle.state != ClawttackTypes.BattleState.Active) revert ClawttackErrors.BattleNotActive();
-        if(bytes(payload.narrative).length > MAX_NARRATIVE_LENGTH) revert ClawttackErrors.NarrativeTooLong();
-
-        // Verify whose turn it is
-        bool isPlayerA = battle.currentTurn % 2 == 0;
-        address expectedSigner = isPlayerA ? battle.ownerA : battle.ownerB;
-        if(msg.sender != expectedSigner) revert ClawttackErrors.UnauthorizedTurn();
-        
-        // Check timeout
-        if(block.timestamp > battle.lastTurnTimestamp + TURN_TIMEOUT) revert ClawttackErrors.TurnDeadlineExpired();
-
-        // 1. Reconstruct Turn Hash to verify signature
-        bytes32 turnHash = keccak256(abi.encode(
-            block.chainid,
-            address(this),
-            battle.sequenceHash,
-            payload.battleId,
-            payload.solution,
-            keccak256(bytes(payload.narrative)),
-            keccak256(payload.nextVOPParams),
-            payload.poisonWordIndex
-        ));
-
-        if(usedTurnHashes[turnHash]) revert ClawttackErrors.TurnHashUsed();
-        usedTurnHashes[turnHash] = true;
-
-        bytes32 messageHash = MessageHashUtils.toEthSignedMessageHash(turnHash);
-        if(messageHash.recover(signature) != expectedSigner) revert ClawttackErrors.InvalidSignature();
-
-        // 2. Validate Target Word (Linguistic Entrapment)
-        string memory targetWord = dictionary.word(battle.expectedTargetWordIndex);
-        if(!_containsWord(payload.narrative, targetWord)) revert ClawttackErrors.TargetWordMissing();
-
-        // 3. Validate Poison Word evasion
-        if (battle.currentTurn > 0) {
-            string memory poisonWord = dictionary.word(battle.lastPoisonWordIndex);
-            if(_containsWord(payload.narrative, poisonWord)) revert ClawttackErrors.PoisonWordDetected();
+        // Forward the stake to the battle clone. Creation fee stays here.
+        if (config.stake > 0) {
+            (bool success,) = battleAddress.call{value: config.stake}("");
+            if (!success) revert ClawttackErrors.TransferFailed();
         }
 
-        // 4. Validate VOP Gate Solution using historical anchoring
-        if (battle.currentVOP != address(0) && battle.currentVOPParams.length > 0) {
-            bool valid = IVerifiableOraclePrimitive(battle.currentVOP).verify(
-                battle.currentVOPParams,
-                payload.solution,
-                block.number - 1 // Grounded frozen anchoring
+        emit BattleCreated(battleId, challengerId, config.stake, config.baseTimeoutBlocks, config.maxTurns);
+    }
+
+    /**
+     * @notice Updates the persistent Elo ratings of agents after a battle concludes.
+     * @dev Only callable by active Battle clones. Processes mathematical updates via EloMath.
+     * @param battleId The ID of the battle triggering the update.
+     * @param winnerId The ID of the winning agent (0 if a draw).
+     * @param loserId The ID of the losing agent (0 if a draw).
+     * @param battleStake The total stake of the battle. Unrated matches (stake < MIN) do not affect Elo.
+     */
+    function updateRatings(uint256 battleId, uint256 winnerId, uint256 loserId, uint256 battleStake) external {
+        if (battles[battleId] != msg.sender) revert ClawttackErrors.InvalidCall();
+
+        if (winnerId != 0) {
+            unchecked {
+                agents[winnerId].totalWins += 1;
+                agents[loserId].totalLosses += 1;
+            }
+        }
+
+        if (battleStake >= MIN_RATED_STAKE && winnerId != 0) {
+            (uint32 wRating, uint32 lRating) = EloMath.updateElo(
+                agents[winnerId].eloRating,
+                agents[loserId].eloRating,
+                32 // Fixed K-factor
             );
-            if(!valid) revert ClawttackErrors.VOPPuzzleFailed();
+            
+            agents[winnerId].eloRating = wRating;
+            agents[loserId].eloRating = lRating;
+            
+            emit RatingUpdated(winnerId, wRating);
+            emit RatingUpdated(loserId, lRating);
         }
-
-        // UPDATE STATE
-        battle.lastPoisonWordIndex = payload.poisonWordIndex;
-        
-        // Advance Sequence Hash
-        battle.sequenceHash = keccak256(abi.encodePacked(
-            battle.sequenceHash,
-            turnHash,
-            block.timestamp
-        ));
-
-        uint16 previousTargetWordIndex = battle.expectedTargetWordIndex;
-        
-        // Generate the Next Puzzle for the Opponent
-        _assignNextPuzzle(battleId, battle.sequenceHash);
-        battle.currentVOPParams = payload.nextVOPParams; // Difficulty configured by current player
-
-        battle.currentTurn++;
-        battle.lastTurnTimestamp = uint64(block.timestamp);
-
-        emit TurnSubmitted(
-            battleId, 
-            battle.currentTurn, 
-            expectedSigner, 
-            battle.sequenceHash,
-            previousTargetWordIndex,
-            payload.narrative,
-            payload.poisonWordIndex,
-            payload.nextVOPParams
-        );
-    }
-
-    /**
-     * @notice CTF Mechanic: Submit compromised local environment signature
-     */
-    function submitCompromise(
-        uint256 battleId, 
-        bytes calldata compromiseMessage, 
-        bytes calldata signature
-    ) external nonReentrant {
-        ClawttackTypes.Battle storage battle = battles[battleId];
-        if(battle.state != ClawttackTypes.BattleState.Active) revert ClawttackErrors.BattleNotActive();
-        
-        // Both A and B are allowed to compromise the other. Determine the target vault.
-        address targetVault;
-        uint256 winnerId;
-        uint256 loserId;
-        
-        if (msg.sender == battle.ownerA) {
-            targetVault = agents[battle.agentB].vaultKey;
-            winnerId = battle.agentA;
-            loserId = battle.agentB;
-        } else if (msg.sender == battle.ownerB) {
-            targetVault = agents[battle.agentA].vaultKey;
-            winnerId = battle.agentB;
-            loserId = battle.agentA;
-        } else {
-            revert ClawttackErrors.NotParticipant();
-        }
-
-        // Verify the signature is actually from the victim's vault key
-        bytes32 protectedHash = keccak256(abi.encode(
-            block.chainid,
-            address(this),
-            battleId,
-            keccak256(compromiseMessage)
-        ));
-        
-        bytes32 messageHash = MessageHashUtils.toEthSignedMessageHash(protectedHash);
-        if(messageHash.recover(signature) != targetVault) revert ClawttackErrors.InvalidCompromiseSignature();
-
-        emit CompromiseExecuted(battleId, winnerId);
-        _settleBattle(battleId, winnerId, loserId);
-    }
-
-    /**
-     * @notice Claims a win if the opponent fails to respond in time.
-     */
-    function claimTimeoutWin(uint256 battleId) external nonReentrant {
-        ClawttackTypes.Battle storage battle = battles[battleId];
-        if(battle.state != ClawttackTypes.BattleState.Active) revert ClawttackErrors.BattleNotActive();
-        if(block.timestamp <= battle.lastTurnTimestamp + TURN_TIMEOUT) revert ClawttackErrors.DeadlineNotExpired();
-
-        bool isPlayerATurn = battle.currentTurn % 2 == 0;
-        
-        uint256 winnerId;
-        uint256 loserId;
-        
-        if (isPlayerATurn) {
-            // Player A timed out. B wins.
-            winnerId = battle.agentB;
-            loserId = battle.agentA;
-        } else {
-            // Player B timed out. A wins.
-            winnerId = battle.agentA;
-            loserId = battle.agentB;
-        }
-
-        _settleBattle(battleId, winnerId, loserId);
-    }
-
-    /**
-     * @dev Internal setter to grab the next puzzle randomly.
-     */
-    function _assignNextPuzzle(uint256 battleId, bytes32 currentHash) internal {
-        ClawttackTypes.Battle storage battle = battles[battleId];
-        
-        // Synchronous On-Chain Randomness Seed
-        uint256 seed = uint256(keccak256(abi.encodePacked(currentHash, block.prevrandao, block.timestamp)));
-        
-        battle.currentVOP = vopRegistry.getRandomVOP(seed);
-        
-        uint16 totalWords = dictionary.wordCount();
-        uint16 wordIndex = uint16(seed % totalWords);
-        battle.expectedTargetWordIndex = wordIndex;
-    }
-
-    function _toLower(bytes1 b) internal pure returns (bytes1) {
-        if (b >= 0x41 && b <= 0x5A) {
-            return bytes1(uint8(b) + 32);
-        }
-        return b;
-    }
-
-    function _isLetter(bytes1 b) internal pure returns (bool) {
-        return (b >= 0x41 && b <= 0x5A) || (b >= 0x61 && b <= 0x7A);
-    }
-
-    /**
-     * @dev Linguistically enforces exact word boundary matching and case-insensitivity. 
-     */
-    function _containsWord(string memory source, string memory search) internal pure returns (bool) {
-        bytes memory src = bytes(source);
-        bytes memory tgt = bytes(search);
-        
-        uint256 srcLen = src.length;
-        uint256 tgtLen = tgt.length;
-        
-        if (tgtLen == 0) return true;
-        if (tgtLen > srcLen) return false;
-
-        for (uint256 i = 0; i <= srcLen - tgtLen; i++) {
-            bool isMatch = true;
-            for (uint256 j = 0; j < tgtLen; j++) {
-                if (_toLower(src[i + j]) != _toLower(tgt[j])) {
-                    isMatch = false;
-                    break;
-                }
-            }
-
-            if (isMatch) {
-                // Check word boundaries
-                bool leftBoundaryOk = (i == 0) || !_isLetter(src[i - 1]);
-                bool rightBoundaryOk = (i + tgtLen == srcLen) || !_isLetter(src[i + tgtLen]);
-                
-                if (leftBoundaryOk && rightBoundaryOk) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    function _settleBattle(uint256 battleId, uint256 winnerId, uint256 loserId) internal {
-        ClawttackTypes.Battle storage battle = battles[battleId];
-        battle.state = ClawttackTypes.BattleState.Completed;
-        battle.winnerAgentId = uint64(winnerId);
-        
-        ClawttackTypes.AgentProfile storage winner = agents[winnerId];
-        ClawttackTypes.AgentProfile storage loser = agents[loserId];
-        
-        winner.totalWins++;
-        loser.totalLosses++;
-
-        // Update ELO
-        (winner.eloRating, loser.eloRating) = Glicko2Math.updateSimplifiedELO(
-            winner.eloRating, 
-            loser.eloRating, 
-            uint32(K_FACTOR)
-        );
-
-        // Disburse Pot
-        uint256 amountToWinner = battle.totalPot;
-        if (feeRate > 0 && feeRecipient != address(0)) {
-            uint256 fee = (amountToWinner * feeRate) / 10000;
-            amountToWinner -= fee;
-            (bool feeSuccess, ) = payable(feeRecipient).call{value: fee}("");
-            if (!feeSuccess) revert ClawttackErrors.TransferFailed();
-        }
-
-        address payable winnerAddr = payable(winner.owner);
-        battle.totalPot = 0;
-        
-        (bool success, ) = winnerAddr.call{value: amountToWinner}("");
-        if(!success) revert ClawttackErrors.TransferFailed();
-
-        emit BattleFinished(battleId, winnerId);
-    }
-
-    // --- VIEW GETTERS ---
-
-    /**
-     * @notice Returns the address of the player whose turn it currently is.
-     */
-    function whoseTurn(uint256 battleId) external view returns (address) {
-        ClawttackTypes.Battle storage battle = battles[battleId];
-        if (battle.state != ClawttackTypes.BattleState.Active) return address(0);
-        return (battle.currentTurn % 2 == 0) ? battle.ownerA : battle.ownerB;
-    }
-
-    /**
-     * @notice Returns the time remaining in seconds for the current turn.
-     */
-    function timeRemaining(uint256 battleId) external view returns (uint256) {
-        ClawttackTypes.Battle storage battle = battles[battleId];
-        if (battle.state != ClawttackTypes.BattleState.Active) return 0;
-        uint256 deadline = battle.lastTurnTimestamp + TURN_TIMEOUT;
-        if (block.timestamp >= deadline) return 0;
-        return deadline - block.timestamp;
-    }
-
-    /**
-     * @notice Fetch the full Battle struct including dynamic fields (string, bytes).
-     * @dev Solidity auto-getters for mappings drop dynamic arrays; this exposes the full struct.
-     */
-    function getBattle(uint256 battleId) external view returns (ClawttackTypes.Battle memory) {
-        return battles[battleId];
     }
 }

@@ -7,29 +7,33 @@ pragma solidity ^0.8.34;
  */
 library ClawttackErrors {
     error AgentAlreadyExists();
-    error InvalidVaultKey();
     error NotAgentOwner();
-    error StakeTooLow();
+    error InsufficientValue();
     error BattleNotOpen();
-    error StakeMismatch();
+    error WrongTargetAgent();
     error CannotBattleSelf();
     error EloRatingMismatch();
     error BattleNotActive();
     error UnauthorizedTurn();
     error TurnDeadlineExpired();
-    error TurnHashUsed();
-    error InvalidSignature();
+    error InvalidSequenceHash();
+    error NarrativeTooShort();
+    error NarrativeTooLong();
+    error InvalidASCII();
     error TargetWordMissing();
     error PoisonWordDetected();
     error VOPPuzzleFailed();
+    error EloDifferenceTooHigh();
+    error NoJokersRemaining();
     error NotParticipant();
     error InvalidCompromiseSignature();
-    error DeadlineNotExpired();
     error TransferFailed();
-    error NarrativeTooLong();
     error BattleNotCancellable();
+    error ConfigOutOfBounds();
     error FeeTooHigh();
-    
+    error InvalidCall();
+    error DeadlineNotExpired();
+
     // VOP Registry Errors
     error OnlyOwner();
     error VOPAlreadyRegistered();
