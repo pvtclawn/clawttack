@@ -5,7 +5,8 @@ import {
   type WalletClient,
   getContract,
   keccak256,
-  encodePacked
+  encodePacked,
+  decodeEventLog
 } from 'viem';
 import { CLAWTTACK_BATTLE_ABI } from './abi';
 import { SegmentedNarrative } from './segmented-narrative';
@@ -159,5 +160,79 @@ export class BattleClient {
       lastHash: lastHash as Hex,
       battleId: battleId as bigint
     };
+  }
+
+  /**
+   * Watches for turns and settlement events on the battle clone.
+   * Enables event-driven agent responses.
+   * @returns Unwatch function to stop listening.
+   */
+  watch(callbacks: {
+    onTurn?: (event: { turnNumber: number; playerId: bigint; narrative: string }) => void;
+    onSettled?: (event: { winnerId: bigint; loserId: bigint; resultType: number }) => void;
+  }) {
+    const unwatchTurn = this.config.publicClient.watchContractEvent({
+      address: this.config.battleAddress,
+      abi: CLAWTTACK_BATTLE_ABI,
+      eventName: 'TurnSubmitted',
+      onLogs: (logs) => {
+        for (const log of logs) {
+          const { turnNumber, playerId, narrative } = (log as any).args;
+          callbacks.onTurn?.({ turnNumber, playerId, narrative });
+        }
+      }
+    });
+
+    const unwatchSettled = this.config.publicClient.watchContractEvent({
+      address: this.config.battleAddress,
+      abi: CLAWTTACK_BATTLE_ABI,
+      eventName: 'BattleSettled',
+      onLogs: (logs) => {
+        for (const log of logs) {
+          const { winnerId, loserId, resultType } = (log as any).args;
+          callbacks.onSettled?.({ winnerId, loserId, resultType });
+        }
+      }
+    });
+
+    return () => {
+      unwatchTurn();
+      unwatchSettled();
+    };
+  }
+
+  /**
+   * Helper to check whose turn it is.
+   */
+  async whoseTurn(): Promise<Address> {
+    const [state, firstMoverA, ownerA, ownerB] = await Promise.all([
+      this.config.publicClient.readContract({
+        address: this.config.battleAddress,
+        abi: CLAWTTACK_BATTLE_ABI,
+        functionName: 'state',
+      }),
+      this.config.publicClient.readContract({
+        address: this.config.battleAddress,
+        abi: CLAWTTACK_BATTLE_ABI,
+        functionName: 'firstMoverA',
+      }),
+      this.config.publicClient.readContract({
+        address: this.config.battleAddress,
+        abi: CLAWTTACK_BATTLE_ABI,
+        functionName: 'challengerOwner',
+      }),
+      this.config.publicClient.readContract({
+        address: this.config.battleAddress,
+        abi: CLAWTTACK_BATTLE_ABI,
+        functionName: 'acceptorOwner',
+      })
+    ]);
+
+    if (state !== 1) return '0x0000000000000000000000000000000000000000';
+
+    const { currentTurn } = await this.getState();
+    const expectedA = (currentTurn % 2 == 0) ? firstMoverA : !firstMoverA;
+    
+    return (expectedA ? ownerA : ownerB) as Address;
   }
 }
