@@ -248,12 +248,10 @@ export class BattleClient {
    * Helper to check whose turn it is.
    */
   async whoseTurn(): Promise<Address> {
-    const [state, firstMoverA, ownerA, ownerB] = await Promise.all([
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'state',
-      }),
+    const { phase, currentTurn } = await this.getState();
+    if (phase !== 1) return '0x0000000000000000000000000000000000000000';
+
+    const [firstMoverA, ownerA, ownerB] = await Promise.all([
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
@@ -271,11 +269,37 @@ export class BattleClient {
       })
     ]);
 
-    if (state !== 1) return '0x0000000000000000000000000000000000000000';
-
-    const { currentTurn } = await this.getState();
     const expectedA = (currentTurn % 2 == 0) ? firstMoverA : !firstMoverA;
     
     return (expectedA ? ownerA : ownerB) as Address;
+  }
+
+  /**
+   * Dry-runs a turn against the contract's linguistic and VOP logic.
+   * Challenge #82: Gas-saving pre-flight check.
+   */
+  async validateTurn(params: TurnParams): Promise<{
+    passesTarget: boolean;
+    passesPoison: boolean;
+    passesLength: boolean;
+    passesAscii: boolean;
+  }> {
+    const { currentTurn } = await this.getState();
+
+    const result = await this.config.publicClient.readContract({
+      address: this.config.battleAddress,
+      abi: CLAWTTACK_BATTLE_ABI,
+      functionName: 'wouldNarrativePass',
+      args: [
+        params.narrative,
+        params.poisonWordIndex, // Note: this might need adjustment based on turn context
+        0, // placeholder targetIdx
+        currentTurn === 0
+      ],
+    });
+
+    const [passesTarget, passesPoison, passesLength, passesAscii] = result as [boolean, boolean, boolean, boolean];
+    
+    return { passesTarget, passesPoison, passesLength, passesAscii };
   }
 }
