@@ -50,13 +50,14 @@ describe('SegmentedNarrative', () => {
   });
 
   it('calculates deterministic truth index', () => {
-    const battleSeed = keccak256(toHex('battle-1'));
+    const battleId = 1n;
+    const battleAddress = '0x0000000000000000000000000000000000000001';
     const lastHash1 = keccak256(toHex('turn-1'));
     const lastHash2 = keccak256(toHex('turn-2'));
     
-    const idx1 = SegmentedNarrative.calculateTruthIndex(battleSeed, lastHash1);
-    const idx2 = SegmentedNarrative.calculateTruthIndex(battleSeed, lastHash2);
-    const idx1_repeat = SegmentedNarrative.calculateTruthIndex(battleSeed, lastHash1);
+    const idx1 = SegmentedNarrative.calculateTruthIndex(battleId, lastHash1, battleAddress);
+    const idx2 = SegmentedNarrative.calculateTruthIndex(battleId, lastHash2, battleAddress);
+    const idx1_repeat = SegmentedNarrative.calculateTruthIndex(battleId, lastHash1, battleAddress);
 
     expect(idx1).toBeGreaterThanOrEqual(0);
     expect(idx1).toBeLessThan(32);

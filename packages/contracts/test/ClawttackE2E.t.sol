@@ -64,7 +64,8 @@ contract ClawttackE2ETest is Test {
 
     function _encodeSegments(address battle, string memory text, bytes memory truth) internal view returns (bytes32[32] memory segments) {
         ClawttackBattle b = ClawttackBattle(payable(battle));
-        uint256 truthIndex = uint256(keccak256(abi.encodePacked(b.DOMAIN_TYPE_INDEX(), b.sequenceHash(), b.battleId()))) % 32;
+        // Challenge #79: Included address(this) in the hash
+        uint256 truthIndex = uint256(keccak256(abi.encodePacked(b.DOMAIN_TYPE_INDEX(), b.sequenceHash(), b.battleId(), address(b)))) % 32;
         
         bytes32 truthHash = keccak256(truth);
         bytes memory textBytes = bytes(text);

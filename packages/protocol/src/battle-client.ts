@@ -22,6 +22,7 @@ export interface TurnParams {
   narrative: string;
   nextVopParams: Hex;
   poisonWordIndex: number;
+  anchoredBlockNumber?: bigint; // Challenge #79: Reorg protection
 }
 
 export class BattleClient {
@@ -49,14 +50,15 @@ export class BattleClient {
    * Automatically handles ACR segmentation (Spec v1.11).
    */
   async submitTurn(params: TurnParams): Promise<Hex> {
-    const { phase, currentTurn, lastHash, battleId } = await this.getState();
+    const { phase, currentTurn, lastHash, battleId } = await this.getState(params.anchoredBlockNumber);
     
     if (phase !== 1) { // 1 = Active
       throw new Error(`Battle is not active (phase: ${phase})`);
     }
 
     // 1. Calculate where the truth MUST be hidden for this turn
-    const truthIndex = SegmentedNarrative.calculateTruthIndex(battleId, lastHash);
+    // Challenge #79: Passing battleAddress for total domain isolation
+    const truthIndex = SegmentedNarrative.calculateTruthIndex(battleId, lastHash, this.config.battleAddress);
 
     // 2. Encode the narrative and next VOP params into the 32-segment array
     const payload = SegmentedNarrative.encode({
@@ -123,33 +125,39 @@ export class BattleClient {
 
   /**
    * Helper to check current state.
+   * Supports block-anchoring to prevent reorg-driven desync (Challenge #79).
    */
-  async getState() {
+  async getState(blockNumber?: bigint) {
     const [state, turn, deadline, lastHash, battleId] = await Promise.all([
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
         functionName: 'state',
+        blockNumber
       }),
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
         functionName: 'currentTurn',
+        blockNumber
       }),
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
         functionName: 'turnDeadlineBlock',
+        blockNumber
       }),
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
         functionName: 'sequenceHash',
+        blockNumber
       }),
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
         functionName: 'battleId',
+        blockNumber
       })
     ]);
 

@@ -171,7 +171,8 @@ contract ClawttackBattle is Initializable {
         if (block.number > turnDeadlineBlock) revert ClawttackErrors.TurnDeadlineExpired();
 
         // 1. Verify Domain Separation & Deterministic Truth Index
-        uint256 truthIndex = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_INDEX, sequenceHash, battleId))) % 32;
+        // Challenge #79: Added address(this) for total domain isolation
+        uint256 truthIndex = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_INDEX, sequenceHash, battleId, address(this)))) % 32;
         
         // Use assembly to compare nextVopParams with the hidden segment
         bytes32 truthInSegments = payload.segments[truthIndex];
