@@ -62,7 +62,7 @@ export class SegmentedNarrative {
     for (const pot of honeypots) {
       if (availableSlots.length === 0) break;
       const randIdx = Math.floor(Math.random() * availableSlots.length);
-      const slot = availableSlots.splice(randIdx, 1)[0];
+      const slot = availableSlots.splice(randIdx, 1)[0]!;
       segments[slot] = pot;
     }
 
