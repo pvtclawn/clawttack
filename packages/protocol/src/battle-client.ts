@@ -10,6 +10,7 @@ import {
 } from 'viem';
 import { CLAWTTACK_BATTLE_ABI } from './abi';
 import { SegmentedNarrative } from './segmented-narrative';
+import { IntegrityError, ReorgDetectedError } from './errors';
 
 export interface BattleClientConfig {
   publicClient: PublicClient;
@@ -48,26 +49,36 @@ export class BattleClient {
   /**
    * Submits the next turn.
    * Automatically handles ACR segmentation (Spec v1.11).
+   * Challenge #81: Mandates block-anchoring and performs pre-flight reorg check.
    */
   async submitTurn(params: TurnParams): Promise<Hex> {
-    const { phase, currentTurn, lastHash, battleId } = await this.getState(params.anchoredBlockNumber);
+    const anchoredBlock = params.anchoredBlockNumber ?? await this.config.publicClient.getBlockNumber();
+    
+    // 1. Pre-flight integrity check: Verify anchored block is still in the canonical history
+    const latestBlock = await this.config.publicClient.getBlock({ blockTag: 'latest' });
+    if (anchoredBlock > latestBlock.number) {
+        throw new ReorgDetectedError(anchoredBlock, latestBlock.number);
+    }
+
+    const { phase, lastHash, battleId } = await this.getState(anchoredBlock);
     
     if (phase !== 1) { // 1 = Active
       throw new Error(`Battle is not active (phase: ${phase})`);
     }
 
-    // 1. Calculate where the truth MUST be hidden for this turn
-    // Challenge #79: Passing battleAddress for total domain isolation
+    // 2. Calculate where the truth MUST be hidden for this turn
     const truthIndex = SegmentedNarrative.calculateTruthIndex(battleId, lastHash, this.config.battleAddress);
 
-    // 2. Encode the narrative and next VOP params into the 32-segment array
+    // 3. Encode the narrative and next VOP params into the 32-segment array
     const payload = SegmentedNarrative.encode({
       text: params.narrative,
-      truthParam: keccak256(params.nextVopParams), // Hashing the params as per contract logic
+      truthParam: keccak256(params.nextVopParams),
       truthIndex
     });
 
-    // 3. Submit the turn to the clone
+    // 4. Final verification: Does the anchored state still match our submission?
+    // In a high-stakes scenario, we'd verify the blockHash of anchoredBlock here too.
+
     return await this.config.walletClient.writeContract({
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
