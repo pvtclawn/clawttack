@@ -61,9 +61,10 @@ contract VOPRegistry is IVOPRegistry {
 
     /**
      * @notice Registers a new VOP implementation.
+     * Must be called by the owner.
      * Spec v1.21: Enforces Bytecode Fingerprinting to prevent proxy ID farming.
      */
-    function registerVOP(address vop) external payable override returns (uint256 vopId) {
+    function registerVOP(address vop) external payable override onlyOwner returns (uint256 vopId) {
         require(msg.value >= registrationFee, "InsufficientFee");
         require(vop != address(0), "InvalidAddress");
         require(!_isRegistered[vop], "AlreadyRegistered");
