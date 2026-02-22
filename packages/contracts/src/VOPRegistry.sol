@@ -8,11 +8,11 @@ import "./interfaces/IVOP.sol";
  * @title VOPRegistry
  * @notice Central registry for Verification Oracle Primitives (Logic Gates).
  * 
- * Clawttack v3 APL Spec v1.20:
+ * Clawttack v3 APL Spec v1.21:
  * - Stake-based registration (0.003 ETH) to prevent Sybil spam.
  * - Curation flags (isVerified) and EAS compatibility (auditorUID).
  * - Pure Sensing requirement: Verified VOPs must source truth from the chain, not users.
- * - ID Exhaustion Protection: uses uint32 for ID mapping to prevent uint16 truncation in BattleState.
+ * - Bytecode Fingerprinting: Prevents ID farming via proxies/clones.
  * - Address Uniqueness: Each implementation can only be registered once.
  * - Sovereign Vault: Dedicated address for protocol fee collection.
  */
@@ -22,7 +22,6 @@ contract VOPRegistry is IVOPRegistry {
     uint256 public override registrationFee = 0.003 ether;
     uint256 public override vopCount;
     
-    // Spec v1.19+: explicitly capped at uint32 max to ensure compatibility with BattleState packing
     uint256 public constant MAX_VOP_ID = type(uint32).max;
 
     struct VOPInfo {
@@ -30,11 +29,13 @@ contract VOPRegistry is IVOPRegistry {
         bool isRegistered;
         bool isVerified;
         bool isPureSensing; 
-        bytes32 auditorUID; // Spec v1.20: EAS Attestation UID from verified auditor
+        bytes32 auditorUID;
+        bytes32 bytecodeHash; // Spec v1.21: keccak256 of the contract runtime code
     }
 
     mapping(uint256 => VOPInfo) private _vops;
     mapping(address => bool) private _isRegistered;
+    mapping(bytes32 => bool) private _bytecodeRegistered; // Spec v1.21 uniqueness check
 
     constructor(address _vault) {
         owner = msg.sender;
@@ -60,8 +61,7 @@ contract VOPRegistry is IVOPRegistry {
 
     /**
      * @notice Registers a new VOP implementation.
-     * Must pay the 0.003 ETH registration fee.
-     * Spec v1.19: Enforces Address Uniqueness and uint32 limit.
+     * Spec v1.21: Enforces Bytecode Fingerprinting to prevent proxy ID farming.
      */
     function registerVOP(address vop) external payable override returns (uint256 vopId) {
         require(msg.value >= registrationFee, "InsufficientFee");
@@ -69,22 +69,32 @@ contract VOPRegistry is IVOPRegistry {
         require(!_isRegistered[vop], "AlreadyRegistered");
         require(vopCount < MAX_VOP_ID, "RegistryExhausted");
 
+        // 1. Calculate bytecode fingerprint
+        bytes32 codeHash;
+        assembly {
+            codeHash := extcodehash(vop)
+        }
+        require(codeHash != bytes32(0), "NoCodeAtAddress");
+        require(!_bytecodeRegistered[codeHash], "LogicAlreadyRegistered");
+
         vopId = ++vopCount;
         _vops[vopId] = VOPInfo({
             implementation: IVOP(vop),
             isRegistered: true,
             isVerified: false,
             isPureSensing: false,
-            auditorUID: bytes32(0)
+            auditorUID: bytes32(0),
+            bytecodeHash: codeHash
         });
+        
         _isRegistered[vop] = true;
+        _bytecodeRegistered[codeHash] = true;
 
         emit VOPRegistered(vopId, vop);
     }
 
     /**
      * @notice Admin method to verify and classify a VOP.
-     * v1.20: incorporates auditorUID for EAS-based reputation curation.
      */
     function setVOPStatus(
         uint256 vopId, 
@@ -110,17 +120,14 @@ contract VOPRegistry is IVOPRegistry {
         return _vops[vopId].isPureSensing;
     }
 
-    function getAuditorUID(uint256 vopId) external view returns (bytes32) {
-        return _vops[vopId].auditorUID;
+    function getBytecodeHash(uint256 vopId) external view returns (bytes32) {
+        return _vops[vopId].bytecodeHash;
     }
 
     function setRegistrationFee(uint256 newFee) external onlyOwner {
         registrationFee = newFee;
     }
 
-    /**
-     * @notice Updates the protocol vault address.
-     */
     function setVaultAddress(address _newVault) external onlyOwner {
         require(_newVault != address(0), "InvalidAddress");
         address oldVault = vaultAddress;
@@ -128,11 +135,7 @@ contract VOPRegistry is IVOPRegistry {
         emit VaultUpdated(oldVault, _newVault);
     }
 
-    /**
-     * @notice Withdraws collected fees to the sovereign vault.
-     */
     function withdraw() external {
-        // Anyone can trigger withdrawal to the vault
         uint256 balance = address(this).balance;
         (bool success, ) = payable(vaultAddress).call{value: balance}("");
         require(success, "WithdrawFailed");
