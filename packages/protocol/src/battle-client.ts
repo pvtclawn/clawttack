@@ -8,7 +8,7 @@ import {
   encodePacked,
   decodeEventLog
 } from 'viem';
-import { CLAWTTACK_BATTLE_ABI } from './abi';
+import { CLAWTTACK_BATTLE_ABI, IVERIFIABLE_ORACLE_PRIMITIVE_ABI } from './abi';
 import { SegmentedNarrative } from './segmented-narrative';
 import { IntegrityError, ReorgDetectedError } from './errors';
 import { InternalNonceTracker } from './nonce-tracker';
@@ -27,6 +27,17 @@ export interface TurnParams {
   anchoredBlockNumber?: bigint; // Challenge #79: Reorg protection
   anchoredBlockHash?: Hex; // Challenge #82: Hash-based reorg detection
   expectedSequenceHash?: Hex; // Challenge #82: State progress protection
+}
+
+export interface ValidationResult {
+  passesTarget: boolean;
+  passesPoison: boolean;
+  passesLength: boolean;
+  passesAscii: boolean;
+  passesPuzzle: boolean; // Challenge #87: Added VOP dry-run
+  anchoredBlockNumber: bigint;
+  anchoredBlockHash: Hex;
+  expectedSequenceHash: Hex;
 }
 
 export class BattleClient {
@@ -90,6 +101,7 @@ export class BattleClient {
     }
 
     // 2. Calculate where the truth MUST be hidden for this turn
+    // Challenge #79: Passing battleAddress for total domain isolation
     const truthIndex = SegmentedNarrative.calculateTruthIndex(battleId, lastHash, this.config.battleAddress);
 
     // 3. Encode the narrative and next VOP params into the 32-segment array
@@ -278,39 +290,58 @@ export class BattleClient {
    * Dry-runs a turn against the contract's linguistic and VOP logic.
    * Challenge #82: Gas-saving pre-flight check.
    * Challenge #84: Returns anchoring metadata to ensure pipeline consistency.
+   * Challenge #87: Added VOP dry-run for full semantic verification.
    */
-  async validateTurn(params: TurnParams): Promise<{
-    passesTarget: boolean;
-    passesPoison: boolean;
-    passesLength: boolean;
-    passesAscii: boolean;
-    anchoredBlockNumber: bigint;
-    anchoredBlockHash: Hex;
-    expectedSequenceHash: Hex;
-  }> {
+  async validateTurn(params: TurnParams): Promise<ValidationResult> {
     const anchoredBlock = await this.config.publicClient.getBlock({ blockTag: 'latest' });
-    const { currentTurn, lastHash } = await this.getState(anchoredBlock.number);
+    const { currentTurn, lastHash, deadlineBlock } = await this.getState(anchoredBlock.number);
 
-    const result = await this.config.publicClient.readContract({
+    // 1. Linguistic Validation (Direct contract view)
+    const wouldPass = await this.config.publicClient.readContract({
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
       functionName: 'wouldNarrativePass',
       args: [
         params.narrative,
+        0, // targetIdx placeholder
         params.poisonWordIndex, 
-        0, // placeholder targetIdx
         currentTurn === 0
       ],
       blockNumber: anchoredBlock.number
     });
 
-    const [passesTarget, passesPoison, passesLength, passesAscii] = result as [boolean, boolean, boolean, boolean];
+    const [passesTarget, passesPoison, passesLength, passesAscii] = wouldPass as [boolean, boolean, boolean, boolean];
+
+    // 2. Puzzle Validation (Call the logic gate implementation directly)
+    const [currentVop, currentVopParams] = await Promise.all([
+      this.config.publicClient.readContract({
+        address: this.config.battleAddress,
+        abi: CLAWTTACK_BATTLE_ABI,
+        functionName: 'currentVop',
+        blockNumber: anchoredBlock.number
+      }),
+      this.config.publicClient.readContract({
+        address: this.config.battleAddress,
+        abi: CLAWTTACK_BATTLE_ABI,
+        functionName: 'currentVopParams',
+        blockNumber: anchoredBlock.number
+      })
+    ]);
+
+    const passesPuzzle = await this.config.publicClient.readContract({
+      address: currentVop as Address,
+      abi: IVERIFIABLE_ORACLE_PRIMITIVE_ABI,
+      functionName: 'verify',
+      args: [currentVopParams as Hex, params.solution, deadlineBlock],
+      blockNumber: anchoredBlock.number
+    }) as boolean;
     
     return { 
       passesTarget, 
       passesPoison, 
       passesLength, 
       passesAscii,
+      passesPuzzle,
       anchoredBlockNumber: anchoredBlock.number,
       anchoredBlockHash: anchoredBlock.hash,
       expectedSequenceHash: lastHash
