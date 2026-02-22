@@ -8,7 +8,7 @@ import "./IVOP.sol";
  * @notice Central registry for Verification Oracle Primitives (Logic Gates).
  * 
  * Tracks immutable core VOPs (verified by protocol) and community plugin VOPs.
- * v3 Spec v1.8: Implements Immutable Semantic Binding and Registration Fees.
+ * v3 Spec v1.20: Implements Reputation-Based Curation and Sovereign Vaults.
  */
 interface IVOPRegistry {
     /**
@@ -43,8 +43,17 @@ interface IVOPRegistry {
     function vopCount() external view returns (uint256);
 
     /**
+     * @notice Returns the sovereign vault address where fees are collected.
+     */
+    function vaultAddress() external view returns (address);
+
+    /**
      * @notice Emitted when a new VOP is registered.
-     * Truth (description) is now read directly from vopAddress.
      */
     event VOPRegistered(uint256 indexed vopId, address indexed vopAddress);
+
+    /**
+     * @notice Emitted when the vault address is updated.
+     */
+    event VaultUpdated(address indexed oldVault, address indexed newVault);
 }

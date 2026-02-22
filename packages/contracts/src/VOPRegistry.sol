@@ -8,33 +8,37 @@ import "./interfaces/IVOP.sol";
  * @title VOPRegistry
  * @notice Central registry for Verification Oracle Primitives (Logic Gates).
  * 
- * Clawttack v3 APL Spec v1.19:
+ * Clawttack v3 APL Spec v1.20:
  * - Stake-based registration (0.003 ETH) to prevent Sybil spam.
- * - Curation flags (isVerified) to distinguish audited primitives.
+ * - Curation flags (isVerified) and EAS compatibility (auditorUID).
  * - Pure Sensing requirement: Verified VOPs must source truth from the chain, not users.
  * - ID Exhaustion Protection: uses uint32 for ID mapping to prevent uint16 truncation in BattleState.
  * - Address Uniqueness: Each implementation can only be registered once.
+ * - Sovereign Vault: Dedicated address for protocol fee collection.
  */
 contract VOPRegistry is IVOPRegistry {
     address public owner;
+    address public override vaultAddress;
     uint256 public override registrationFee = 0.003 ether;
     uint256 public override vopCount;
     
-    // Spec v1.19: explicitly capped at uint32 max to ensure compatibility with BattleState packing
+    // Spec v1.19+: explicitly capped at uint32 max to ensure compatibility with BattleState packing
     uint256 public constant MAX_VOP_ID = type(uint32).max;
 
     struct VOPInfo {
         IVOP implementation;
         bool isRegistered;
         bool isVerified;
-        bool isPureSensing; // Spec v1.17: Truth derived from chain state, not gateData
+        bool isPureSensing; 
+        bytes32 auditorUID; // Spec v1.20: EAS Attestation UID from verified auditor
     }
 
     mapping(uint256 => VOPInfo) private _vops;
     mapping(address => bool) private _isRegistered;
 
-    constructor() {
+    constructor(address _vault) {
         owner = msg.sender;
+        vaultAddress = _vault;
     }
 
     modifier onlyOwner() {
@@ -70,7 +74,8 @@ contract VOPRegistry is IVOPRegistry {
             implementation: IVOP(vop),
             isRegistered: true,
             isVerified: false,
-            isPureSensing: false
+            isPureSensing: false,
+            auditorUID: bytes32(0)
         });
         _isRegistered[vop] = true;
 
@@ -79,11 +84,18 @@ contract VOPRegistry is IVOPRegistry {
 
     /**
      * @notice Admin method to verify and classify a VOP.
+     * v1.20: incorporates auditorUID for EAS-based reputation curation.
      */
-    function setVOPStatus(uint256 vopId, bool verified, bool pureSensing) external onlyOwner {
+    function setVOPStatus(
+        uint256 vopId, 
+        bool verified, 
+        bool pureSensing, 
+        bytes32 auditorUID
+    ) external onlyOwner {
         require(_vops[vopId].isRegistered, "UnknownVOP");
         _vops[vopId].isVerified = verified;
         _vops[vopId].isPureSensing = pureSensing;
+        _vops[vopId].auditorUID = auditorUID;
     }
 
     function isRegistered(address vop) external view override returns (bool) {
@@ -98,13 +110,31 @@ contract VOPRegistry is IVOPRegistry {
         return _vops[vopId].isPureSensing;
     }
 
+    function getAuditorUID(uint256 vopId) external view returns (bytes32) {
+        return _vops[vopId].auditorUID;
+    }
+
     function setRegistrationFee(uint256 newFee) external onlyOwner {
         registrationFee = newFee;
     }
 
-    function withdraw() external onlyOwner {
+    /**
+     * @notice Updates the protocol vault address.
+     */
+    function setVaultAddress(address _newVault) external onlyOwner {
+        require(_newVault != address(0), "InvalidAddress");
+        address oldVault = vaultAddress;
+        vaultAddress = _newVault;
+        emit VaultUpdated(oldVault, _newVault);
+    }
+
+    /**
+     * @notice Withdraws collected fees to the sovereign vault.
+     */
+    function withdraw() external {
+        // Anyone can trigger withdrawal to the vault
         uint256 balance = address(this).balance;
-        (bool success, ) = payable(owner).call{value: balance}("");
+        (bool success, ) = payable(vaultAddress).call{value: balance}("");
         require(success, "WithdrawFailed");
     }
 }
