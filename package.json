@@ -8,7 +8,7 @@
     "packages/bot"
   ],
   "scripts": {
-    "test": "bun test --recursive packages/",
+    "test": "bun test packages/protocol packages/relay packages/sdk packages/bot packages/web",
     "test:contracts": "cd packages/contracts && forge test",
     "typecheck": "bunx tsc --noEmit -p packages/protocol && bunx tsc --noEmit -p packages/relay && bunx tsc --noEmit -p packages/sdk && bunx tsc --noEmit -p packages/bot",
     "build:contracts": "cd packages/contracts && forge build",
