@@ -19,9 +19,8 @@ interface IVerifiableOraclePrimitive {
      * @param referenceBlock The historical block number the solution must be anchored to (prevents oracle lag).
      * @return isValid Boolean indicating if the solution is perfectly correct.
      */
-    function verify(
-        bytes calldata params,
-        uint256 solution,
-        uint256 referenceBlock
-    ) external view returns (bool isValid);
+    function verify(bytes calldata params, uint256 solution, uint256 referenceBlock)
+        external
+        view
+        returns (bool isValid);
 }

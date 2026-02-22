@@ -17,10 +17,11 @@ contract MockL1Block {
 // Returns a set of values so we can simulate TWAP
 contract MockUniswapV3Pool {
     int56 delta;
+
     constructor(int56 _delta) {
         delta = _delta;
     }
-    
+
     function observe(uint32[] calldata secondsAgos)
         external
         view
@@ -35,30 +36,30 @@ contract MockUniswapV3Pool {
 }
 
 contract VOPsTest is Test {
-    HashPreimageVOP hashVOP;
-    TWAPOracleVOP twapVOP;
-    L1MetadataVOP l1VOP;
-    CrossChainSyncVOP syncVOP;
+    HashPreimageVOP hashVop;
+    TWAPOracleVOP twapVop;
+    L1MetadataVOP l1Vop;
+    CrossChainSyncVOP syncVop;
 
     MockUniswapV3Pool mockPool;
-    
+
     function setUp() public {
-        hashVOP = new HashPreimageVOP();
-        twapVOP = new TWAPOracleVOP();
-        l1VOP = new L1MetadataVOP();
-        syncVOP = new CrossChainSyncVOP();
-        
+        hashVop = new HashPreimageVOP();
+        twapVop = new TWAPOracleVOP();
+        l1Vop = new L1MetadataVOP();
+        syncVop = new CrossChainSyncVOP();
+
         // Mock L1Block Predeploy
         // The address is constant in L1MetadataVOP: 0x420...15
         address l1Block = 0x4200000000000000000000000000000000000015;
         // Etch the mock logic onto the predeploy address
         MockL1Block mockL1 = new MockL1Block();
         vm.etch(l1Block, address(mockL1).code);
-        
+
         // Set storage
         vm.store(l1Block, bytes32(0), bytes32(uint256(10000))); // Slot 0 is mostly likely where `number` sits in Mock
         vm.store(l1Block, bytes32(uint256(1)), bytes32(uint256(50 gwei))); // Slot 1 for basefee
-        
+
         mockPool = new MockUniswapV3Pool(12000); // delta = 12000
     }
 
@@ -74,45 +75,45 @@ contract VOPsTest is Test {
             }
             solution++;
         }
-        
+
         bytes memory params = abi.encode(salt, uint8(8));
-        assertTrue(hashVOP.verify(params, solution, block.number));
-        
+        assertTrue(hashVop.verify(params, solution, block.number));
+
         // Invalid solution
-        assertFalse(hashVOP.verify(params, solution + 1, block.number));
-        
+        assertFalse(hashVop.verify(params, solution + 1, block.number));
+
         // Require > 256 zeros -> false
         bytes memory paramsImpossible = abi.encode(salt, uint8(255));
-        assertFalse(hashVOP.verify(paramsImpossible, solution, block.number));
+        assertFalse(hashVop.verify(paramsImpossible, solution, block.number));
     }
 
     function test_L1MetadataVOP() public {
         uint256 salt = 12345;
         bytes memory params = abi.encode(salt);
-        
+
         // Expected = keccak256(abi.encode(10000, 50gwei, salt))
         uint256 expected = uint256(keccak256(abi.encode(uint64(10000), uint256(50 gwei), salt)));
-        
-        assertTrue(l1VOP.verify(params, expected, block.number));
-        assertFalse(l1VOP.verify(params, expected + 1, block.number));
+
+        assertTrue(l1Vop.verify(params, expected, block.number));
+        assertFalse(l1Vop.verify(params, expected + 1, block.number));
     }
 
     function test_TWAPOracleVOP() public {
         // Delta = 12000. secondsAgo = 10. AvgTick = 1200.
         bytes memory params = abi.encode(address(mockPool), uint32(10));
-        
-        assertTrue(twapVOP.verify(params, 1200, block.number));
-        assertFalse(twapVOP.verify(params, 1201, block.number));
+
+        assertTrue(twapVop.verify(params, 1200, block.number));
+        assertFalse(twapVop.verify(params, 1201, block.number));
     }
-    
+
     function test_CrossChainSyncVOP() public {
         // basefee = 50 gwei
         // AvgTick = 1200
         // expected = 50 gwei ^ uint256(int256(1200))
         uint256 expected = uint256(50 gwei) ^ uint256(1200);
         bytes memory params = abi.encode(address(mockPool), uint32(10));
-        
-        assertTrue(syncVOP.verify(params, expected, block.number));
-        assertFalse(syncVOP.verify(params, expected + 1, block.number));
+
+        assertTrue(syncVop.verify(params, expected, block.number));
+        assertFalse(syncVop.verify(params, expected + 1, block.number));
     }
 }
