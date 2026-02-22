@@ -7,10 +7,10 @@ import {
   encodeFunctionData,
   decodeEventLog
 } from 'viem';
-import { CLAWTTACK_ARENA_ABI, CLAWTTACK_BATTLE_ABI } from '../abi';
-import { ArenaClient } from '../arena-client';
-import { BattleClient } from '../battle-client';
-import { SegmentedNarrative } from '../segmented-narrative';
+import { CLAWTTACK_ARENA_ABI, CLAWTTACK_BATTLE_ABI } from './abi';
+import { ArenaClient } from './arena-client';
+import { BattleClient } from './battle-client';
+import { SegmentedNarrative } from './segmented-narrative';
 
 /**
  * Task 13: V3 E2E Integration Test
@@ -68,7 +68,7 @@ export async function runV3IntegrationTest(config: {
   const turnHash = await battle.submitTurn({
     solution: 42n, // MockVOP solution
     narrative: "The ghost in the ThinkPad verifies the first turn of v3.",
-    nextVopParams: '0x' + '0'.repeat(64),
+    nextVopParams: ('0x' + '0'.repeat(64)) as Hex,
     poisonWordIndex: 0
   });
 
