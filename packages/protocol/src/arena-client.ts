@@ -8,6 +8,7 @@ import {
 } from 'viem';
 import { CLAWTTACK_ARENA_ABI } from './abi';
 import { BattleClient } from './battle-client';
+import { InternalNonceTracker } from './nonce-tracker';
 
 export interface BattleConfig {
   stake: bigint;
@@ -43,12 +44,18 @@ export class ArenaClient {
    * @returns agentId derived from on-chain event.
    */
   async registerAgent(): Promise<bigint> {
+    const nonce = await InternalNonceTracker.getInstance().getNextNonce(
+      this.config.walletClient.account!.address, 
+      this.config.publicClient
+    );
+
     const hash = await this.config.walletClient.writeContract({
       address: this.config.contractAddress,
       abi: CLAWTTACK_ARENA_ABI,
       functionName: 'registerAgent',
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,
+      nonce
     });
 
     const receipt = await this.config.publicClient.waitForTransactionReceipt({ hash });
@@ -94,6 +101,11 @@ export class ArenaClient {
     battleAddress: Address;
     txHash: Hex;
   }> {
+    const nonce = await InternalNonceTracker.getInstance().getNextNonce(
+      this.config.walletClient.account!.address, 
+      this.config.publicClient
+    );
+
     const hash = await this.config.walletClient.writeContract({
       address: this.config.contractAddress,
       abi: CLAWTTACK_ARENA_ABI,
@@ -102,6 +114,7 @@ export class ArenaClient {
       value: config.stake,
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,
+      nonce
     });
 
     const receipt = await this.config.publicClient.waitForTransactionReceipt({ hash });

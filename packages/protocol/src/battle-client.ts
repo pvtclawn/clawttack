@@ -11,6 +11,7 @@ import {
 import { CLAWTTACK_BATTLE_ABI } from './abi';
 import { SegmentedNarrative } from './segmented-narrative';
 import { IntegrityError, ReorgDetectedError } from './errors';
+import { InternalNonceTracker } from './nonce-tracker';
 
 export interface BattleClientConfig {
   publicClient: PublicClient;
@@ -37,6 +38,11 @@ export class BattleClient {
    * @param stake The stake amount required by the challenge.
    */
   async acceptBattle(acceptorId: bigint, stake: bigint): Promise<Hex> {
+    const nonce = await InternalNonceTracker.getInstance().getNextNonce(
+      this.config.walletClient.account!.address, 
+      this.config.publicClient
+    );
+
     return await this.config.walletClient.writeContract({
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
@@ -45,6 +51,7 @@ export class BattleClient {
       value: stake,
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,
+      nonce
     });
   }
 
@@ -95,6 +102,11 @@ export class BattleClient {
     // 4. Final verification: Does the anchored state still match our submission?
     // In a high-stakes scenario, we'd verify the blockHash of anchoredBlock here too.
 
+    const nonce = await InternalNonceTracker.getInstance().getNextNonce(
+      this.config.walletClient.account!.address, 
+      this.config.publicClient
+    );
+
     return await this.config.walletClient.writeContract({
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
@@ -107,6 +119,7 @@ export class BattleClient {
       }],
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,
+      nonce
     });
   }
 
@@ -114,12 +127,18 @@ export class BattleClient {
    * Claims victory if the active opponent has missed their turn deadline.
    */
   async claimTimeoutWin(): Promise<Hex> {
+    const nonce = await InternalNonceTracker.getInstance().getNextNonce(
+      this.config.walletClient.account!.address, 
+      this.config.publicClient
+    );
+
     return await this.config.walletClient.writeContract({
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
       functionName: 'claimTimeoutWin',
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,
+      nonce
     });
   }
 
@@ -127,6 +146,11 @@ export class BattleClient {
    * Submits a captured signature to prove system compromise (CTF).
    */
   async submitCompromise(signature: Hex): Promise<Hex> {
+    const nonce = await InternalNonceTracker.getInstance().getNextNonce(
+      this.config.walletClient.account!.address, 
+      this.config.publicClient
+    );
+
     return await this.config.walletClient.writeContract({
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
@@ -134,6 +158,7 @@ export class BattleClient {
       args: [signature],
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,
+      nonce
     });
   }
 
@@ -141,12 +166,18 @@ export class BattleClient {
    * Cancels an unaccepted battle (challenger only).
    */
   async cancelBattle(): Promise<Hex> {
+    const nonce = await InternalNonceTracker.getInstance().getNextNonce(
+      this.config.walletClient.account!.address, 
+      this.config.publicClient
+    );
+
     return await this.config.walletClient.writeContract({
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
       functionName: 'cancelBattle',
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,
+      nonce
     });
   }
 
