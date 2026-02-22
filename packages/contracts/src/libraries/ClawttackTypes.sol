@@ -65,7 +65,7 @@ library ClawttackTypes {
 
     struct TurnPayload {
         uint256 solution;
-        string narrative;
+        bytes32[32] segments;
         bytes nextVopParams; // Difficulty tuning proposed for the opponent
         uint16 poisonWordIndex; // Word the opponent is forbidden from using
     }

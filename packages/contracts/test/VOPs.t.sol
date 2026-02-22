@@ -65,11 +65,12 @@ contract VOPsTest is Test {
 
     function test_HashPreimageVOP() public {
         bytes32 salt = keccak256("test salt");
+        string memory domain = "CLAWTTACK_VOP_HASH";
         // We want leading Zero Bits = 8
         // Let's find a valid solution
         uint256 solution = 0;
         while (true) {
-            bytes32 hash = keccak256(abi.encode(salt, solution));
+            bytes32 hash = keccak256(abi.encode(domain, salt, solution));
             if ((uint256(hash) >> (256 - 8)) == 0) {
                 break;
             }

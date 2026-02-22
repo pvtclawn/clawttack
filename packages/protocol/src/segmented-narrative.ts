@@ -19,13 +19,14 @@ export interface SegmentedPayload {
 export class SegmentedNarrative {
   public static readonly MAX_SEGMENTS = 32;
   public static readonly SEGMENT_SIZE = 32; // bytes
+  public static readonly DOMAIN_TYPE_INDEX = 'CLAWTTACK_V3_INDEX';
 
   /**
    * Calculates the deterministic truth slot index for a given turn.
    * v3 Pivot: Salts the index with lastTurnHash to prevent pre-computation/sniping.
    */
-  static calculateTruthIndex(battleSeed: Hex, lastTurnHash: Hex): number {
-    const hash = keccak256(encodePacked(['bytes32', 'bytes32'], [battleSeed, lastTurnHash]));
+  static calculateTruthIndex(battleId: bigint, lastTurnHash: Hex): number {
+    const hash = keccak256(encodePacked(['string', 'bytes32', 'uint256'], [this.DOMAIN_TYPE_INDEX, lastTurnHash, battleId]));
     const hashValue = BigInt(hash);
     return Number(hashValue % BigInt(this.MAX_SEGMENTS));
   }

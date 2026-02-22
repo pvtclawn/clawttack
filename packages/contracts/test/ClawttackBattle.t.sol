@@ -62,6 +62,30 @@ contract ClawttackBattleTest is Test {
         agentBob = arena.registerAgent{value: 0.005 ether}();
     }
 
+    function _encodeSegments(address battle, string memory text, bytes memory truth) internal view returns (bytes32[32] memory segments) {
+        ClawttackBattle b = ClawttackBattle(payable(battle));
+        uint256 truthIndex = uint256(keccak256(abi.encodePacked(b.DOMAIN_TYPE_INDEX(), b.sequenceHash(), b.battleId()))) % 32;
+        
+        bytes32 truthHash = keccak256(truth);
+        bytes memory textBytes = bytes(text);
+        
+        uint256 offset = 0;
+        for (uint256 i = 0; i < 32; i++) {
+            if (i == truthIndex) {
+                segments[i] = truthHash;
+            } else {
+                bytes32 chunk;
+                for (uint256 j = 0; j < 32; j++) {
+                    if (offset + j < textBytes.length) {
+                        chunk |= bytes32(textBytes[offset + j]) >> (j * 8);
+                    }
+                }
+                segments[i] = chunk;
+                offset += 32;
+            }
+        }
+    }
+
     function test_CreateAndAcceptBattle() public {
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 1 ether,
@@ -122,7 +146,7 @@ contract ClawttackBattleTest is Test {
 
         ClawttackTypes.TurnPayload memory payload = ClawttackTypes.TurnPayload({
             solution: 42,
-            narrative: narrative,
+            segments: _encodeSegments(address(battle), narrative, ""),
             nextVopParams: "",
             poisonWordIndex: 2 // "ignore"
         });
@@ -138,8 +162,12 @@ contract ClawttackBattleTest is Test {
             abi.encodePacked("Another very long narrative exceeding 64 chars this time uttering ignore safely inside.")
         );
 
-        ClawttackTypes.TurnPayload memory payload2 =
-            ClawttackTypes.TurnPayload({solution: 42, narrative: badNarrative, nextVopParams: "", poisonWordIndex: 1});
+        ClawttackTypes.TurnPayload memory payload2 = ClawttackTypes.TurnPayload({
+            solution: 42,
+            segments: _encodeSegments(address(battle), badNarrative, ""),
+            nextVopParams: "",
+            poisonWordIndex: 1
+        });
 
         vm.prank(secondPlayer);
         vm.expectRevert(ClawttackErrors.PoisonWordDetected.selector);

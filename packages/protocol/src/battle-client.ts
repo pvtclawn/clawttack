@@ -21,7 +21,6 @@ export interface TurnParams {
   narrative: string;
   nextVopParams: Hex;
   poisonWordIndex: number;
-  battleSeed: Hex;
 }
 
 export class BattleClient {
@@ -49,19 +48,19 @@ export class BattleClient {
    * Automatically handles ACR segmentation (Spec v1.11).
    */
   async submitTurn(params: TurnParams): Promise<Hex> {
-    const { phase, currentTurn, lastHash } = await this.getState();
+    const { phase, currentTurn, lastHash, battleId } = await this.getState();
     
     if (phase !== 1) { // 1 = Active
       throw new Error(`Battle is not active (phase: ${phase})`);
     }
 
     // 1. Calculate where the truth MUST be hidden for this turn
-    const truthIndex = SegmentedNarrative.calculateTruthIndex(params.battleSeed, lastHash);
+    const truthIndex = SegmentedNarrative.calculateTruthIndex(battleId, lastHash);
 
     // 2. Encode the narrative and next VOP params into the 32-segment array
     const payload = SegmentedNarrative.encode({
       text: params.narrative,
-      truthParam: params.nextVopParams,
+      truthParam: keccak256(params.nextVopParams), // Hashing the params as per contract logic
       truthIndex
     });
 
@@ -72,7 +71,7 @@ export class BattleClient {
       functionName: 'submitTurn',
       args: [{
         solution: params.solution,
-        narrative: params.narrative, // Note: contract still takes narrative string for events
+        segments: payload.segments as any,
         nextVopParams: params.nextVopParams,
         poisonWordIndex: params.poisonWordIndex
       }],
@@ -125,7 +124,7 @@ export class BattleClient {
    * Helper to check current state.
    */
   async getState() {
-    const [state, turn, deadline, lastHash] = await Promise.all([
+    const [state, turn, deadline, lastHash, battleId] = await Promise.all([
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
@@ -145,6 +144,11 @@ export class BattleClient {
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
         functionName: 'sequenceHash',
+      }),
+      this.config.publicClient.readContract({
+        address: this.config.battleAddress,
+        abi: CLAWTTACK_BATTLE_ABI,
+        functionName: 'battleId',
       })
     ]);
 
@@ -152,7 +156,8 @@ export class BattleClient {
       phase: state as number, 
       currentTurn: turn as number, 
       deadlineBlock: deadline as bigint,
-      lastHash: lastHash as Hex
+      lastHash: lastHash as Hex,
+      battleId: battleId as bigint
     };
   }
 }

@@ -27,7 +27,10 @@ contract ClawttackBattle is Initializable {
     address public arena;
 
     // Constants
-    uint256 public constant MAX_NARRATIVE_LEN = 256;
+    string public constant DOMAIN_TYPE_INIT = "CLAWTTACK_V3_INIT";
+    string public constant DOMAIN_TYPE_TURN = "CLAWTTACK_V3_TURN";
+    string public constant DOMAIN_TYPE_INDEX = "CLAWTTACK_V3_INDEX";
+    uint256 public constant MAX_NARRATIVE_LEN = 992; // 31 * 32 bytes
     uint32 public constant TURNS_UNTIL_HALVING = 5;
     string public constant COMPROMISE_REASON = "COMPROMISE";
     string public constant ETH_SIGNED_MESSAGE_PREFIX = "\x19Ethereum Signed Message:\n32";
@@ -132,14 +135,14 @@ contract ClawttackBattle is Initializable {
 
         state = ClawttackTypes.BattleState.Active;
 
-        uint256 r = uint256(keccak256(abi.encodePacked(block.prevrandao, battleId)));
+        uint256 r = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_INIT, block.prevrandao, battleId)));
         firstMoverA = (r % 2 == 0);
 
         startBlock = uint32(block.number + config.warmupBlocks);
         turnDeadlineBlock = startBlock + config.baseTimeoutBlocks;
 
         currentTurn = 0;
-        sequenceHash = keccak256(abi.encodePacked(battleId, _acceptorId, r));
+        sequenceHash = keccak256(abi.encodePacked(DOMAIN_TYPE_INIT, battleId, _acceptorId, r));
 
         address vopRegistry = IClawttackArenaView(arena).vopRegistry();
         address wordDictionary = IClawttackArenaView(arena).wordDictionary();
@@ -153,7 +156,7 @@ contract ClawttackBattle is Initializable {
     /**
      * @notice Submits the next narrative and puzzle solution for the battle.
      * @dev Validates the VOP gate, linguistic constraints, and updates the sequence hash.
-     * @param payload The encoded payload containing narrative, solution, next target logic, etc.
+     * @param payload The encoded payload containing narrative segments, solution, next target logic, etc.
      */
     function submitTurn(ClawttackTypes.TurnPayload calldata payload) external {
         if (state != ClawttackTypes.BattleState.Active) revert ClawttackErrors.BattleNotActive();
@@ -167,26 +170,29 @@ contract ClawttackBattle is Initializable {
 
         if (block.number > turnDeadlineBlock) revert ClawttackErrors.TurnDeadlineExpired();
 
-        uint256 narrativeLen = bytes(payload.narrative).length;
-        if (narrativeLen > MAX_NARRATIVE_LEN) {
-            if (narrativeLen > LinguisticParser.MAX_JOKER_NARRATIVE_LEN) revert ClawttackErrors.NarrativeTooLong();
+        // 1. Verify Domain Separation & Deterministic Truth Index
+        uint256 truthIndex = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_INDEX, sequenceHash, battleId))) % 32;
+        
+        // Use assembly to compare nextVopParams with the hidden segment
+        bytes32 truthInSegments = payload.segments[truthIndex];
+        bytes32 nextVopHash = keccak256(payload.nextVopParams);
+        if (truthInSegments != nextVopHash) revert ClawttackErrors.InvalidSolution(); // Using generic error
 
-            if (isPlayerA) {
-                if (jokersRemainingA == 0) revert ClawttackErrors.NoJokersRemaining();
-                jokersRemainingA--;
-                emit JokerPlayed(battleId, challengerId, jokersRemainingA);
-            } else {
-                if (jokersRemainingB == 0) revert ClawttackErrors.NoJokersRemaining();
-                jokersRemainingB--;
-                emit JokerPlayed(battleId, acceptorId, jokersRemainingB);
-            }
+        // 2. Extract full narrative for linguistic checks
+        string memory narrative = "";
+        for (uint256 i = 0; i < 32; i++) {
+            if (i == truthIndex) continue;
+            narrative = string(abi.encodePacked(narrative, payload.segments[i]));
         }
+
+        uint256 narrativeLen = bytes(narrative).length;
+        if (narrativeLen > MAX_NARRATIVE_LEN) revert ClawttackErrors.NarrativeTooLong();
 
         address wordDictionary = IClawttackArenaView(arena).wordDictionary();
         string memory targetWord = IWordDictionary(wordDictionary).word(targetWordIndex);
         string memory poisonWord = currentTurn > 0 ? IWordDictionary(wordDictionary).word(poisonWordIndex) : "";
 
-        LinguisticParser.verifyLinguistics(payload.narrative, targetWord, poisonWord);
+        LinguisticParser.verifyLinguistics(narrative, targetWord, poisonWord);
 
         bool puzzlePassed =
             IVerifiableOraclePrimitive(currentVop).verify(currentVopParams, payload.solution, turnDeadlineBlock);
@@ -202,7 +208,7 @@ contract ClawttackBattle is Initializable {
 
         sequenceHash = keccak256(
             abi.encodePacked(
-                sequenceHash, keccak256(bytes(payload.narrative)), payload.solution, keccak256(payload.nextVopParams)
+                DOMAIN_TYPE_TURN, sequenceHash, keccak256(bytes(narrative)), payload.solution, nextVopHash
             )
         );
 
@@ -214,7 +220,7 @@ contract ClawttackBattle is Initializable {
         uint64 baseForNext = uint64(block.number > startBlock ? block.number : startBlock);
         turnDeadlineBlock = baseForNext + nextTimeout;
 
-        uint256 randomness = uint256(keccak256(abi.encodePacked(block.prevrandao, sequenceHash)));
+        uint256 randomness = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_TURN, block.prevrandao, sequenceHash)));
 
         currentVop = IVOPRegistry(IClawttackArenaView(arena).vopRegistry()).getRandomVop(randomness);
         uint16 _wordCount = IWordDictionary(wordDictionary).wordCount();
@@ -236,7 +242,7 @@ contract ClawttackBattle is Initializable {
             targetWordIndex,
             poisonWordIndex,
             currentVopParams,
-            payload.narrative
+            narrative
         );
 
         if (currentTurn == config.maxTurns) {
