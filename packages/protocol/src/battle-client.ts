@@ -277,14 +277,19 @@ export class BattleClient {
   /**
    * Dry-runs a turn against the contract's linguistic and VOP logic.
    * Challenge #82: Gas-saving pre-flight check.
+   * Challenge #84: Returns anchoring metadata to ensure pipeline consistency.
    */
   async validateTurn(params: TurnParams): Promise<{
     passesTarget: boolean;
     passesPoison: boolean;
     passesLength: boolean;
     passesAscii: boolean;
+    anchoredBlockNumber: bigint;
+    anchoredBlockHash: Hex;
+    expectedSequenceHash: Hex;
   }> {
-    const { currentTurn } = await this.getState();
+    const anchoredBlock = await this.config.publicClient.getBlock({ blockTag: 'latest' });
+    const { currentTurn, lastHash } = await this.getState(anchoredBlock.number);
 
     const result = await this.config.publicClient.readContract({
       address: this.config.battleAddress,
@@ -292,14 +297,23 @@ export class BattleClient {
       functionName: 'wouldNarrativePass',
       args: [
         params.narrative,
-        params.poisonWordIndex, // Note: this might need adjustment based on turn context
+        params.poisonWordIndex, 
         0, // placeholder targetIdx
         currentTurn === 0
       ],
+      blockNumber: anchoredBlock.number
     });
 
     const [passesTarget, passesPoison, passesLength, passesAscii] = result as [boolean, boolean, boolean, boolean];
     
-    return { passesTarget, passesPoison, passesLength, passesAscii };
+    return { 
+      passesTarget, 
+      passesPoison, 
+      passesLength, 
+      passesAscii,
+      anchoredBlockNumber: anchoredBlock.number,
+      anchoredBlockHash: anchoredBlock.hash,
+      expectedSequenceHash: lastHash
+    };
   }
 }
