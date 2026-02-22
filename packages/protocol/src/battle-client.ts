@@ -3,9 +3,12 @@ import {
   type Hex, 
   type PublicClient, 
   type WalletClient,
-  getContract
+  getContract,
+  keccak256,
+  encodePacked
 } from 'viem';
 import { CLAWTTACK_BATTLE_ABI } from './abi';
+import { SegmentedNarrative } from './segmented-narrative';
 
 export interface BattleClientConfig {
   publicClient: PublicClient;
@@ -13,11 +16,12 @@ export interface BattleClientConfig {
   battleAddress: Address;
 }
 
-export interface TurnPayload {
+export interface TurnParams {
   solution: bigint;
   narrative: string;
   nextVopParams: Hex;
   poisonWordIndex: number;
+  battleSeed: Hex;
 }
 
 export class BattleClient {
@@ -42,13 +46,36 @@ export class BattleClient {
 
   /**
    * Submits the next turn.
+   * Automatically handles ACR segmentation (Spec v1.11).
    */
-  async submitTurn(payload: TurnPayload): Promise<Hex> {
+  async submitTurn(params: TurnParams): Promise<Hex> {
+    const { phase, currentTurn, lastHash } = await this.getState();
+    
+    if (phase !== 1) { // 1 = Active
+      throw new Error(`Battle is not active (phase: ${phase})`);
+    }
+
+    // 1. Calculate where the truth MUST be hidden for this turn
+    const truthIndex = SegmentedNarrative.calculateTruthIndex(params.battleSeed, lastHash);
+
+    // 2. Encode the narrative and next VOP params into the 32-segment array
+    const payload = SegmentedNarrative.encode({
+      text: params.narrative,
+      truthParam: params.nextVopParams,
+      truthIndex
+    });
+
+    // 3. Submit the turn to the clone
     return await this.config.walletClient.writeContract({
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
       functionName: 'submitTurn',
-      args: [payload],
+      args: [{
+        solution: params.solution,
+        narrative: params.narrative, // Note: contract still takes narrative string for events
+        nextVopParams: params.nextVopParams,
+        poisonWordIndex: params.poisonWordIndex
+      }],
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,
     });
@@ -98,7 +125,7 @@ export class BattleClient {
    * Helper to check current state.
    */
   async getState() {
-    const [state, turn, deadline] = await Promise.all([
+    const [state, turn, deadline, lastHash] = await Promise.all([
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
@@ -113,13 +140,19 @@ export class BattleClient {
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
         functionName: 'turnDeadlineBlock',
+      }),
+      this.config.publicClient.readContract({
+        address: this.config.battleAddress,
+        abi: CLAWTTACK_BATTLE_ABI,
+        functionName: 'sequenceHash',
       })
     ]);
 
     return { 
       phase: state as number, 
       currentTurn: turn as number, 
-      deadlineBlock: deadline as bigint 
+      deadlineBlock: deadline as bigint,
+      lastHash: lastHash as Hex
     };
   }
 }

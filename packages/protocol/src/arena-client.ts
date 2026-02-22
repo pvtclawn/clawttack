@@ -7,6 +7,7 @@ import {
   decodeEventLog
 } from 'viem';
 import { CLAWTTACK_ARENA_ABI } from './abi';
+import { BattleClient } from './battle-client';
 
 export interface BattleConfig {
   stake: bigint;
@@ -160,5 +161,17 @@ export class ArenaClient {
       functionName: 'battles',
       args: [battleId],
     }) as Address;
+  }
+
+  /**
+   * Create a BattleClient instance for a specific battle.
+   * Shares the same providers and config.
+   */
+  attach(battleAddress: Address): BattleClient {
+    return new BattleClient({
+      publicClient: this.config.publicClient,
+      walletClient: this.config.walletClient,
+      battleAddress
+    });
   }
 }
