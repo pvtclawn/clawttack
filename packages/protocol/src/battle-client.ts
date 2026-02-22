@@ -24,6 +24,8 @@ export interface TurnParams {
   nextVopParams: Hex;
   poisonWordIndex: number;
   anchoredBlockNumber?: bigint; // Challenge #79: Reorg protection
+  anchoredBlockHash?: Hex; // Challenge #82: Hash-based reorg detection
+  expectedSequenceHash?: Hex; // Challenge #82: State progress protection
 }
 
 export class BattleClient {
@@ -50,6 +52,7 @@ export class BattleClient {
    * Submits the next turn.
    * Automatically handles ACR segmentation (Spec v1.11).
    * Challenge #81: Mandates block-anchoring and performs pre-flight reorg check.
+   * Challenge #82: Upgraded to hash-based verification and state pinning.
    */
   async submitTurn(params: TurnParams): Promise<Hex> {
     const anchoredBlock = params.anchoredBlockNumber ?? await this.config.publicClient.getBlockNumber();
@@ -60,10 +63,23 @@ export class BattleClient {
         throw new ReorgDetectedError(anchoredBlock, latestBlock.number);
     }
 
+    // 1.1 Challenge #82: Hash-based reorg detection
+    if (params.anchoredBlockHash) {
+        const canonicalBlock = await this.config.publicClient.getBlock({ blockNumber: anchoredBlock });
+        if (canonicalBlock.hash.toLowerCase() !== params.anchoredBlockHash.toLowerCase()) {
+            throw new IntegrityError(`Anchored block hash ${params.anchoredBlockHash} is no longer canonical at height ${anchoredBlock}`);
+        }
+    }
+
     const { phase, lastHash, battleId } = await this.getState(anchoredBlock);
     
     if (phase !== 1) { // 1 = Active
       throw new Error(`Battle is not active (phase: ${phase})`);
+    }
+
+    // 1.2 Challenge #82: State progress protection (Ghost Turn injection prevention)
+    if (params.expectedSequenceHash && lastHash.toLowerCase() !== params.expectedSequenceHash.toLowerCase()) {
+        throw new IntegrityError(`Battle state has progressed: expected hash ${params.expectedSequenceHash}, found ${lastHash}`);
     }
 
     // 2. Calculate where the truth MUST be hidden for this turn
@@ -137,47 +153,24 @@ export class BattleClient {
   /**
    * Helper to check current state.
    * Supports block-anchoring to prevent reorg-driven desync (Challenge #79).
+   * Challenge #82: Uses atomic getBattleState() call.
    */
   async getState(blockNumber?: bigint) {
-    const [state, turn, deadline, lastHash, battleId] = await Promise.all([
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'state',
-        blockNumber
-      }),
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'currentTurn',
-        blockNumber
-      }),
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'turnDeadlineBlock',
-        blockNumber
-      }),
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'sequenceHash',
-        blockNumber
-      }),
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'battleId',
-        blockNumber
-      })
-    ]);
+    const state = await this.config.publicClient.readContract({
+      address: this.config.battleAddress,
+      abi: CLAWTTACK_BATTLE_ABI,
+      functionName: 'getBattleState',
+      blockNumber
+    });
+
+    const [_state, turn, deadline, lastHash, battleId] = state as [number, number, bigint, Hex, bigint];
 
     return { 
-      phase: state as number, 
-      currentTurn: turn as number, 
-      deadlineBlock: deadline as bigint,
-      lastHash: lastHash as Hex,
-      battleId: battleId as bigint
+      phase: _state, 
+      currentTurn: turn, 
+      deadlineBlock: deadline,
+      lastHash: lastHash,
+      battleId: battleId
     };
   }
 

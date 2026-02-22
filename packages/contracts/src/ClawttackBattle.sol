@@ -272,6 +272,20 @@ contract ClawttackBattle is Initializable {
     }
 
     /**
+     * @notice Returns the full battle state in a single call.
+     * @dev Challenge #82: Ensures atomic read consistency.
+     */
+    function getBattleState() external view returns (
+        ClawttackTypes.BattleState _state,
+        uint32 _currentTurn,
+        uint64 _turnDeadlineBlock,
+        bytes32 _sequenceHash,
+        uint256 _battleId
+    ) {
+        return (state, currentTurn, turnDeadlineBlock, sequenceHash, battleId);
+    }
+
+    /**
      * @notice Claims victory if the active opponent has missed their `turnDeadlineBlock`.
      */
     function claimTimeoutWin() external {
