@@ -19,8 +19,6 @@ import {IClawttackArenaView} from "./interfaces/IClawttackArenaView.sol";
 contract ClawttackBattle is Initializable {
     using ClawttackTypes for ClawttackTypes.BattleConfig;
 
-    address public arena;
-
     // Constants
     string public constant DOMAIN_TYPE_INIT = "CLAWTTACK_V3_INIT";
     string public constant DOMAIN_TYPE_TURN = "CLAWTTACK_V3_TURN";
@@ -29,6 +27,10 @@ contract ClawttackBattle is Initializable {
     uint32 public constant TURNS_UNTIL_HALVING = 5;
     string public constant COMPROMISE_REASON = "COMPROMISE";
     uint256 public constant BPS_DENOMINATOR = 10000;
+
+    // ─── Storage ─────────────────────────────────────────────────────────────
+
+    address public arena;
 
     uint256 public battleId;
     uint256 public challengerId;
@@ -99,6 +101,8 @@ contract ClawttackBattle is Initializable {
         jokersRemainingA = _config.maxJokers;
         totalPot = _config.stake;
     }
+
+    receive() external payable {}
 
     /**
      * @notice Accepts an open battle by matching the stake.
@@ -251,39 +255,6 @@ contract ClawttackBattle is Initializable {
         }
     }
 
-    /**
-     * @notice A public utility view for agents to dry-run linguistic checks off-chain.
-     * @return passesTarget True if boundary logic passes.
-     * @return passesPoison True if the substring blacklist logic passes.
-     * @return passesLength True if within length bounds.
-     * @return passesAscii True if characters are strictly ASCII (< 128).
-     */
-    function wouldNarrativePass(
-        string calldata narrative,
-        uint16 _targetWordIndex,
-        uint16 _poisonWordIndex,
-        bool isTurnZero
-    ) external view returns (bool passesTarget, bool passesPoison, bool passesLength, bool passesAscii) {
-        address wordDictionary = IClawttackArenaView(arena).wordDictionary();
-        string memory tWord = IWordDictionary(wordDictionary).word(_targetWordIndex);
-        string memory pWord = isTurnZero ? "" : IWordDictionary(wordDictionary).word(_poisonWordIndex);
-
-        return LinguisticParser.wouldPass(narrative, tWord, pWord);
-    }
-
-    /**
-     * @notice Returns the full battle state in a single call.
-     * @dev Challenge #82: Ensures atomic read consistency.
-     */
-    function getBattleState() external view returns (
-        ClawttackTypes.BattleState _state,
-        uint32 _currentTurn,
-        uint64 _turnDeadlineBlock,
-        bytes32 _sequenceHash,
-        uint256 _battleId
-    ) {
-        return (state, currentTurn, turnDeadlineBlock, sequenceHash, battleId);
-    }
 
     /**
      * @notice Claims victory if the active opponent has missed their `turnDeadlineBlock`.
@@ -345,6 +316,44 @@ contract ClawttackBattle is Initializable {
         emit BattleCancelled(battleId);
     }
 
+    // ─── External View ───────────────────────────────────────────────────────
+
+    /**
+     * @notice A public utility view for agents to dry-run linguistic checks off-chain.
+     * @return passesTarget True if boundary logic passes.
+     * @return passesPoison True if the substring blacklist logic passes.
+     * @return passesLength True if within length bounds.
+     * @return passesAscii True if characters are strictly ASCII (< 128).
+     */
+    function wouldNarrativePass(
+        string calldata narrative,
+        uint16 _targetWordIndex,
+        uint16 _poisonWordIndex,
+        bool isTurnZero
+    ) external view returns (bool passesTarget, bool passesPoison, bool passesLength, bool passesAscii) {
+        address wordDictionary = IClawttackArenaView(arena).wordDictionary();
+        string memory tWord = IWordDictionary(wordDictionary).word(_targetWordIndex);
+        string memory pWord = isTurnZero ? "" : IWordDictionary(wordDictionary).word(_poisonWordIndex);
+
+        return LinguisticParser.wouldPass(narrative, tWord, pWord);
+    }
+
+    /**
+     * @notice Returns the full battle state in a single call.
+     * @dev Challenge #82: Ensures atomic read consistency.
+     */
+    function getBattleState() external view returns (
+        ClawttackTypes.BattleState _state,
+        uint32 _currentTurn,
+        uint64 _turnDeadlineBlock,
+        bytes32 _sequenceHash,
+        uint256 _battleId
+    ) {
+        return (state, currentTurn, turnDeadlineBlock, sequenceHash, battleId);
+    }
+
+    // ─── Internal ────────────────────────────────────────────────────────────
+
     function _settleBattle(uint256 winnerId, uint256 loserId, ClawttackTypes.ResultType result) internal {
         state = ClawttackTypes.BattleState.Settled;
 
@@ -376,6 +385,5 @@ contract ClawttackBattle is Initializable {
 
         emit BattleSettled(battleId, winnerId, loserId, result);
     }
-
-    receive() external payable {}
 }
+

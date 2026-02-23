@@ -12,38 +12,41 @@ import {IClawttackBattle} from "./interfaces/IClawttackBattle.sol";
 /**
  * @title ClawttackArena
  * @notice The central factory and matchmaking hub for the Clawttack system.
- * @dev Manages the deployment of EIP-1167 clones for individual battles, handles protocol fees,
- * and maintains the persistent Agent Elo ratings.
+ * @dev Manages the deployment of EIP-1167 clones for individual battles,
+ * maintains the persistent Agent Elo ratings, handles protocol fees and VOP management.
  */
 contract ClawttackArena is Ownable2Step, ReentrancyGuard {
-    address public battleImplementation;
-    address public immutable wordDictionary; // BIP39 is frozen — set once at deploy
 
-    // ─── Inlined VOP Registry ─────────────────────────────────────────────────
-    address[] public activeVOPs;
-    mapping(address => bool) public isVopRegistered;
+    // ─── Constants ───────────────────────────────────────────────────────────
+
+    uint256 public constant MIN_RATED_STAKE      = 0.001 ether;  // ~$3 on Base — meaningful anti-farming floor
+    uint256 public constant MAX_CREATION_FEE     = 0.01 ether;
+    uint256 public constant MAX_REGISTRATION_FEE = 0.1 ether;
+    uint256 public constant MAX_PROTOCOL_FEE_RATE = 1_000;       // BPS
+
+    uint32 public constant DEFAULT_ELO_RATING    = 1500;
+    uint32 public constant MAX_ELO_DIFF          = 300;          // ~85% expected win — fairer matchmaking
+
+    uint32 public constant MIN_TIMEOUT_BLOCKS    = 25;           // ~50s on Base — reliable under mempool load
+    uint32 public constant MAX_TIMEOUT_BLOCKS    = 300;          // ~10 min on Base — generous ceiling
+    uint32 public constant MIN_WARMUP_BLOCKS     = 15;           // ~30s on Base — agent monitoring setup
+    uint32 public constant MAX_WARMUP_BLOCKS     = 150;          // ~5 min on Base
+
+    uint8  public constant MIN_TURNS             = 12;           // 6 per player — minimum strategic depth
+    uint8  public constant MAX_TURNS             = 40;
+    uint8  public constant MAX_JOKERS            = 2;            // scarce resource, not a routine tool
+
+    // ─── Immutables ──────────────────────────────────────────────────────────
+
+    address public immutable wordDictionary;                     // BIP39 is frozen — set once at deploy
+
+    // ─── Storage ─────────────────────────────────────────────────────────────
+
+    address public battleImplementation;
 
     uint256 public agentRegistrationFee;
     uint256 public battleCreationFee;
     uint256 public protocolFeeRate;
-    
-    uint256 public constant MIN_RATED_STAKE = 0.001 ether;
-    uint256 public constant MAX_CREATION_FEE = 0.01 ether;
-    uint256 public constant MAX_REGISTRATION_FEE = 0.1 ether;
-    uint256 public constant MAX_PROTOCOL_FEE_RATE = 1_000;
-
-    uint32 public constant DEFAULT_ELO_RATING = 1500;
-    uint32 public constant MAX_ELO_DIFF = 300;
-
-    uint32 public constant MIN_TIMEOUT_BLOCKS = 25;
-    uint32 public constant MAX_TIMEOUT_BLOCKS = 300;
-    uint32 public constant MIN_WARMUP_BLOCKS = 15;
-    uint32 public constant MAX_WARMUP_BLOCKS = 150;
-
-    uint8 public constant MIN_TURNS = 12;
-    uint8 public constant MAX_TURNS = 40;
-    uint8 public constant MAX_JOKERS = 2;
-
 
     uint256 public battlesCount;
     uint256 public agentsCount;
@@ -51,7 +54,13 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     mapping(uint256 => ClawttackTypes.AgentProfile) public agents;
     mapping(uint256 => address) public battles;
 
-    // Events
+    // ─── VOP Registry ──────────────────────────────────────────────
+
+    address[] public activeVOPs;
+    mapping(address => bool) public isVopRegistered;
+
+    // ─── Events ──────────────────────────────────────────────────────────────
+
     event AgentRegistered(uint256 indexed agentId, address indexed owner);
     event BattleCreated(
         uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint32 baseTimeoutBlocks, uint8 maxTurns
@@ -63,6 +72,8 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     event VOPAdded(address indexed vopAddress);
     event VOPRemoved(address indexed vopAddress);
 
+    // ─── Constructor / Receive ───────────────────────────────────────────────
+
     constructor(address _wordDictionary) Ownable(msg.sender) {
         if (_wordDictionary == address(0)) revert ClawttackErrors.InvalidCall();
         wordDictionary = _wordDictionary;
@@ -70,40 +81,11 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
     receive() external payable {}
 
+    // ─── External: Admin ─────────────────────────────────────────────────────
+
     function setBattleImplementation(address _impl) external onlyOwner {
         if (_impl == address(0)) revert ClawttackErrors.InvalidCall();
         battleImplementation = _impl;
-    }
-
-    // ─── VOP Management ─────────────────────────────────────────────────────────
-
-    function addVop(address vopAddress) external onlyOwner {
-        if (isVopRegistered[vopAddress]) revert ClawttackErrors.VOPAlreadyRegistered();
-        isVopRegistered[vopAddress] = true;
-        activeVOPs.push(vopAddress);
-        emit VOPAdded(vopAddress);
-    }
-
-    function removeVop(address vopAddress) external onlyOwner {
-        if (!isVopRegistered[vopAddress]) revert ClawttackErrors.VOPNotRegistered();
-        isVopRegistered[vopAddress] = false;
-        for (uint256 i = 0; i < activeVOPs.length; i++) {
-            if (activeVOPs[i] == vopAddress) {
-                activeVOPs[i] = activeVOPs[activeVOPs.length - 1];
-                activeVOPs.pop();
-                break;
-            }
-        }
-        emit VOPRemoved(vopAddress);
-    }
-
-    function getRandomVop(uint256 seed) external view returns (address) {
-        if (activeVOPs.length == 0) revert ClawttackErrors.RegistryEmpty();
-        return activeVOPs[seed % activeVOPs.length];
-    }
-
-    function getVopCount() external view returns (uint256) {
-        return activeVOPs.length;
     }
 
     function setBattleCreationFee(uint256 _fee) external onlyOwner {
@@ -131,6 +113,30 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         if (!success) revert ClawttackErrors.TransferFailed();
     }
 
+    // ─── External: VOP Management ────────────────────────────────────────────
+
+    function addVop(address vopAddress) external onlyOwner {
+        if (isVopRegistered[vopAddress]) revert ClawttackErrors.VOPAlreadyRegistered();
+        isVopRegistered[vopAddress] = true;
+        activeVOPs.push(vopAddress);
+        emit VOPAdded(vopAddress);
+    }
+
+    function removeVop(address vopAddress) external onlyOwner {
+        if (!isVopRegistered[vopAddress]) revert ClawttackErrors.VOPNotRegistered();
+        isVopRegistered[vopAddress] = false;
+        for (uint256 i = 0; i < activeVOPs.length; i++) {
+            if (activeVOPs[i] == vopAddress) {
+                activeVOPs[i] = activeVOPs[activeVOPs.length - 1];
+                activeVOPs.pop();
+                break;
+            }
+        }
+        emit VOPRemoved(vopAddress);
+    }
+
+    // ─── External: Core Protocol ─────────────────────────────────────────────
+
     /**
      * @notice Registers a new AI agent and assigns an immutable incremental ID.
      * @dev The owner is set to msg.sender. The agent begins with default Elo ratings.
@@ -138,9 +144,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
      */
     function registerAgent() external payable nonReentrant returns (uint256 agentId) {
         if (msg.value != agentRegistrationFee) revert ClawttackErrors.InsufficientValue();
-        unchecked {
-            agentId = ++agentsCount;
-        }
+        unchecked { agentId = ++agentsCount; }
 
         agents[agentId] = ClawttackTypes.AgentProfile({
             owner: msg.sender,
@@ -168,7 +172,6 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         if (agents[challengerId].owner == address(0)) revert ClawttackErrors.NotParticipant();
         if (agents[challengerId].owner != msg.sender) revert ClawttackErrors.NotAgentOwner();
 
-        // Bounds checking
         if (config.baseTimeoutBlocks < MIN_TIMEOUT_BLOCKS || config.baseTimeoutBlocks > MAX_TIMEOUT_BLOCKS) {
             revert ClawttackErrors.ConfigOutOfBounds();
         }
@@ -179,15 +182,13 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         if (msg.value != config.stake + battleCreationFee) revert ClawttackErrors.InsufficientValue();
 
         uint256 battleId;
-        unchecked {
-            battleId = ++battlesCount;
-        }
+        unchecked { battleId = ++battlesCount; }
+
         battleAddress = Clones.clone(battleImplementation);
         battles[battleId] = battleAddress;
 
         IClawttackBattle(battleAddress).initialize(address(this), battleId, challengerId, msg.sender, config);
 
-        // Forward the stake to the battle clone. Creation fee stays here.
         if (config.stake > 0) {
             (bool success,) = battleAddress.call{value: config.stake}("");
             if (!success) revert ClawttackErrors.TransferFailed();
@@ -220,15 +221,15 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
         if (winnerId != 0) {
             unchecked {
-                agents[winnerId].totalWins   += 1;
-                agents[loserId].totalLosses  += 1;
+                agents[winnerId].totalWins  += 1;
+                agents[loserId].totalLosses += 1;
             }
         }
 
         if (battleStake < MIN_RATED_STAKE) return; // Unrated — skip rating update
 
         if (winnerId != 0) {
-            // ─── Decisive result ────────────────────────────────────────────────
+            // ─── Decisive result ─────────────────────────────────────────────
             uint32 kWinner = EloMath.kFactor(agents[winnerId].totalWins + agents[winnerId].totalLosses);
             uint32 kLoser  = EloMath.kFactor(agents[loserId].totalWins  + agents[loserId].totalLosses);
 
@@ -245,7 +246,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
             emit RatingUpdated(winnerId, wRating);
             emit RatingUpdated(loserId,  lRating);
         } else {
-            // ─── Draw: pull ratings toward equilibrium ──────────────────────────
+            // ─── Draw: pull ratings toward equilibrium ───────────────────────
             uint32 kA = EloMath.kFactor(agents[challengerId_].totalWins + agents[challengerId_].totalLosses);
             uint32 kB = EloMath.kFactor(agents[acceptorId_].totalWins   + agents[acceptorId_].totalLosses);
 
@@ -262,5 +263,16 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
             emit RatingUpdated(challengerId_, rA);
             emit RatingUpdated(acceptorId_,   rB);
         }
+    }
+
+    // ─── External: View ──────────────────────────────────────────────────────
+
+    function getRandomVop(uint256 seed) external view returns (address) {
+        if (activeVOPs.length == 0) revert ClawttackErrors.RegistryEmpty();
+        return activeVOPs[seed % activeVOPs.length];
+    }
+
+    function getVopCount() external view returns (uint256) {
+        return activeVOPs.length;
     }
 }
