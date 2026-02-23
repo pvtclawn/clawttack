@@ -127,13 +127,26 @@ export class ArenaClient {
           topics: log.topics,
         });
         if (event.eventName === 'BattleCreated') {
-          return {
-            battleId: (event.args as any).battleId,
-            battleAddress: (event.args as any).battleAddress,
-            txHash: hash
-          };
+          console.log('DEBUG: Found BattleCreated event:', event.args);
+          const battleId = (event.args as any).battleId as bigint;
+          // BattleCreated doesn't include the clone address — look it up from mapping
+          let battleAddress = '0x0000000000000000000000000000000000000000' as Address;
+          for (let i = 0; i < 5; i++) {
+            battleAddress = await this.config.publicClient.readContract({
+              address: this.config.contractAddress,
+              abi: CLAWTTACK_ARENA_ABI,
+              functionName: 'battles',
+              args: [battleId]
+            }) as Address;
+            if (battleAddress !== '0x0000000000000000000000000000000000000000') break;
+            console.log(`DEBUG: Battle address not found yet, retrying ${i+1}...`);
+            await new Promise(r => setTimeout(r, 2000));
+          }
+          console.log('DEBUG: Looked up battleAddress:', battleAddress);
+          return { battleId, battleAddress, txHash: hash };
         }
       } catch (e) {
+        console.log('DEBUG: Failed to decode or read battle address:', e);
         continue;
       }
     }
