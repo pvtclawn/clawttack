@@ -67,10 +67,10 @@ contract ClawttackBattleTest is Test {
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 1 ether,
             baseTimeoutBlocks: 30,
-            warmupBlocks: 10,
+            warmupBlocks: 15,
             targetAgentId: 0,
             maxTurns: 20,
-            maxJokers: 3
+            maxJokers: 2
         });
 
         vm.prank(alice);
@@ -91,7 +91,7 @@ contract ClawttackBattleTest is Test {
 
     function test_TurnLinguistics() public {
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
-            stake: 0, baseTimeoutBlocks: 30, warmupBlocks: 5, targetAgentId: 0, maxTurns: 20, maxJokers: 3
+            stake: 0, baseTimeoutBlocks: 30, warmupBlocks: 15, targetAgentId: 0, maxTurns: 20, maxJokers: 2
         });
 
         vm.prank(alice);

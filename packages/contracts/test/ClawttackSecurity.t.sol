@@ -110,7 +110,7 @@ contract ClawttackSecurityTest is Test {
         return ClawttackTypes.BattleConfig({
             stake: stake,
             baseTimeoutBlocks: 30,
-            warmupBlocks: 5,
+            warmupBlocks: 15,
             targetAgentId: 0,
             maxTurns: 20,
             maxJokers: 2
@@ -648,7 +648,7 @@ contract ClawttackSecurityTest is Test {
         ClawttackTypes.BattleConfig memory cfg = ClawttackTypes.BattleConfig({
             stake: 0,
             baseTimeoutBlocks: 30,
-            warmupBlocks: 5,
+            warmupBlocks: 15,
             targetAgentId: 0,
             maxTurns: 20,
             maxJokers: 1
@@ -719,14 +719,15 @@ contract ClawttackSecurityTest is Test {
     // ─── Elo Rating Logic ────────────────────────────────────────────────────────
 
     /// @notice Verifies that Elo is NOT updated for draws (winner == 0)
-    function test_elo_notUpdatedOnDraw() public {
+    /// @notice On a rated draw (MAX_TURNS), ratings converge slightly via drawElo()
+    function test_elo_convergesOnDraw() public {
         // MAX_TURNS draw — use a small maxTurns config
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 1 ether,
             baseTimeoutBlocks: 30,
-            warmupBlocks: 5,
+            warmupBlocks: 15,
             targetAgentId: 0,
-            maxTurns: 10, // MIN_TURNS
+            maxTurns: 12,
             maxJokers: 2
         });
 
@@ -740,14 +741,15 @@ contract ClawttackSecurityTest is Test {
         vm.roll(block.number + config.warmupBlocks + 1);
         bool aFirst = battle.firstMoverA();
 
-        for (uint i = 0; i < 10; i++) {
+        // Submit all 12 turns to trigger MAX_TURNS settlement
+        for (uint i = 0; i < 12; i++) {
             address p = aFirst ? (i % 2 == 0 ? alice : bob) : (i % 2 == 0 ? bob : alice);
             _submitPass(battle, p, WORD_IGNORE);
         }
 
         assertEq(uint8(battle.state()), uint8(ClawttackTypes.BattleState.Settled));
 
-        // Ratings should be unchanged (draw)
+        // Equal-rated agents on a draw: ratings should stay at 1500 (drawElo delta = 0 when diff=0)
         (, uint32 aliceElo,,) = arena.agents(agentAlice);
         (, uint32 bobElo,,)   = arena.agents(agentBob);
         assertEq(aliceElo, arena.DEFAULT_ELO_RATING());

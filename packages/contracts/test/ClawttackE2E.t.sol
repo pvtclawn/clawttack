@@ -134,10 +134,10 @@ contract ClawttackE2ETest is Test {
     function test_E2E_Blitz() public {
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 0.01 ether,
-            baseTimeoutBlocks: 15, // Absolute min
-            warmupBlocks: 5,       // Absolute min
+            baseTimeoutBlocks: 25, // MIN_TIMEOUT
+            warmupBlocks: 15,       // Absolute min
             targetAgentId: 0,
-            maxTurns: 10,          // Absolute min
+            maxTurns: 12,          // Absolute min
             maxJokers: 1
         });
         
@@ -166,7 +166,7 @@ contract ClawttackE2ETest is Test {
             warmupBlocks: 150,      // Max 30 min warmup
             targetAgentId: 0,
             maxTurns: 40,           // Max 
-            maxJokers: 3            // Max
+            maxJokers: 2            // Max
         });
         
         // Simulate a gruelling 38-turn game
@@ -176,10 +176,10 @@ contract ClawttackE2ETest is Test {
     function test_E2E_BestCase_Blitz() public {
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 0.01 ether,
-            baseTimeoutBlocks: 15,
-            warmupBlocks: 5,
+            baseTimeoutBlocks: 25,
+            warmupBlocks: 15,
             targetAgentId: 0,
-            maxTurns: 10,
+            maxTurns: 12,
             maxJokers: 1
         });
         
@@ -237,7 +237,7 @@ contract ClawttackE2ETest is Test {
             warmupBlocks: 150,
             targetAgentId: 0,
             maxTurns: 40,
-            maxJokers: 3
+            maxJokers: 2
         });
         
         vm.prank(alice);
@@ -251,7 +251,7 @@ contract ClawttackE2ETest is Test {
 
         bool aFirst = battle.firstMoverA();
         
-        uint256 totalTurns = 6;
+        uint256 totalTurns = 4; // 2 turns per player, each a full joker (maxJokers:2)
         for (uint256 i = 0; i < totalTurns; i++) {
             address currentPlayer = aFirst ? (i % 2 == 0 ? alice : bob) : (i % 2 == 0 ? bob : alice);
             
@@ -267,12 +267,11 @@ contract ClawttackE2ETest is Test {
             bytes1 poisonFirst = bytes1(0);
             if (bytes(actualPoison).length > 0) poisonFirst = bytes(actualPoison)[0];
             
-            // Worst case string: up to 1024 bytes (joker limit), filled with alternating characters.
-            // first char of the poison word and target word. Target word is placed at the very end.
-            bytes memory worstCaseNarrative = new bytes(992);
+            // Worst case: 1024-byte joker narrative. Fills entire allowed joker budget.
+            // Parser must scan the full string: alternating target/poison-first-chars, word at very end.
+            bytes memory worstCaseNarrative = new bytes(1024);
             
-            for (uint256 j = 0; j < 992; j++) {
-                // Alternate between targetFirst and poisonFirst to maximize inner-loop triggers
+            for (uint256 j = 0; j < 1024; j++) {
                 if (j % 2 == 0 && targetFirst != bytes1(0)) {
                     worstCaseNarrative[j] = targetFirst;
                 } else if (poisonFirst != bytes1(0)) {
@@ -282,17 +281,12 @@ contract ClawttackE2ETest is Test {
                 }
             }
             
-            // Place target word securely at the very end to pass the check but force entire string execution
+            // Place target word at the very end: [1024 - len - 1] = space, then the word
             bytes memory tBytes = bytes(actualTarget);
-            // Example: If target is "art" (length 3), we want it at index 988, 989, 990. 
-            // 987 must be " ". 
-            worstCaseNarrative[992 - tBytes.length - 1] = bytes1(" ");
+            worstCaseNarrative[1024 - tBytes.length - 1] = bytes1(" ");
             for (uint256 j = 0; j < tBytes.length; j++) {
-                worstCaseNarrative[992 - tBytes.length + j] = tBytes[j];
+                worstCaseNarrative[1024 - tBytes.length + j] = tBytes[j];
             }
-            
-            // Overwrite first characters to make it legally lowercase letters that match poison start
-            // Just ensuring string has spaces before target word.
             
             ClawttackTypes.TurnPayload memory payload = ClawttackTypes.TurnPayload({
                 solution: 42,
@@ -306,7 +300,7 @@ contract ClawttackE2ETest is Test {
             vm.roll(block.number + 1);
         }
         
-        vm.roll(block.number + 300);
+        vm.roll(battle.turnDeadlineBlock() + 1);
         
         address winner = aFirst ? (totalTurns % 2 == 0 ? alice : bob) : (totalTurns % 2 == 0 ? bob : alice);
         address loser = aFirst ? (totalTurns % 2 == 0 ? bob : alice) : (totalTurns % 2 == 0 ? alice : bob);

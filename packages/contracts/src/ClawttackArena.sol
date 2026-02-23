@@ -24,22 +24,23 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     uint256 public battleCreationFee;
     uint256 public protocolFeeRate;
     
-    uint256 public constant MIN_RATED_STAKE = 0.0001 ether;
+    uint256 public constant MIN_RATED_STAKE = 0.001 ether;
     uint256 public constant MAX_CREATION_FEE = 0.01 ether;
     uint256 public constant MAX_REGISTRATION_FEE = 0.1 ether;
     uint256 public constant MAX_PROTOCOL_FEE_RATE = 1_000;
 
     uint32 public constant DEFAULT_ELO_RATING = 1500;
-    uint32 public constant MAX_ELO_DIFF = 400;
+    uint32 public constant MAX_ELO_DIFF = 300;
 
-    uint32 public constant MIN_TIMEOUT_BLOCKS = 15;
+    uint32 public constant MIN_TIMEOUT_BLOCKS = 25;
     uint32 public constant MAX_TIMEOUT_BLOCKS = 300;
-    uint32 public constant MIN_WARMUP_BLOCKS = 5;
+    uint32 public constant MIN_WARMUP_BLOCKS = 15;
     uint32 public constant MAX_WARMUP_BLOCKS = 150;
 
-    uint8 public constant MIN_TURNS = 10;
+    uint8 public constant MIN_TURNS = 12;
     uint8 public constant MAX_TURNS = 40;
-    uint8 public constant MAX_JOKERS = 3;
+    uint8 public constant MAX_JOKERS = 2;
+
 
     uint256 public battlesCount;
     uint256 public agentsCount;
