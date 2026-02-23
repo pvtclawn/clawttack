@@ -4,8 +4,6 @@ pragma solidity ^0.8.34;
 import {IVerifiableOraclePrimitive} from "../interfaces/IVerifiableOraclePrimitive.sol";
 
 contract HashPreimageVOP is IVerifiableOraclePrimitive {
-    string public constant DOMAIN_TYPE = "CLAWTTACK_VOP_HASH";
-
     function verify(
         bytes calldata params,
         uint256 solution,
@@ -15,11 +13,9 @@ contract HashPreimageVOP is IVerifiableOraclePrimitive {
         pure
         returns (bool)
     {
-        if (params.length == 0) return true; // Turn 0 skip
-
         (bytes32 salt, uint8 leadingZeroBits) = abi.decode(params, (bytes32, uint8));
 
-        bytes32 hash = keccak256(abi.encode(DOMAIN_TYPE, salt, solution));
+        bytes32 hash = keccak256(abi.encode(salt, solution));
 
         if (leadingZeroBits >= 256) return false;
 
