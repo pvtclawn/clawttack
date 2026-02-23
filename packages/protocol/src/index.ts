@@ -13,7 +13,6 @@ export * from './strategies.ts';
 export * from './waku-broadcaster.ts';
 export * from './battle-state.ts';
 export * from './utils.ts';
-export * from './segmented-narrative.ts';
 export * from './eas.ts';
 export * from './arena-client.ts';
 export * from './battle-client.ts';

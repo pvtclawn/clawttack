@@ -3,15 +3,11 @@ import {
   type Hex, 
   type PublicClient, 
   type WalletClient,
-  getContract,
-  keccak256,
-  encodePacked,
   decodeEventLog
 } from 'viem';
 import { CLAWTTACK_BATTLE_ABI, IVERIFIABLE_ORACLE_PRIMITIVE_ABI } from './abi';
 import { IntegrityError, ReorgDetectedError } from './errors';
 import { InternalNonceTracker } from './nonce-tracker';
-import { Epoch } from './epoch';
 
 export interface BattleClientConfig {
   publicClient: PublicClient;
@@ -24,7 +20,6 @@ export interface TurnParams {
   narrative: string;
   nextVopParams: Hex;
   poisonWordIndex: number;
-  /** Optional: pipe from Epoch.toAnchor() for reorg protection */
   anchoredBlockNumber?: bigint;
   anchoredBlockHash?: Hex;
   expectedSequenceHash?: Hex;
@@ -66,41 +61,35 @@ export class BattleClient {
   }
 
   /**
-   * Submits the next turn with a plain narrative string.
-   * Performs optional reorg pre-flight checks if anchoring data is provided.
+   * Submits the next turn with narrative and puzzle solution.
+   * Performs pre-flight reorg and state integrity checks.
    */
   async submitTurn(params: TurnParams): Promise<Hex> {
-    // Pre-flight reorg check if anchoring is provided
-    if (params.anchoredBlockNumber) {
-      const latestBlock = await this.config.publicClient.getBlock({ blockTag: 'latest' });
-      if (params.anchoredBlockNumber > latestBlock.number) {
-        throw new ReorgDetectedError(params.anchoredBlockNumber, latestBlock.number);
-      }
+    const anchoredBlock = params.anchoredBlockNumber ?? await this.config.publicClient.getBlockNumber();
+    
+    // Pre-flight: verify anchored block is in canonical chain
+    const latestBlock = await this.config.publicClient.getBlock({ blockTag: 'latest' });
+    if (anchoredBlock > latestBlock.number) {
+      throw new ReorgDetectedError(anchoredBlock, latestBlock.number);
+    }
 
-      if (params.anchoredBlockHash) {
-        const canonicalBlock = await this.config.publicClient.getBlock({ 
-          blockNumber: params.anchoredBlockNumber 
-        });
-        if (canonicalBlock.hash!.toLowerCase() !== params.anchoredBlockHash.toLowerCase()) {
-          throw new IntegrityError(
-            `Anchored block hash ${params.anchoredBlockHash} is no longer canonical at height ${params.anchoredBlockNumber}`
-          );
-        }
+    // Hash-based reorg detection
+    if (params.anchoredBlockHash) {
+      const canonicalBlock = await this.config.publicClient.getBlock({ blockNumber: anchoredBlock });
+      if (canonicalBlock.hash.toLowerCase() !== params.anchoredBlockHash.toLowerCase()) {
+        throw new IntegrityError(`Block hash mismatch at height ${anchoredBlock}`);
       }
     }
 
-    const blockNumber = params.anchoredBlockNumber ?? await this.config.publicClient.getBlockNumber();
-    const { phase, lastHash } = await this.getState(blockNumber);
+    const { phase, lastHash } = await this.getState(anchoredBlock);
     
-    if (phase !== 1) { // 1 = Active
+    if (phase !== 1) {
       throw new Error(`Battle is not active (phase: ${phase})`);
     }
 
     // State progress protection
     if (params.expectedSequenceHash && lastHash.toLowerCase() !== params.expectedSequenceHash.toLowerCase()) {
-      throw new IntegrityError(
-        `Battle state has progressed: expected hash ${params.expectedSequenceHash}, found ${lastHash}`
-      );
+      throw new IntegrityError(`State progressed: expected ${params.expectedSequenceHash}, got ${lastHash}`);
     }
 
     const nonce = await InternalNonceTracker.getInstance().getNextNonce(
@@ -123,7 +112,7 @@ export class BattleClient {
       nonce
     });
 
-    // Mempool Echo for Nonce Recovery
+    // Mempool echo for nonce recovery
     InternalNonceTracker.getInstance().verifyEcho(
       this.config.walletClient.account!.address,
       txHash,
@@ -134,7 +123,7 @@ export class BattleClient {
   }
 
   /**
-   * Claims victory if the active opponent has missed their turn deadline.
+   * Claims victory if the opponent missed their turn deadline.
    */
   async claimTimeoutWin(): Promise<Hex> {
     const nonce = await InternalNonceTracker.getInstance().getNextNonce(
@@ -192,11 +181,10 @@ export class BattleClient {
   }
 
   /**
-   * Helper to check current state.
-   * Supports block-anchoring for reorg protection.
+   * Returns battle state. Supports block-anchoring for reorg protection.
    */
   async getState(blockNumber?: bigint) {
-    const [_state, currentTurn, deadline, seqHash, bId, challengerId, acceptorId] = await Promise.all([
+    const [phase, turn, deadline, lastHash, battleId] = await Promise.all([
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
@@ -227,33 +215,19 @@ export class BattleClient {
         functionName: 'battleId',
         blockNumber
       }),
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'challengerId',
-        blockNumber
-      }),
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'acceptorId',
-        blockNumber
-      }),
     ]);
 
     return { 
-      phase: _state as number, 
-      currentTurn: currentTurn as number, 
+      phase: Number(phase), 
+      currentTurn: Number(turn), 
       deadlineBlock: deadline as bigint,
-      lastHash: seqHash as Hex,
-      battleId: bId as bigint,
-      challengerId: challengerId as bigint,
-      acceptorId: acceptorId as bigint
+      lastHash: lastHash as Hex,
+      battleId: battleId as bigint
     };
   }
 
   /**
-   * Watches for turns and settlement events on the battle clone.
+   * Watches for turn and settlement events on the battle clone.
    */
   watch(callbacks: {
     onTurn?: (event: { turnNumber: number; playerId: bigint; narrative: string }) => void;
@@ -290,7 +264,7 @@ export class BattleClient {
   }
 
   /**
-   * Helper to check whose turn it is.
+   * Returns whose turn it is (address).
    */
   async whoseTurn(): Promise<Address> {
     const { phase, currentTurn } = await this.getState();
@@ -320,14 +294,14 @@ export class BattleClient {
   }
 
   /**
-   * Dry-runs a turn against the contract's linguistic and VOP logic.
-   * Returns anchoring metadata for pipeline consistency.
+   * Pre-flight validation: checks narrative linguistics and VOP puzzle solution.
+   * Returns anchoring metadata for pipeline consistency with submitTurn().
    */
   async validateTurn(params: TurnParams): Promise<ValidationResult> {
     const anchoredBlock = await this.config.publicClient.getBlock({ blockTag: 'latest' });
     const { currentTurn, lastHash, deadlineBlock } = await this.getState(anchoredBlock.number);
 
-    // 1. Linguistic Validation
+    // 1. Linguistic validation
     const wouldPass = await this.config.publicClient.readContract({
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
@@ -343,7 +317,7 @@ export class BattleClient {
 
     const [passesTarget, passesPoison, passesLength, passesAscii] = wouldPass as [boolean, boolean, boolean, boolean];
 
-    // 2. Puzzle Validation
+    // 2. VOP puzzle dry-run
     const [currentVop, currentVopParams] = await Promise.all([
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
