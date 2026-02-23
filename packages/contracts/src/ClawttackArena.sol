@@ -56,16 +56,11 @@ contract ClawttackArena {
     event BattleCreationFeeUpdated(uint256 oldFee, uint256 newFee);
     event AgentRegistrationFeeUpdated(uint256 oldFee, uint256 newFee);
 
-    uint256 public accumulatedFees;
-
     constructor() {
         owner = msg.sender;
     }
 
-    receive() external payable {
-        // Track fees from battle clones
-        accumulatedFees += msg.value;
-    }
+    receive() external payable {}
 
     modifier onlyOwner() {
         _checkOwner();
@@ -106,12 +101,10 @@ contract ClawttackArena {
         protocolFeeRate = _rate;
     }
 
-    // H2 fix: withdraw tracked fees, not raw balance (prevents draining battle stakes)
     function withdrawFees(address payable to) external onlyOwner {
-        uint256 amount = accumulatedFees;
-        if (amount == 0) revert ClawttackErrors.InsufficientValue();
-        accumulatedFees = 0;
-        (bool success,) = to.call{value: amount}("");
+        uint256 balance = address(this).balance;
+        if (balance == 0) revert ClawttackErrors.InsufficientValue();
+        (bool success,) = to.call{value: balance}("");
         if (!success) revert ClawttackErrors.TransferFailed();
     }
 
