@@ -10,7 +10,7 @@ export const config = createConfig({
 
 // Contract addresses (Base Sepolia — canonical)
 export const CONTRACTS = {
-  registry: '0xeee01a6846C896efb1a43442434F1A51BF87d3aA' as const,
-  arena: '0xC20f694dEDa74fa2f4bCBB9f77413238862ba9f7' as const,
-  injectionCTF: '0x3D160303816ed14F05EA8784Ef9e021a02B747C4' as const,
+  arena: '0x771e0f0d30b56f5f83e2b9d452ca4b995a38f22e' as const,
+  vopRegistry: '0x36da2af2f36549be53703cc0c55df822c2fe27b1' as const,
+  wordDictionary: '0xe675b676b31adf0eaa408c43830382168ab21d38' as const,
 } as const
