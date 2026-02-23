@@ -1,8 +1,7 @@
 // Known agent names — will be replaced by on-chain registry/ENS lookup
 const KNOWN_AGENTS: Record<string, string> = {
-  '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266': 'PrivateClawn',
-  '0x70997970c51812dc3a010c7d01b50e0d17dc79c8': 'ClawnJr',
-  '0xec6cd01f6fdeaec192b88eb7b62f5e72d65719af': 'pvtclawn.eth',
+  '0xec6cd01f6fdeaec192b88eb7b62f5e72d65719af': 'PrivateClawn',
+  '0xd1033447b9a7297bdc91265eed761fbe5a3b8961': 'ClawnJr',
 }
 
 export function formatAddress(address: string): string {
