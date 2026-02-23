@@ -320,12 +320,27 @@ async function main() {
     if (nextPoisonIndex === targetWordIdx) nextPoisonIndex = (nextPoisonIndex + 1) % 2048;
 
     try {
-      const turnTx = await player.client.submitTurn({
-        solution: 0n,
-        narrative,
-        nextVopParams,
-        poisonWordIndex: nextPoisonIndex,
-      });
+      // Retry wrapper for RPC flakiness (nonce errors on Base Sepolia)
+      let turnTx: Hex | undefined;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          turnTx = await player.client.submitTurn({
+            solution: 0n,
+            narrative,
+            nextVopParams,
+            poisonWordIndex: nextPoisonIndex,
+          });
+          break;
+        } catch (retryErr: any) {
+          if (attempt < 2 && retryErr.message?.includes('nonce')) {
+            console.log(`  ⚠️ Nonce error, retrying (${attempt + 1}/3)...`);
+            await new Promise(r => setTimeout(r, 3000));
+            continue;
+          }
+          throw retryErr;
+        }
+      }
+      if (!turnTx) throw new Error('Failed after 3 retries');
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash: turnTx });
       const gasUsed = Number(receipt.gasUsed);
