@@ -7,7 +7,6 @@ import {ClawttackArena} from "../src/ClawttackArena.sol";
 import {ClawttackBattle} from "../src/ClawttackBattle.sol";
 import {ClawttackTypes} from "../src/libraries/ClawttackTypes.sol";
 import {ClawttackErrors} from "../src/libraries/ClawttackErrors.sol";
-import {VOPRegistry} from "../src/VOPRegistry.sol";
 import {BIP39Words} from "../src/BIP39Words.sol";
 import {IVerifiableOraclePrimitive} from "../src/interfaces/IVerifiableOraclePrimitive.sol";
 
@@ -20,7 +19,6 @@ contract MockVOP is IVerifiableOraclePrimitive {
 contract ClawttackE2ETest is Test {
     ClawttackArena arena;
     ClawttackBattle implementation;
-    VOPRegistry registry;
     BIP39Words dict;
     MockVOP mockVop;
 
@@ -34,26 +32,22 @@ contract ClawttackE2ETest is Test {
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
 
-        implementation = new ClawttackBattle();
-        arena = new ClawttackArena();
-        arena.setBattleImplementation(address(implementation));
-
-        registry = new VOPRegistry();
-        mockVop = new MockVOP();
-        registry.addVop(address(mockVop));
-        arena.setVopRegistry(address(registry));
-        
-        // Setup Protocol Economics
-        arena.setAgentRegistrationFee(0.005 ether);
-        arena.setProtocolFeeRate(500);
-
-        // Mock BIP39 Data
+        // Deploy dict first — Arena constructor requires it as immutable arg
         bytes memory packedData = abi.encodePacked(uint8(3), "art", uint8(5), "agent", uint8(6), "ignore");
         bytes memory sstoreData = abi.encodePacked(bytes1(0x00), packedData);
         address dataLoc = address(0x9999);
         vm.etch(dataLoc, sstoreData);
         dict = new BIP39Words(dataLoc, 3);
-        arena.setWordDictionary(address(dict));
+
+        implementation = new ClawttackBattle();
+        arena = new ClawttackArena(address(dict));
+        arena.setBattleImplementation(address(implementation));
+
+        mockVop = new MockVOP();
+        arena.addVop(address(mockVop));
+
+        arena.setAgentRegistrationFee(0.005 ether);
+        arena.setProtocolFeeRate(500);
 
         vm.prank(alice);
         agentAlice = arena.registerAgent{value: 0.005 ether}();
@@ -61,6 +55,7 @@ contract ClawttackE2ETest is Test {
         vm.prank(bob);
         agentBob = arena.registerAgent{value: 0.005 ether}();
     }
+
 
     receive() external payable {}
 
@@ -88,9 +83,10 @@ contract ClawttackE2ETest is Test {
             // If we are caught in an RNG trap where the target word IS the poison word,
             // we MUST use a Joker to bypass linguistic verification entirely.
             if (i > 0 && targetIdx == poisonIdx) {
+                string memory narrative = "This is a Joker bypass string that must be physically longer than 256 characters so let us pad it out right now. Pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad.";
                 payload = ClawttackTypes.TurnPayload({
                     solution: 0,
-                    narrative: "This is a Joker bypass string that must be physically longer than 256 characters so let us pad it out right now. Pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad.",
+                    narrative: narrative,
                     nextVopParams: "",
                     poisonWordIndex: uint16((targetIdx + 1) % 3)
                 });
@@ -132,10 +128,10 @@ contract ClawttackE2ETest is Test {
     function test_E2E_Blitz() public {
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 0.01 ether,
-            baseTimeoutBlocks: 15, // Absolute min
-            warmupBlocks: 5,       // Absolute min
+            baseTimeoutBlocks: 25, // MIN_TIMEOUT
+            warmupBlocks: 15,       // Absolute min
             targetAgentId: 0,
-            maxTurns: 10,          // Absolute min
+            maxTurns: 12,          // Absolute min
             maxJokers: 1
         });
         
@@ -164,7 +160,7 @@ contract ClawttackE2ETest is Test {
             warmupBlocks: 150,      // Max 30 min warmup
             targetAgentId: 0,
             maxTurns: 40,           // Max 
-            maxJokers: 3            // Max
+            maxJokers: 2            // Max
         });
         
         // Simulate a gruelling 38-turn game
@@ -174,10 +170,10 @@ contract ClawttackE2ETest is Test {
     function test_E2E_BestCase_Blitz() public {
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 0.01 ether,
-            baseTimeoutBlocks: 15,
-            warmupBlocks: 5,
+            baseTimeoutBlocks: 25,
+            warmupBlocks: 15,
             targetAgentId: 0,
-            maxTurns: 10,
+            maxTurns: 12,
             maxJokers: 1
         });
         
@@ -235,7 +231,7 @@ contract ClawttackE2ETest is Test {
             warmupBlocks: 150,
             targetAgentId: 0,
             maxTurns: 40,
-            maxJokers: 3
+            maxJokers: 2
         });
         
         vm.prank(alice);
@@ -249,7 +245,7 @@ contract ClawttackE2ETest is Test {
 
         bool aFirst = battle.firstMoverA();
         
-        uint256 totalTurns = 6;
+        uint256 totalTurns = 4; // 2 turns per player, each a full joker (maxJokers:2)
         for (uint256 i = 0; i < totalTurns; i++) {
             address currentPlayer = aFirst ? (i % 2 == 0 ? alice : bob) : (i % 2 == 0 ? bob : alice);
             
@@ -265,12 +261,11 @@ contract ClawttackE2ETest is Test {
             bytes1 poisonFirst = bytes1(0);
             if (bytes(actualPoison).length > 0) poisonFirst = bytes(actualPoison)[0];
             
-            // Worst case string: 1024 bytes (Joker), filled with alternating characters matching the 
-            // first char of the poison word and target word. Target word is placed at the very end.
+            // Worst case: 1024-byte joker narrative. Fills entire allowed joker budget.
+            // Parser must scan the full string: alternating target/poison-first-chars, word at very end.
             bytes memory worstCaseNarrative = new bytes(1024);
             
             for (uint256 j = 0; j < 1024; j++) {
-                // Alternate between targetFirst and poisonFirst to maximize inner-loop triggers
                 if (j % 2 == 0 && targetFirst != bytes1(0)) {
                     worstCaseNarrative[j] = targetFirst;
                 } else if (poisonFirst != bytes1(0)) {
@@ -280,18 +275,12 @@ contract ClawttackE2ETest is Test {
                 }
             }
             
-            // Place target word securely at the very end to pass the check but force entire string execution
+            // Place target word at the very end: [1024 - len - 1] = space, then the word
             bytes memory tBytes = bytes(actualTarget);
-            // Example: If target is "art" (length 3), we want it at index 1020, 1021, 1022. 
-            // 1019 must be " ". 1023 must be " " (or we just let the length be the boundary)
-            // The parser allows the end of the string to be a boundary.
             worstCaseNarrative[1024 - tBytes.length - 1] = bytes1(" ");
             for (uint256 j = 0; j < tBytes.length; j++) {
                 worstCaseNarrative[1024 - tBytes.length + j] = tBytes[j];
             }
-            
-            // Overwrite first characters to make it legally lowercase letters that match poison start
-            // Just ensuring string has spaces before target word.
             
             ClawttackTypes.TurnPayload memory payload = ClawttackTypes.TurnPayload({
                 solution: 42,
@@ -305,7 +294,7 @@ contract ClawttackE2ETest is Test {
             vm.roll(block.number + 1);
         }
         
-        vm.roll(block.number + 300);
+        vm.roll(battle.turnDeadlineBlock() + 1);
         
         address winner = aFirst ? (totalTurns % 2 == 0 ? alice : bob) : (totalTurns % 2 == 0 ? bob : alice);
         address loser = aFirst ? (totalTurns % 2 == 0 ? bob : alice) : (totalTurns % 2 == 0 ? alice : bob);

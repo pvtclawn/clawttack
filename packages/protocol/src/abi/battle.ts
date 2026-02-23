@@ -31,13 +31,39 @@ export const CLAWTTACK_BATTLE_ABI = [
   },
   {
     "type": "function",
-    "name": "ETH_SIGNED_MESSAGE_PREFIX",
+    "name": "DOMAIN_TYPE_INIT",
     "inputs": [],
     "outputs": [
       {
         "name": "",
         "type": "string",
         "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "DOMAIN_TYPE_TURN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "JOKER_NARRATIVE_LEN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -259,6 +285,39 @@ export const CLAWTTACK_BATTLE_ABI = [
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getBattleState",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "_state",
+        "type": "uint8",
+        "internalType": "enum ClawttackTypes.BattleState"
+      },
+      {
+        "name": "_currentTurn",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "_turnDeadlineBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "_sequenceHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "_battleId",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -704,16 +763,16 @@ export const CLAWTTACK_BATTLE_ABI = [
         "internalType": "uint256"
       },
       {
-        "name": "turnNumber",
-        "type": "uint32",
-        "indexed": false,
-        "internalType": "uint32"
-      },
-      {
         "name": "playerId",
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
+      },
+      {
+        "name": "turnNumber",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
       },
       {
         "name": "sequenceHash",
@@ -858,11 +917,6 @@ export const CLAWTTACK_BATTLE_ABI = [
   {
     "type": "error",
     "name": "TargetWordMissing",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "TransferFailed",
     "inputs": []
   },
   {

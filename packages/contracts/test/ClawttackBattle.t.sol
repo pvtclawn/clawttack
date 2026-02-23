@@ -7,7 +7,6 @@ import {ClawttackArena} from "../src/ClawttackArena.sol";
 import {ClawttackBattle} from "../src/ClawttackBattle.sol";
 import {ClawttackTypes} from "../src/libraries/ClawttackTypes.sol";
 import {ClawttackErrors} from "../src/libraries/ClawttackErrors.sol";
-import {VOPRegistry} from "../src/VOPRegistry.sol";
 import {BIP39Words} from "../src/BIP39Words.sol";
 import {IVerifiableOraclePrimitive} from "../src/interfaces/IVerifiableOraclePrimitive.sol";
 
@@ -20,7 +19,6 @@ contract MockVOP is IVerifiableOraclePrimitive {
 contract ClawttackBattleTest is Test {
     ClawttackArena arena;
     ClawttackBattle implementation;
-    VOPRegistry registry;
     BIP39Words dict;
     MockVOP mockVop;
 
@@ -34,26 +32,22 @@ contract ClawttackBattleTest is Test {
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
 
-        implementation = new ClawttackBattle();
-        arena = new ClawttackArena();
-        arena.setBattleImplementation(address(implementation));
-
-        registry = new VOPRegistry();
-        mockVop = new MockVOP();
-        registry.addVop(address(mockVop));
-        arena.setVopRegistry(address(registry));
-        
-        // Setup Protocol Economics
-        arena.setAgentRegistrationFee(0.005 ether);
-        arena.setProtocolFeeRate(500);
-
-        // Mock BIP39 Data (words: 0:"art", 1:"agent", 2:"ignore")
+        // Deploy dict first — Arena constructor requires it as immutable arg
         bytes memory packedData = abi.encodePacked(uint8(3), "art", uint8(5), "agent", uint8(6), "ignore");
         bytes memory sstoreData = abi.encodePacked(bytes1(0x00), packedData);
         address dataLoc = address(0x9999);
         vm.etch(dataLoc, sstoreData);
         dict = new BIP39Words(dataLoc, 3);
-        arena.setWordDictionary(address(dict));
+
+        implementation = new ClawttackBattle();
+        arena = new ClawttackArena(address(dict));
+        arena.setBattleImplementation(address(implementation));
+
+        mockVop = new MockVOP();
+        arena.addVop(address(mockVop));
+
+        arena.setAgentRegistrationFee(0.005 ether);
+        arena.setProtocolFeeRate(500);
 
         vm.prank(alice);
         agentAlice = arena.registerAgent{value: 0.005 ether}();
@@ -62,14 +56,15 @@ contract ClawttackBattleTest is Test {
         agentBob = arena.registerAgent{value: 0.005 ether}();
     }
 
+
     function test_CreateAndAcceptBattle() public {
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 1 ether,
             baseTimeoutBlocks: 30,
-            warmupBlocks: 10,
+            warmupBlocks: 15,
             targetAgentId: 0,
             maxTurns: 20,
-            maxJokers: 3
+            maxJokers: 2
         });
 
         vm.prank(alice);
@@ -90,7 +85,7 @@ contract ClawttackBattleTest is Test {
 
     function test_TurnLinguistics() public {
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
-            stake: 0, baseTimeoutBlocks: 30, warmupBlocks: 5, targetAgentId: 0, maxTurns: 20, maxJokers: 3
+            stake: 0, baseTimeoutBlocks: 30, warmupBlocks: 15, targetAgentId: 0, maxTurns: 20, maxJokers: 2
         });
 
         vm.prank(alice);
@@ -138,8 +133,12 @@ contract ClawttackBattleTest is Test {
             abi.encodePacked("Another very long narrative exceeding 64 chars this time uttering ignore safely inside.")
         );
 
-        ClawttackTypes.TurnPayload memory payload2 =
-            ClawttackTypes.TurnPayload({solution: 42, narrative: badNarrative, nextVopParams: "", poisonWordIndex: 1});
+        ClawttackTypes.TurnPayload memory payload2 = ClawttackTypes.TurnPayload({
+            solution: 42,
+            narrative: badNarrative,
+            nextVopParams: "",
+            poisonWordIndex: 1
+        });
 
         vm.prank(secondPlayer);
         vm.expectRevert(ClawttackErrors.PoisonWordDetected.selector);

@@ -99,19 +99,17 @@ contract VOPsTest is Test {
     }
 
     function test_TWAPOracleVOP() public {
-        // Delta = 12000. secondsAgo = 10. AvgTick = 1200.
-        bytes memory params = abi.encode(address(mockPool), uint32(10));
+        // Delta = 12000. secondsAgo = 300. AvgTick = 40.
+        bytes memory params = abi.encode(address(mockPool), uint32(300));
 
-        assertTrue(twapVop.verify(params, 1200, block.number));
-        assertFalse(twapVop.verify(params, 1201, block.number));
+        assertTrue(twapVop.verify(params, 40, block.number));
+        assertFalse(twapVop.verify(params, 41, block.number));
     }
 
     function test_CrossChainSyncVOP() public {
-        // basefee = 50 gwei
-        // AvgTick = 1200
-        // expected = 50 gwei ^ uint256(int256(1200))
-        uint256 expected = uint256(50 gwei) ^ uint256(1200);
-        bytes memory params = abi.encode(address(mockPool), uint32(10));
+        // expected = 50 gwei ^ uint256(int256(40))
+        uint256 expected = uint256(50 gwei) ^ uint256(40);
+        bytes memory params = abi.encode(address(mockPool), uint32(300));
 
         assertTrue(syncVop.verify(params, expected, block.number));
         assertFalse(syncVop.verify(params, expected + 1, block.number));

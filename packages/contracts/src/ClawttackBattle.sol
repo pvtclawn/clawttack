@@ -6,7 +6,7 @@ import {ClawttackTypes} from "./libraries/ClawttackTypes.sol";
 import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
 import {LinguisticParser} from "./libraries/LinguisticParser.sol";
 import {ECDSA} from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
-import {IVOPRegistry} from "./interfaces/IVOPRegistry.sol";
+import {MessageHashUtils} from "openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
 import {IVerifiableOraclePrimitive} from "./interfaces/IVerifiableOraclePrimitive.sol";
 import {IWordDictionary} from "./interfaces/IWordDictionary.sol";
 import {IClawttackArenaView} from "./interfaces/IClawttackArenaView.sol";
@@ -19,14 +19,20 @@ import {IClawttackArenaView} from "./interfaces/IClawttackArenaView.sol";
 contract ClawttackBattle is Initializable {
     using ClawttackTypes for ClawttackTypes.BattleConfig;
 
-    address public arena;
+    // ─── Constants ───────────────────────────────────────────────────────────
 
-    // Constants
-    uint256 public constant MAX_NARRATIVE_LEN = 256;
-    uint32 public constant TURNS_UNTIL_HALVING = 5;
+    string public constant DOMAIN_TYPE_INIT = "CLAWTTACK_V3_INIT";
+    string public constant DOMAIN_TYPE_TURN = "CLAWTTACK_V3_TURN";
     string public constant COMPROMISE_REASON = "COMPROMISE";
-    string public constant ETH_SIGNED_MESSAGE_PREFIX = "\x19Ethereum Signed Message:\n32";
+
+    uint256 public constant MAX_NARRATIVE_LEN = 256;
+    uint256 public constant JOKER_NARRATIVE_LEN = 1024;
     uint256 public constant BPS_DENOMINATOR = 10000;
+    uint32 public constant TURNS_UNTIL_HALVING = 5;
+
+    // ─── Storage ─────────────────────────────────────────────────────────────
+
+    address public arena;
 
     uint256 public battleId;
     uint256 public challengerId;
@@ -53,7 +59,8 @@ contract ClawttackBattle is Initializable {
     uint16 public poisonWordIndex;
     bytes public currentVopParams;
 
-    // Events
+    // ─── Events ──────────────────────────────────────────────────────────────
+
     event BattleAccepted(uint256 indexed battleId, uint256 indexed acceptorId, bool challengerGoesFirst);
     event BattleCancelled(uint256 indexed battleId);
     event BattleSettled(
@@ -64,8 +71,8 @@ contract ClawttackBattle is Initializable {
     );
     event TurnSubmitted(
         uint256 indexed battleId,
-        uint32 turnNumber,
         uint256 indexed playerId,
+        uint32 turnNumber,
         bytes32 sequenceHash,
         uint16 targetWord,
         uint16 poisonWord,
@@ -75,6 +82,14 @@ contract ClawttackBattle is Initializable {
     event JokerPlayed(uint256 indexed battleId, uint256 indexed agentId, uint8 jokersRemaining);
     event FlagCaptured(uint256 indexed battleId, uint256 indexed winnerId, uint256 indexed loserId);
     event TimeoutClaimed(uint256 indexed battleId, uint256 indexed claimantId);
+
+    /**
+     * @notice Locks the implementation contract from being initialized.
+     */
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
 
     /**
      * @notice Initializes the battle clone parameters post-deployment.
@@ -98,6 +113,8 @@ contract ClawttackBattle is Initializable {
         totalPot = _config.stake;
     }
 
+    receive() external payable {}
+
     /**
      * @notice Accepts an open battle by matching the stake.
      * @dev Rolls the `prevrandao` to deterministically allocate the First Mover advantage.
@@ -107,6 +124,9 @@ contract ClawttackBattle is Initializable {
         if (state != ClawttackTypes.BattleState.Open) revert ClawttackErrors.BattleNotOpen();
         if (msg.value != config.stake) revert ClawttackErrors.InsufficientValue();
         if (_acceptorId == challengerId) revert ClawttackErrors.CannotBattleSelf();
+
+        (address _agentOwner, , ,) = IClawttackArenaView(arena).agents(_acceptorId);
+        if (_agentOwner != msg.sender) revert ClawttackErrors.NotParticipant();
 
         if (config.targetAgentId != 0) {
             if (_acceptorId != config.targetAgentId) revert ClawttackErrors.WrongTargetAgent();
@@ -127,19 +147,18 @@ contract ClawttackBattle is Initializable {
 
         state = ClawttackTypes.BattleState.Active;
 
-        uint256 r = uint256(keccak256(abi.encodePacked(block.prevrandao, battleId)));
+        uint256 r = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_INIT, block.prevrandao, battleId)));
         firstMoverA = (r % 2 == 0);
 
         startBlock = uint32(block.number + config.warmupBlocks);
         turnDeadlineBlock = startBlock + config.baseTimeoutBlocks;
 
         currentTurn = 0;
-        sequenceHash = keccak256(abi.encodePacked(battleId, _acceptorId, r));
+        sequenceHash = keccak256(abi.encodePacked(DOMAIN_TYPE_INIT, battleId, _acceptorId, r));
 
-        address vopRegistry = IClawttackArenaView(arena).vopRegistry();
         address wordDictionary = IClawttackArenaView(arena).wordDictionary();
 
-        currentVop = IVOPRegistry(vopRegistry).getRandomVop(r);
+        currentVop = IClawttackArenaView(arena).getRandomVop(r);
         targetWordIndex = uint16(r % IWordDictionary(wordDictionary).wordCount());
 
         emit BattleAccepted(battleId, _acceptorId, firstMoverA);
@@ -148,7 +167,7 @@ contract ClawttackBattle is Initializable {
     /**
      * @notice Submits the next narrative and puzzle solution for the battle.
      * @dev Validates the VOP gate, linguistic constraints, and updates the sequence hash.
-     * @param payload The encoded payload containing narrative, solution, next target logic, etc.
+     * @param payload The encoded payload containing narrative segments, solution, next target logic, etc.
      */
     function submitTurn(ClawttackTypes.TurnPayload calldata payload) external {
         if (state != ClawttackTypes.BattleState.Active) revert ClawttackErrors.BattleNotActive();
@@ -162,29 +181,35 @@ contract ClawttackBattle is Initializable {
 
         if (block.number > turnDeadlineBlock) revert ClawttackErrors.TurnDeadlineExpired();
 
+        // 1. Joker / narrative-length enforcement
         uint256 narrativeLen = bytes(payload.narrative).length;
-        if (narrativeLen > MAX_NARRATIVE_LEN) {
-            if (narrativeLen > LinguisticParser.MAX_JOKER_NARRATIVE_LEN) revert ClawttackErrors.NarrativeTooLong();
-
-            if (isPlayerA) {
-                if (jokersRemainingA == 0) revert ClawttackErrors.NoJokersRemaining();
-                jokersRemainingA--;
-                emit JokerPlayed(battleId, challengerId, jokersRemainingA);
-            } else {
-                if (jokersRemainingB == 0) revert ClawttackErrors.NoJokersRemaining();
-                jokersRemainingB--;
-                emit JokerPlayed(battleId, acceptorId, jokersRemainingB);
-            }
+        bool isJoker = narrativeLen > MAX_NARRATIVE_LEN;
+        if (isJoker) {
+            if (narrativeLen > JOKER_NARRATIVE_LEN) revert ClawttackErrors.NarrativeTooLong();
+            uint8 jokersLeft = isPlayerA ? jokersRemainingA : jokersRemainingB;
+            if (jokersLeft == 0) revert ClawttackErrors.NoJokersRemaining();
+            if (isPlayerA) { jokersRemainingA--; } else { jokersRemainingB--; }
+            emit JokerPlayed(battleId, isPlayerA ? challengerId : acceptorId, isPlayerA ? jokersRemainingA : jokersRemainingB);
         }
 
+        // 2. Linguistic verification
         address wordDictionary = IClawttackArenaView(arena).wordDictionary();
         string memory targetWord = IWordDictionary(wordDictionary).word(targetWordIndex);
         string memory poisonWord = currentTurn > 0 ? IWordDictionary(wordDictionary).word(poisonWordIndex) : "";
 
         LinguisticParser.verifyLinguistics(payload.narrative, targetWord, poisonWord);
 
-        bool puzzlePassed =
-            IVerifiableOraclePrimitive(currentVop).verify(currentVopParams, payload.solution, turnDeadlineBlock);
+        // 3. VOP puzzle verification
+        bool puzzlePassed;
+        if (currentVopParams.length == 0) {
+            puzzlePassed = true;
+        } else {
+            try IVerifiableOraclePrimitive(currentVop).verify(currentVopParams, payload.solution, turnDeadlineBlock) returns (bool _passed) {
+                puzzlePassed = _passed;
+            } catch {
+                puzzlePassed = true; // Auto-pass if previous player bricked params
+            }
+        }
 
         if (!puzzlePassed) {
             _settleBattle(
@@ -195,9 +220,11 @@ contract ClawttackBattle is Initializable {
             return;
         }
 
+        // 4. Advance sequence hash (chains narrative + solution + nextVopParams)
+        bytes32 nextVopHash = keccak256(payload.nextVopParams);
         sequenceHash = keccak256(
             abi.encodePacked(
-                sequenceHash, keccak256(bytes(payload.narrative)), payload.solution, keccak256(payload.nextVopParams)
+                DOMAIN_TYPE_TURN, sequenceHash, keccak256(bytes(payload.narrative)), payload.solution, nextVopHash
             )
         );
 
@@ -209,13 +236,13 @@ contract ClawttackBattle is Initializable {
         uint64 baseForNext = uint64(block.number > startBlock ? block.number : startBlock);
         turnDeadlineBlock = baseForNext + nextTimeout;
 
-        uint256 randomness = uint256(keccak256(abi.encodePacked(block.prevrandao, sequenceHash)));
+        uint256 randomness = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_TURN, block.prevrandao, sequenceHash)));
 
-        currentVop = IVOPRegistry(IClawttackArenaView(arena).vopRegistry()).getRandomVop(randomness);
+        currentVop = IClawttackArenaView(arena).getRandomVop(randomness);
         uint16 _wordCount = IWordDictionary(wordDictionary).wordCount();
         targetWordIndex = uint16(randomness % _wordCount);
-        poisonWordIndex = payload.poisonWordIndex;
-        
+        poisonWordIndex = uint16(payload.poisonWordIndex % _wordCount);
+
         // Anti-Trap Security: Prevent RNG from dooming the next player
         if (targetWordIndex == poisonWordIndex) {
             targetWordIndex = (targetWordIndex + 1) % _wordCount;
@@ -225,8 +252,8 @@ contract ClawttackBattle is Initializable {
 
         emit TurnSubmitted(
             battleId,
-            currentTurn,
             isPlayerA ? challengerId : acceptorId,
+            currentTurn,
             sequenceHash,
             targetWordIndex,
             poisonWordIndex,
@@ -239,25 +266,6 @@ contract ClawttackBattle is Initializable {
         }
     }
 
-    /**
-     * @notice A public utility view for agents to dry-run linguistic checks off-chain.
-     * @return passesTarget True if boundary logic passes.
-     * @return passesPoison True if the substring blacklist logic passes.
-     * @return passesLength True if within length bounds.
-     * @return passesAscii True if characters are strictly ASCII (< 128).
-     */
-    function wouldNarrativePass(
-        string calldata narrative,
-        uint16 _targetWordIndex,
-        uint16 _poisonWordIndex,
-        bool isTurnZero
-    ) external view returns (bool passesTarget, bool passesPoison, bool passesLength, bool passesAscii) {
-        address wordDictionary = IClawttackArenaView(arena).wordDictionary();
-        string memory tWord = IWordDictionary(wordDictionary).word(_targetWordIndex);
-        string memory pWord = isTurnZero ? "" : IWordDictionary(wordDictionary).word(_poisonWordIndex);
-
-        return LinguisticParser.wouldPass(narrative, tWord, pWord);
-    }
 
     /**
      * @notice Claims victory if the active opponent has missed their `turnDeadlineBlock`.
@@ -292,7 +300,7 @@ contract ClawttackBattle is Initializable {
         uint256 attackerId = isPlayerA ? challengerId : acceptorId;
 
         bytes32 messageHash = keccak256(abi.encode(block.chainid, address(this), battleId, COMPROMISE_REASON));
-        bytes32 ethSignedMessageHash = keccak256(abi.encodePacked(ETH_SIGNED_MESSAGE_PREFIX, messageHash));
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
 
         address recovered = ECDSA.recover(ethSignedMessageHash, signature);
 
@@ -313,16 +321,54 @@ contract ClawttackBattle is Initializable {
 
         if (totalPot > 0) {
             (bool success,) = challengerOwner.call{value: totalPot}("");
-            if (!success) revert ClawttackErrors.TransferFailed();
+            // Do not revert on failure to prevent permanent un-cancellable state
         }
 
         emit BattleCancelled(battleId);
     }
 
+    // ─── External View ───────────────────────────────────────────────────────
+
+    /**
+     * @notice A public utility view for agents to dry-run linguistic checks off-chain.
+     * @return passesTarget True if boundary logic passes.
+     * @return passesPoison True if the substring blacklist logic passes.
+     * @return passesLength True if within length bounds.
+     * @return passesAscii True if characters are strictly ASCII (< 128).
+     */
+    function wouldNarrativePass(
+        string calldata narrative,
+        uint16 _targetWordIndex,
+        uint16 _poisonWordIndex,
+        bool isTurnZero
+    ) external view returns (bool passesTarget, bool passesPoison, bool passesLength, bool passesAscii) {
+        address wordDictionary = IClawttackArenaView(arena).wordDictionary();
+        string memory tWord = IWordDictionary(wordDictionary).word(_targetWordIndex);
+        string memory pWord = isTurnZero ? "" : IWordDictionary(wordDictionary).word(_poisonWordIndex);
+
+        return LinguisticParser.wouldPass(narrative, tWord, pWord);
+    }
+
+    /**
+     * @notice Returns the full battle state in a single call.
+     * @dev Challenge #82: Ensures atomic read consistency.
+     */
+    function getBattleState() external view returns (
+        ClawttackTypes.BattleState _state,
+        uint32 _currentTurn,
+        uint64 _turnDeadlineBlock,
+        bytes32 _sequenceHash,
+        uint256 _battleId
+    ) {
+        return (state, currentTurn, turnDeadlineBlock, sequenceHash, battleId);
+    }
+
+    // ─── Internal ────────────────────────────────────────────────────────────
+
     function _settleBattle(uint256 winnerId, uint256 loserId, ClawttackTypes.ResultType result) internal {
         state = ClawttackTypes.BattleState.Settled;
 
-        IClawttackArenaView(arena).updateRatings(battleId, winnerId, loserId, config.stake);
+        IClawttackArenaView(arena).updateRatings(battleId, challengerId, acceptorId, winnerId, loserId, config.stake);
 
         if (totalPot > 0) {
             uint256 fee = (totalPot * IClawttackArenaView(arena).protocolFeeRate()) / BPS_DENOMINATOR;
@@ -331,23 +377,24 @@ contract ClawttackBattle is Initializable {
             address winnerAddress = (winnerId == challengerId) ? challengerOwner : acceptorOwner;
 
             if (fee > 0) {
-                (bool s1,) = IClawttackArenaView(arena).owner().call{value: fee}("");
-                if (!s1) revert ClawttackErrors.TransferFailed();
+                (bool s1,) = arena.call{value: fee}("");
+                if (!s1) {
+                    payout += fee;
+                }
             }
             if (payout > 0 && winnerId != 0) {
                 (bool s2,) = winnerAddress.call{value: payout}("");
-                if (!s2) revert ClawttackErrors.TransferFailed();
+                // Do not revert on failure; state must successfully settle
             } else if (payout > 0 && winnerId == 0) {
                 // It's a draw, refund both
                 uint256 refund = payout / 2;
                 (bool s3,) = challengerOwner.call{value: refund}("");
                 (bool s4,) = acceptorOwner.call{value: payout - refund}("");
-                if (!s3 || !s4) revert ClawttackErrors.TransferFailed();
+                // Do not revert on failure
             }
         }
 
         emit BattleSettled(battleId, winnerId, loserId, result);
     }
-
-    receive() external payable {}
 }
+

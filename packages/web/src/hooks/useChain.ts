@@ -88,6 +88,8 @@ export interface V3BattleInfo {
   turnDeadlineBlock: bigint
   sequenceHash: `0x${string}`
   totalPot: bigint
+  baseTimeoutBlocks: number
+  firstMoverA: boolean
 }
 
 export interface V3TurnEvent {
@@ -136,6 +138,8 @@ const ARENA_ABI = [
 // ─── Battle (clone) ABI fragments ───────────────────────────────────
 
 const BATTLE_ABI = [
+  { type: 'function', name: 'getBattleState', inputs: [], outputs: [{ type: 'uint8' }, { type: 'uint32' }, { type: 'uint64' }, { type: 'bytes32' }, { type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'firstMoverA', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
   { type: 'function', name: 'state', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
   { type: 'function', name: 'battleId', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
   { type: 'function', name: 'challengerId', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
@@ -225,24 +229,20 @@ export function useBattleInfo(battleId?: bigint, live = false) {
       }) as Address
 
       // 2. Read all state from the clone
-      const [state, challId, accId, challOwner, accOwner, turn, deadline, seqHash, pot] = await Promise.all([
-        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'state' }),
+      const [battleState, challId, accId, challOwner, accOwner, pot, config, fmA] = await Promise.all([
+        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'getBattleState' }) as Promise<[number, number, bigint, `0x${string}`, bigint]>,
         client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'challengerId' }),
         client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'acceptorId' }),
         client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'challengerOwner' }),
         client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'acceptorOwner' }),
-        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'currentTurn' }),
-        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'turnDeadlineBlock' }),
-        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'sequenceHash' }),
         client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'totalPot' }),
+        client.readContract({ address: battleAddress, abi: BATTLE_CONFIG_ABI, functionName: 'config' }),
+        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'firstMoverA' }),
       ])
+      
+      const [state, turn, deadline, seqHash] = battleState;
 
-      // 3. Read config for maxTurns
-      const config = await client.readContract({
-        address: battleAddress,
-        abi: BATTLE_CONFIG_ABI,
-        functionName: 'config',
-      }) as [bigint, number, number, bigint, number, number]
+
 
       return {
         battleId: battleId!,
@@ -253,10 +253,12 @@ export function useBattleInfo(battleId?: bigint, live = false) {
         challengerOwner: challOwner as Address,
         acceptorOwner: accOwner as Address,
         currentTurn: Number(turn),
-        maxTurns: config[4], // maxTurns from BattleConfig
-        turnDeadlineBlock: deadline as bigint,
-        sequenceHash: seqHash as `0x${string}`,
+        maxTurns: (config as [bigint, number, number, bigint, number, number])[4], // maxTurns from BattleConfig
+        turnDeadlineBlock: deadline,
+        sequenceHash: seqHash,
         totalPot: pot as bigint,
+        baseTimeoutBlocks: (config as [bigint, number, number, bigint, number, number])[1],
+        firstMoverA: fmA as boolean,
       }
     },
     staleTime: live ? 0 : 30_000,
@@ -288,17 +290,16 @@ export function useBattleList(live = false) {
 
             if (addr === '0x0000000000000000000000000000000000000000') return null
 
-            const [state, challId, accId, challOwner, accOwner, turn, deadline, seqHash, pot] = await Promise.all([
-              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'state' }),
+            const [battleState, challId, accId, challOwner, accOwner, pot, fmA] = await Promise.all([
+              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'getBattleState' }) as Promise<[number, number, bigint, `0x${string}`, bigint]>,
               client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'challengerId' }),
               client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'acceptorId' }),
               client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'challengerOwner' }),
               client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'acceptorOwner' }),
-              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'currentTurn' }),
-              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'turnDeadlineBlock' }),
-              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'sequenceHash' }),
               client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'totalPot' }),
+              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'firstMoverA' }),
             ])
+            const [state, turn, deadline, seqHash] = battleState
 
             const config = await client.readContract({
               address: addr, abi: BATTLE_CONFIG_ABI, functionName: 'config',
@@ -314,9 +315,11 @@ export function useBattleList(live = false) {
               acceptorOwner: accOwner as Address,
               currentTurn: Number(turn),
               maxTurns: config[4],
-              turnDeadlineBlock: deadline as bigint,
-              sequenceHash: seqHash as `0x${string}`,
+              turnDeadlineBlock: deadline,
+              sequenceHash: seqHash,
               totalPot: pot as bigint,
+              baseTimeoutBlocks: config[1],
+              firstMoverA: fmA as boolean,
             } as V3BattleInfo
           } catch {
             return null
