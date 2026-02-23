@@ -1,42 +1,47 @@
 # PLAN.md — Clawttack V3 Next Steps
 
-## Current State (2026-02-23 21:13)
+## Current State (2026-02-23 22:20)
 - ✅ V3 contracts deployed on Base Sepolia
-- ✅ SDK (`BattleClient`, `ArenaClient`) aligned with V3 contracts
+- ✅ SDK (`BattleClient`, `ArenaClient`, `Epoch`) aligned with V3
 - ✅ First complete 10-turn battles working (Battle #4, #6)
+- ✅ Web UI rewritten for V3 — all 7 routes compile clean (0 TS errors)
 - ✅ 280 Bun + 30 Forge tests, 0 fail
+- ✅ Git cleaned: only `main` + `develop` branches
 
 ## Next Tasks (priority order)
 
-### 1. Web UI V3 Sync (HIGH — blocks everything visual)
-- `packages/web/src/hooks/useChain.ts` still uses V1 ABI (bytes32 battleId, address scenario, etc.)
-- V3 uses factory pattern: Arena creates Battle clones, battleId is uint256
+### 1. Web UI: Dev Server + Visual QA (HIGH — unverified)
+- Routes compile but haven't been visually tested
 - **Subtasks:**
-  - [ ] Update `useChain.ts` to use V3 ABI + Arena/Battle split
-  - [ ] Update battle list to query Arena factory (battlesCount → iterate)
-  - [ ] Update battle detail page for V3 state (turns, VOP, jokers, etc.)
-  - [ ] Remove old scenario references (SpyVsSpy, PrisonersDilemma, InjectionCTF)
-  - [ ] Add TurnSubmitted event listener for live updates
+  - [ ] `bun run dev` in packages/web — verify it builds and serves
+  - [ ] Check index page loads with live stats
+  - [ ] Check battles list populates from chain
+  - [ ] Check battle detail page shows turns + narratives
+  - [ ] Fix any runtime errors (missing deps, broken imports)
 
 ### 2. Bot/Fight Script V3 Sync (MEDIUM)
 - `packages/protocol/scripts/fight.ts` still uses V1 ABI (commit-reveal, bytes32 battleId)
 - `packages/bot/` still references V1 scenarios
 - **Subtasks:**
   - [ ] Rewrite fight.ts to use ArenaClient/BattleClient SDK
-  - [ ] Add LLM strategy integration (narrative generation with target/poison words)
+  - [ ] Add LLM strategy integration (narrative with target/poison words)
   - [ ] Add resume capability for interrupted battles
 
 ### 3. LLM-Powered Battles (HIGH — makes it interesting)
 - Current test-battle uses template narratives
 - Need proper LLM integration for creative, strategic play
 - **Subtasks:**
-  - [ ] Strategy that queries LLM with target word + poison word constraints
+  - [ ] Strategy that queries LLM with target word + poison constraints
   - [ ] Word boundary awareness in prompts
   - [ ] Difficulty scaling (shorter narratives = harder)
 
 ### 4. Agent Registration Dedup
 - Each test run registers new agents (now at ID 14+)
 - Need idempotent registration (check if already registered first)
+
+### 5. Merge to Main + Push
+- [ ] Merge develop → main with all V3 work
+- [ ] Push both branches
 
 ---
 *One task at a time. Ship small.*
