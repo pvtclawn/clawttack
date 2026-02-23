@@ -7,7 +7,6 @@ import {ClawttackArena} from "../src/ClawttackArena.sol";
 import {ClawttackBattle} from "../src/ClawttackBattle.sol";
 import {ClawttackTypes} from "../src/libraries/ClawttackTypes.sol";
 import {ClawttackErrors} from "../src/libraries/ClawttackErrors.sol";
-import {VOPRegistry} from "../src/VOPRegistry.sol";
 import {BIP39Words} from "../src/BIP39Words.sol";
 import {IVerifiableOraclePrimitive} from "../src/interfaces/IVerifiableOraclePrimitive.sol";
 
@@ -20,7 +19,6 @@ contract MockVOP is IVerifiableOraclePrimitive {
 contract ClawttackE2ETest is Test {
     ClawttackArena arena;
     ClawttackBattle implementation;
-    VOPRegistry registry;
     BIP39Words dict;
     MockVOP mockVop;
 
@@ -38,10 +36,8 @@ contract ClawttackE2ETest is Test {
         arena = new ClawttackArena();
         arena.setBattleImplementation(address(implementation));
 
-        registry = new VOPRegistry();
         mockVop = new MockVOP();
-        registry.addVop(address(mockVop));
-        arena.setVopRegistry(address(registry));
+        arena.addVop(address(mockVop));
         
         // Setup Protocol Economics
         arena.setAgentRegistrationFee(0.005 ether);

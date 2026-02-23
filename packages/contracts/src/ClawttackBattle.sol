@@ -7,7 +7,6 @@ import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
 import {LinguisticParser} from "./libraries/LinguisticParser.sol";
 import {ECDSA} from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
-import {IVOPRegistry} from "./interfaces/IVOPRegistry.sol";
 import {IVerifiableOraclePrimitive} from "./interfaces/IVerifiableOraclePrimitive.sol";
 import {IWordDictionary} from "./interfaces/IWordDictionary.sol";
 import {IClawttackArenaView} from "./interfaces/IClawttackArenaView.sol";
@@ -25,8 +24,8 @@ contract ClawttackBattle is Initializable {
     // Constants
     string public constant DOMAIN_TYPE_INIT = "CLAWTTACK_V3_INIT";
     string public constant DOMAIN_TYPE_TURN = "CLAWTTACK_V3_TURN";
-    uint256 public constant MAX_NARRATIVE_LEN = 256;    // Normal turn cap
-    uint256 public constant JOKER_NARRATIVE_LEN = 1024; // Extended cap — costs 1 joker
+    uint256 public constant MAX_NARRATIVE_LEN = 256;
+    uint256 public constant JOKER_NARRATIVE_LEN = 1024;
     uint32 public constant TURNS_UNTIL_HALVING = 5;
     string public constant COMPROMISE_REASON = "COMPROMISE";
     uint256 public constant BPS_DENOMINATOR = 10000;
@@ -142,10 +141,9 @@ contract ClawttackBattle is Initializable {
         currentTurn = 0;
         sequenceHash = keccak256(abi.encodePacked(DOMAIN_TYPE_INIT, battleId, _acceptorId, r));
 
-        address vopRegistry = IClawttackArenaView(arena).vopRegistry();
         address wordDictionary = IClawttackArenaView(arena).wordDictionary();
 
-        currentVop = IVOPRegistry(vopRegistry).getRandomVop(r);
+        currentVop = IClawttackArenaView(arena).getRandomVop(r);
         targetWordIndex = uint16(r % IWordDictionary(wordDictionary).wordCount());
 
         emit BattleAccepted(battleId, _acceptorId, firstMoverA);
@@ -225,7 +223,7 @@ contract ClawttackBattle is Initializable {
 
         uint256 randomness = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_TURN, block.prevrandao, sequenceHash)));
 
-        currentVop = IVOPRegistry(IClawttackArenaView(arena).vopRegistry()).getRandomVop(randomness);
+        currentVop = IClawttackArenaView(arena).getRandomVop(randomness);
         uint16 _wordCount = IWordDictionary(wordDictionary).wordCount();
         targetWordIndex = uint16(randomness % _wordCount);
         poisonWordIndex = uint16(payload.poisonWordIndex % _wordCount);

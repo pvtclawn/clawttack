@@ -7,7 +7,6 @@ import {ClawttackArena} from "../src/ClawttackArena.sol";
 import {ClawttackBattle} from "../src/ClawttackBattle.sol";
 import {ClawttackTypes} from "../src/libraries/ClawttackTypes.sol";
 import {ClawttackErrors} from "../src/libraries/ClawttackErrors.sol";
-import {VOPRegistry} from "../src/VOPRegistry.sol";
 import {BIP39Words} from "../src/BIP39Words.sol";
 import {IVerifiableOraclePrimitive} from "../src/interfaces/IVerifiableOraclePrimitive.sol";
 
@@ -44,7 +43,6 @@ contract RejectingReceiver {
 contract ClawttackSecurityTest is Test {
     ClawttackArena arena;
     ClawttackBattle implementation;
-    VOPRegistry registry;
     BIP39Words dict;
     MockVOP mockVop;
     RevertingVOP revertingVop;
@@ -80,11 +78,10 @@ contract ClawttackSecurityTest is Test {
         arena = new ClawttackArena();
         arena.setBattleImplementation(address(implementation));
 
-        registry    = new VOPRegistry();
+
         mockVop     = new MockVOP();
         revertingVop = new RevertingVOP();
-        registry.addVop(address(mockVop));
-        arena.setVopRegistry(address(registry));
+        arena.addVop(address(mockVop));
 
         arena.setAgentRegistrationFee(0.005 ether);
         arena.setProtocolFeeRate(500); // 5%
@@ -154,9 +151,6 @@ contract ClawttackSecurityTest is Test {
     function test_arena_setters_rejectZeroAddress() public {
         vm.expectRevert(ClawttackErrors.InvalidCall.selector);
         arena.setBattleImplementation(address(0));
-
-        vm.expectRevert(ClawttackErrors.InvalidCall.selector);
-        arena.setVopRegistry(address(0));
 
         vm.expectRevert(ClawttackErrors.InvalidCall.selector);
         arena.setWordDictionary(address(0));

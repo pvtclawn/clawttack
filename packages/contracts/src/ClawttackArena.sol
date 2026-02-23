@@ -17,8 +17,11 @@ import {IClawttackBattle} from "./interfaces/IClawttackBattle.sol";
  */
 contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     address public battleImplementation;
-    address public vopRegistry;
     address public wordDictionary;
+
+    // ─── Inlined VOP Registry ─────────────────────────────────────────────────
+    address[] public activeVOPs;
+    mapping(address => bool) public isVopRegistered;
 
     uint256 public agentRegistrationFee;
     uint256 public battleCreationFee;
@@ -57,6 +60,8 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     event ProtocolFeeUpdated(uint256 oldRate, uint256 newRate);
     event BattleCreationFeeUpdated(uint256 oldFee, uint256 newFee);
     event AgentRegistrationFeeUpdated(uint256 oldFee, uint256 newFee);
+    event VOPAdded(address indexed vopAddress);
+    event VOPRemoved(address indexed vopAddress);
 
     constructor() Ownable(msg.sender) {}
 
@@ -67,14 +72,40 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         battleImplementation = _impl;
     }
 
-    function setVopRegistry(address _registry) external onlyOwner {
-        if (_registry == address(0)) revert ClawttackErrors.InvalidCall();
-        vopRegistry = _registry;
-    }
-
     function setWordDictionary(address _dictionary) external onlyOwner {
         if (_dictionary == address(0)) revert ClawttackErrors.InvalidCall();
         wordDictionary = _dictionary;
+    }
+
+    // ─── VOP Management (inlined from VOPRegistry) ────────────────────────────
+
+    function addVop(address vopAddress) external onlyOwner {
+        if (isVopRegistered[vopAddress]) revert ClawttackErrors.VOPAlreadyRegistered();
+        isVopRegistered[vopAddress] = true;
+        activeVOPs.push(vopAddress);
+        emit VOPAdded(vopAddress);
+    }
+
+    function removeVop(address vopAddress) external onlyOwner {
+        if (!isVopRegistered[vopAddress]) revert ClawttackErrors.VOPNotRegistered();
+        isVopRegistered[vopAddress] = false;
+        for (uint256 i = 0; i < activeVOPs.length; i++) {
+            if (activeVOPs[i] == vopAddress) {
+                activeVOPs[i] = activeVOPs[activeVOPs.length - 1];
+                activeVOPs.pop();
+                break;
+            }
+        }
+        emit VOPRemoved(vopAddress);
+    }
+
+    function getRandomVop(uint256 seed) external view returns (address) {
+        if (activeVOPs.length == 0) revert ClawttackErrors.RegistryEmpty();
+        return activeVOPs[seed % activeVOPs.length];
+    }
+
+    function getVopCount() external view returns (uint256) {
+        return activeVOPs.length;
     }
 
     function setBattleCreationFee(uint256 _fee) external onlyOwner {

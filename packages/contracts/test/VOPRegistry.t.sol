@@ -2,11 +2,15 @@
 pragma solidity ^0.8.34;
 
 import "forge-std/Test.sol";
-import "../src/VOPRegistry.sol";
+import "../src/ClawttackArena.sol";
 import "../src/libraries/ClawttackErrors.sol";
 
-contract VOPRegistryTest is Test {
-    VOPRegistry registry;
+/**
+ * @notice Tests for the VOP management functions, now inlined into ClawttackArena.
+ *         (VOPRegistry.sol deleted — logic is owned directly by the Arena.)
+ */
+contract ArenaVOPTest is Test {
+    ClawttackArena arena;
     address owner = address(this);
     address notOwner = address(0x1);
 
@@ -14,67 +18,67 @@ contract VOPRegistryTest is Test {
     address vop2 = address(0x20);
 
     function setUp() public {
-        registry = new VOPRegistry();
+        arena = new ClawttackArena();
     }
 
     function test_initialState() public {
-        assertEq(registry.owner(), owner);
-        assertEq(registry.getVopCount(), 0);
+        assertEq(arena.owner(), owner);
+        assertEq(arena.getVopCount(), 0);
     }
 
     function test_addVop() public {
-        registry.addVop(vop1);
-        assertEq(registry.getVopCount(), 1);
-        assertTrue(registry.isVopRegistered(vop1));
-        assertEq(registry.activeVOPs(0), vop1);
+        arena.addVop(vop1);
+        assertEq(arena.getVopCount(), 1);
+        assertTrue(arena.isVopRegistered(vop1));
+        assertEq(arena.activeVOPs(0), vop1);
     }
 
     function test_revert_addVop_notOwner() public {
         vm.prank(notOwner);
         vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", notOwner));
-        registry.addVop(vop1);
+        arena.addVop(vop1);
     }
 
     function test_revert_addVop_alreadyRegistered() public {
-        registry.addVop(vop1);
+        arena.addVop(vop1);
         vm.expectRevert(ClawttackErrors.VOPAlreadyRegistered.selector);
-        registry.addVop(vop1);
+        arena.addVop(vop1);
     }
 
     function test_removeVop() public {
-        registry.addVop(vop1);
-        registry.addVop(vop2);
+        arena.addVop(vop1);
+        arena.addVop(vop2);
 
-        registry.removeVop(vop1);
-        assertEq(registry.getVopCount(), 1);
-        assertFalse(registry.isVopRegistered(vop1));
-        assertEq(registry.activeVOPs(0), vop2); // SWAP pop check
+        arena.removeVop(vop1);
+        assertEq(arena.getVopCount(), 1);
+        assertFalse(arena.isVopRegistered(vop1));
+        assertEq(arena.activeVOPs(0), vop2); // swap-pop: vop2 moved to index 0
     }
 
     function test_revert_removeVop_notRegistered() public {
         vm.expectRevert(ClawttackErrors.VOPNotRegistered.selector);
-        registry.removeVop(vop1);
+        arena.removeVop(vop1);
     }
 
     function test_revert_removeVop_notOwner() public {
-        registry.addVop(vop1);
+        arena.addVop(vop1);
         vm.prank(notOwner);
         vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", notOwner));
-        registry.removeVop(vop1);
+        arena.removeVop(vop1);
     }
 
     function test_getRandomVop() public {
-        registry.addVop(vop1);
-        registry.addVop(vop2);
+        arena.addVop(vop1);
+        arena.addVop(vop2);
 
         // 10 % 2 = 0 -> vop1
-        assertEq(registry.getRandomVop(10), vop1);
+        assertEq(arena.getRandomVop(10), vop1);
         // 11 % 2 = 1 -> vop2
-        assertEq(registry.getRandomVop(11), vop2);
+        assertEq(arena.getRandomVop(11), vop2);
     }
 
     function test_revert_getRandomVop_empty() public {
         vm.expectRevert(ClawttackErrors.RegistryEmpty.selector);
-        registry.getRandomVop(10);
+        arena.getRandomVop(10);
     }
 }
