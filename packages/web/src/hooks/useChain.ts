@@ -1,7 +1,17 @@
+/**
+ * useChain.ts — V3 on-chain data hooks for Clawttack Arena
+ * 
+ * V3 Architecture:
+ *   Arena (factory) creates Battle clones.
+ *   battleId is uint256, not bytes32.
+ *   Battle state lives on each clone (read directly from clone address).
+ *   TurnSubmitted events are emitted by individual Battle clones.
+ */
+
 import { useQuery } from '@tanstack/react-query'
-import { createPublicClient, http, parseAbiItem } from 'viem'
+import { createPublicClient, http, parseAbiItem, type Address } from 'viem'
 import { baseSepolia } from 'viem/chains'
-import { CONTRACTS } from '../config/wagmi'
+import { CONTRACTS, ARENA_DEPLOY_BLOCK } from '../config/wagmi'
 
 const client = createPublicClient({
   chain: baseSepolia,
@@ -11,19 +21,15 @@ const client = createPublicClient({
   }),
 })
 
-// Contract deploy blocks (Base Sepolia)
-const REGISTRY_DEPLOY_BLOCK = 37_752_000n
-const ARENA_DEPLOY_BLOCK = 37_884_000n
-
 // Max block range per getLogs request (public RPCs reject large ranges)
 const CHUNK_SIZE = 10_000n
 
 /** Fetch logs in chunks to avoid 413 errors from public RPCs */
 async function getLogsChunked<T>(params: {
-  address: `0x${string}`
+  address: Address
   event: ReturnType<typeof parseAbiItem>
   fromBlock: bigint
-  args?: Record<string, any>
+  args?: Record<string, unknown>
   mapFn: (log: any) => T
 }): Promise<T[]> {
   const latestBlock = await client.getBlockNumber()
@@ -43,15 +49,12 @@ async function getLogsChunked<T>(params: {
       })
       results.push(...logs.map(params.mapFn))
     } catch (err) {
-      // If chunk is still too big, halve it and retry with smaller chunks
       console.warn(`getLogs failed for range ${from}-${to}, retrying smaller`, err)
       const mid = from + (to - from) / 2n
-      if (mid === from) throw err // Can't split further
-
-      // Recursive call scans [from, latest] with halved chunk size — covers all remaining
+      if (mid === from) throw err
       const remaining = await getLogsChunked({ ...params, fromBlock: from })
       results.push(...remaining)
-      break // recursive call already handled everything from `from` onward
+      break
     }
 
     from = to + 1n
@@ -60,348 +63,365 @@ async function getLogsChunked<T>(params: {
   return results
 }
 
-export interface BattleCreatedEvent {
-  battleId: `0x${string}`
-  scenario: `0x${string}`
-  agents: readonly `0x${string}`[]
-  entryFee: bigint
-  commitment: `0x${string}`
+// ─── V3 Types ────────────────────────────────────────────────────────
+
+export interface V3BattleCreatedEvent {
+  battleId: bigint
+  challengerId: bigint
+  stake: bigint
+  baseTimeoutBlocks: number
+  maxTurns: number
   blockNumber: bigint
   txHash: `0x${string}`
 }
 
-export interface BattleSettledEvent {
-  battleId: `0x${string}`
-  winner: `0x${string}`
-  turnLogCid: `0x${string}`
+export interface V3BattleInfo {
+  battleId: bigint
+  address: Address
+  state: number          // 0=Open, 1=Active, 2=Settled, 3=Cancelled
+  challengerId: bigint
+  acceptorId: bigint
+  challengerOwner: Address
+  acceptorOwner: Address
+  currentTurn: number
+  maxTurns: number
+  turnDeadlineBlock: bigint
+  sequenceHash: `0x${string}`
+  totalPot: bigint
+}
+
+export interface V3TurnEvent {
+  battleId: bigint
+  turnNumber: number
+  playerId: bigint
+  sequenceHash: `0x${string}`
+  targetWord: number
+  poisonWord: number
+  narrative: string
   blockNumber: bigint
   txHash: `0x${string}`
 }
 
-export interface AgentStats {
-  address: `0x${string}`
-  elo: number
-  wins: number
-  losses: number
-  draws: number
-  lastActiveAt: bigint
+export interface V3SettledEvent {
+  battleId: bigint
+  winnerId: bigint
+  loserId: bigint
+  resultType: number  // 0=MaxTurns, 1=Timeout, 2=Compromise, 3=Cancel
+  blockNumber: bigint
+  txHash: `0x${string}`
 }
 
-export function useBattleCreatedEvents() {
+export interface V3AgentProfile {
+  agentId: bigint
+  owner: Address
+  eloRating: number
+  totalWins: number
+  totalLosses: number
+}
+
+// ─── Arena (factory) ABI fragments ──────────────────────────────────
+
+const ARENA_ABI = [
+  { type: 'function', name: 'battlesCount', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'agentsCount', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'battles', inputs: [{ name: 'id', type: 'uint256' }], outputs: [{ type: 'address' }], stateMutability: 'view' },
+  { type: 'function', name: 'agents', inputs: [{ name: 'id', type: 'uint256' }], outputs: [
+    { name: 'owner', type: 'address' },
+    { name: 'eloRating', type: 'uint32' },
+    { name: 'totalWins', type: 'uint32' },
+    { name: 'totalLosses', type: 'uint32' },
+  ], stateMutability: 'view' },
+] as const
+
+// ─── Battle (clone) ABI fragments ───────────────────────────────────
+
+const BATTLE_ABI = [
+  { type: 'function', name: 'state', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
+  { type: 'function', name: 'battleId', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'challengerId', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'acceptorId', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'challengerOwner', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
+  { type: 'function', name: 'acceptorOwner', inputs: [], outputs: [{ type: 'address' }], stateMutability: 'view' },
+  { type: 'function', name: 'currentTurn', inputs: [], outputs: [{ type: 'uint32' }], stateMutability: 'view' },
+  { type: 'function', name: 'turnDeadlineBlock', inputs: [], outputs: [{ type: 'uint64' }], stateMutability: 'view' },
+  { type: 'function', name: 'sequenceHash', inputs: [], outputs: [{ type: 'bytes32' }], stateMutability: 'view' },
+  { type: 'function', name: 'totalPot', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'targetWordIndex', inputs: [], outputs: [{ type: 'uint16' }], stateMutability: 'view' },
+  { type: 'function', name: 'poisonWordIndex', inputs: [], outputs: [{ type: 'uint16' }], stateMutability: 'view' },
+  { type: 'function', name: 'jokersRemainingA', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
+  { type: 'function', name: 'jokersRemainingB', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
+] as const
+
+const WORD_DICTIONARY_ABI = [
+  { type: 'function', name: 'word', inputs: [{ name: 'index', type: 'uint16' }], outputs: [{ type: 'string' }], stateMutability: 'view' },
+  { type: 'function', name: 'wordCount', inputs: [], outputs: [{ type: 'uint16' }], stateMutability: 'view' },
+] as const
+
+const BATTLE_CONFIG_ABI = [
+  { type: 'function', name: 'config', inputs: [], outputs: [
+    { name: 'stake', type: 'uint256' },
+    { name: 'baseTimeoutBlocks', type: 'uint32' },
+    { name: 'warmupBlocks', type: 'uint32' },
+    { name: 'targetAgentId', type: 'uint256' },
+    { name: 'maxTurns', type: 'uint8' },
+    { name: 'maxJokers', type: 'uint8' },
+  ], stateMutability: 'view' },
+] as const
+
+// ─── Arena-level hooks ──────────────────────────────────────────────
+
+/** Get total battle and agent counts from the Arena factory */
+export function useArenaStats() {
   return useQuery({
-    queryKey: ['battles', 'created'],
-    queryFn: async (): Promise<BattleCreatedEvent[]> => {
+    queryKey: ['v3', 'arena', 'stats'],
+    queryFn: async () => {
+      const [battlesCount, agentsCount] = await Promise.all([
+        client.readContract({ address: CONTRACTS.arena, abi: ARENA_ABI, functionName: 'battlesCount' }),
+        client.readContract({ address: CONTRACTS.arena, abi: ARENA_ABI, functionName: 'agentsCount' }),
+      ])
+      return { battlesCount: battlesCount as bigint, agentsCount: agentsCount as bigint }
+    },
+    staleTime: 15_000,
+  })
+}
+
+/** Get all BattleCreated events from the Arena */
+export function useBattleCreatedEvents(live = false) {
+  return useQuery({
+    queryKey: ['v3', 'battles', 'created'],
+    queryFn: async (): Promise<V3BattleCreatedEvent[]> => {
       return getLogsChunked({
-        address: CONTRACTS.registry,
-        event: parseAbiItem('event BattleCreated(bytes32 indexed battleId, address indexed scenario, address[] agents, uint256 entryFee, bytes32 commitment)'),
-        fromBlock: REGISTRY_DEPLOY_BLOCK,
+        address: CONTRACTS.arena,
+        event: parseAbiItem('event BattleCreated(uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint32 baseTimeoutBlocks, uint8 maxTurns)'),
+        fromBlock: ARENA_DEPLOY_BLOCK,
         mapFn: (log) => ({
           battleId: log.args.battleId!,
-          scenario: log.args.scenario!,
-          agents: log.args.agents!,
-          entryFee: log.args.entryFee!,
-          commitment: log.args.commitment!,
+          challengerId: log.args.challengerId!,
+          stake: log.args.stake!,
+          baseTimeoutBlocks: Number(log.args.baseTimeoutBlocks!),
+          maxTurns: Number(log.args.maxTurns!),
           blockNumber: log.blockNumber,
           txHash: log.transactionHash!,
         }),
       })
     },
-    // Historical chain events don't change — cache for 5 minutes
-    staleTime: 5 * 60_000,
-    gcTime: 60 * 60_000, // historical events are immutable — cache 1h
-    retry: 2,
+    staleTime: live ? 0 : 5 * 60_000,
+    refetchInterval: live ? 10_000 : false,
   })
 }
 
-export function useBattleSettledEvents() {
+/** Fetch the full info for a single battle by looking up its clone address */
+export function useBattleInfo(battleId?: bigint, live = false) {
   return useQuery({
-    queryKey: ['battles', 'settled'],
-    queryFn: async (): Promise<BattleSettledEvent[]> => {
-      return getLogsChunked({
-        address: CONTRACTS.registry,
-        event: parseAbiItem('event BattleSettled(bytes32 indexed battleId, address indexed winner, bytes32 turnLogCid, uint256 payout)'),
-        fromBlock: REGISTRY_DEPLOY_BLOCK,
-        mapFn: (log) => ({
-          battleId: log.args.battleId!,
-          winner: log.args.winner!,
-          turnLogCid: log.args.turnLogCid!,
-          blockNumber: log.blockNumber,
-          txHash: log.transactionHash!,
-        }),
-      })
-    },
-    // Historical chain events don't change — cache for 5 minutes
-    staleTime: 5 * 60_000,
-    gcTime: 60 * 60_000, // historical events are immutable — cache 1h
-    retry: 2,
-  })
-}
+    queryKey: ['v3', 'battle', battleId?.toString()],
+    enabled: battleId !== undefined,
+    queryFn: async (): Promise<V3BattleInfo> => {
+      // 1. Resolve clone address from Arena factory
+      const battleAddress = await client.readContract({
+        address: CONTRACTS.arena,
+        abi: ARENA_ABI,
+        functionName: 'battles',
+        args: [battleId!],
+      }) as Address
 
-export function useAgentStats(address: `0x${string}`) {
-  return useQuery({
-    queryKey: ['agent', address],
-    queryFn: async (): Promise<AgentStats> => {
-      const result = await client.readContract({
-        address: CONTRACTS.registry,
-        abi: [{
-          type: 'function',
-          name: 'agents',
-          inputs: [{ name: '', type: 'address' }],
-          outputs: [
-            { name: 'elo', type: 'uint32' },
-            { name: 'wins', type: 'uint32' },
-            { name: 'losses', type: 'uint32' },
-            { name: 'draws', type: 'uint32' },
-            { name: 'lastActiveAt', type: 'uint256' },
-          ],
-          stateMutability: 'view',
-        }],
-        functionName: 'agents',
-        args: [address],
-      })
+      // 2. Read all state from the clone
+      const [state, challId, accId, challOwner, accOwner, turn, deadline, seqHash, pot] = await Promise.all([
+        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'state' }),
+        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'challengerId' }),
+        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'acceptorId' }),
+        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'challengerOwner' }),
+        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'acceptorOwner' }),
+        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'currentTurn' }),
+        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'turnDeadlineBlock' }),
+        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'sequenceHash' }),
+        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'totalPot' }),
+      ])
+
+      // 3. Read config for maxTurns
+      const config = await client.readContract({
+        address: battleAddress,
+        abi: BATTLE_CONFIG_ABI,
+        functionName: 'config',
+      }) as [bigint, number, number, bigint, number, number]
 
       return {
-        address,
-        elo: Number(result[0]),
-        wins: Number(result[1]),
-        losses: Number(result[2]),
-        draws: Number(result[3]),
-        lastActiveAt: result[4],
+        battleId: battleId!,
+        address: battleAddress,
+        state: Number(state),
+        challengerId: challId as bigint,
+        acceptorId: accId as bigint,
+        challengerOwner: challOwner as Address,
+        acceptorOwner: accOwner as Address,
+        currentTurn: Number(turn),
+        maxTurns: config[4], // maxTurns from BattleConfig
+        turnDeadlineBlock: deadline as bigint,
+        sequenceHash: seqHash as `0x${string}`,
+        totalPot: pot as bigint,
+      }
+    },
+    staleTime: live ? 0 : 30_000,
+    refetchInterval: live ? 4_000 : false,
+  })
+}
+
+/** Fetch a list of all battles with their clone addresses + basic state */
+export function useBattleList(live = false) {
+  const statsQuery = useArenaStats()
+
+  return useQuery({
+    queryKey: ['v3', 'battles', 'list', statsQuery.data?.battlesCount?.toString()],
+    enabled: !!statsQuery.data,
+    queryFn: async (): Promise<V3BattleInfo[]> => {
+      const count = Number(statsQuery.data!.battlesCount)
+      if (count === 0) return []
+
+      // Fetch all battles in parallel (limited to 20 most recent for perf)
+      const start = Math.max(1, count - 19)
+      const ids = Array.from({ length: count - start + 1 }, (_, i) => BigInt(start + i))
+
+      const battles = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const addr = await client.readContract({
+              address: CONTRACTS.arena, abi: ARENA_ABI, functionName: 'battles', args: [id],
+            }) as Address
+
+            if (addr === '0x0000000000000000000000000000000000000000') return null
+
+            const [state, challId, accId, challOwner, accOwner, turn, deadline, seqHash, pot] = await Promise.all([
+              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'state' }),
+              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'challengerId' }),
+              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'acceptorId' }),
+              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'challengerOwner' }),
+              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'acceptorOwner' }),
+              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'currentTurn' }),
+              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'turnDeadlineBlock' }),
+              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'sequenceHash' }),
+              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'totalPot' }),
+            ])
+
+            const config = await client.readContract({
+              address: addr, abi: BATTLE_CONFIG_ABI, functionName: 'config',
+            }) as [bigint, number, number, bigint, number, number]
+
+            return {
+              battleId: id,
+              address: addr,
+              state: Number(state),
+              challengerId: challId as bigint,
+              acceptorId: accId as bigint,
+              challengerOwner: challOwner as Address,
+              acceptorOwner: accOwner as Address,
+              currentTurn: Number(turn),
+              maxTurns: config[4],
+              turnDeadlineBlock: deadline as bigint,
+              sequenceHash: seqHash as `0x${string}`,
+              totalPot: pot as bigint,
+            } as V3BattleInfo
+          } catch {
+            return null
+          }
+        })
+      )
+
+      return battles.filter((b): b is V3BattleInfo => b !== null).reverse()
+    },
+    staleTime: live ? 0 : 30_000,
+    refetchInterval: live ? 10_000 : false,
+  })
+}
+
+/** Get turn events for a specific battle clone */
+export function useBattleTurns(battleAddress?: Address, live = false) {
+  return useQuery({
+    queryKey: ['v3', 'turns', battleAddress],
+    enabled: !!battleAddress,
+    queryFn: async (): Promise<V3TurnEvent[]> => {
+      return getLogsChunked({
+        address: battleAddress!,
+        event: parseAbiItem('event TurnSubmitted(uint256 indexed battleId, uint32 turnNumber, uint256 indexed playerId, bytes32 sequenceHash, uint16 targetWord, uint16 poisonWord, bytes nextVopParams, string narrative)'),
+        fromBlock: ARENA_DEPLOY_BLOCK,
+        mapFn: (log) => ({
+          battleId: log.args.battleId!,
+          turnNumber: Number(log.args.turnNumber!),
+          playerId: log.args.playerId!,
+          sequenceHash: log.args.sequenceHash!,
+          targetWord: Number(log.args.targetWord!),
+          poisonWord: Number(log.args.poisonWord!),
+          narrative: log.args.narrative!,
+          blockNumber: log.blockNumber,
+          txHash: log.transactionHash!,
+        }),
+      })
+    },
+    staleTime: live ? 0 : 5 * 60_000,
+    refetchInterval: live ? 4_000 : false,
+  })
+}
+
+/** Get settlement events for a specific battle */
+export function useBattleSettlement(battleAddress?: Address) {
+  return useQuery({
+    queryKey: ['v3', 'settlement', battleAddress],
+    enabled: !!battleAddress,
+    queryFn: async (): Promise<V3SettledEvent | null> => {
+      const events = await getLogsChunked({
+        address: battleAddress!,
+        event: parseAbiItem('event BattleSettled(uint256 indexed battleId, uint256 indexed winnerId, uint256 indexed loserId, uint8 resultType)'),
+        fromBlock: ARENA_DEPLOY_BLOCK,
+        mapFn: (log) => ({
+          battleId: log.args.battleId!,
+          winnerId: log.args.winnerId!,
+          loserId: log.args.loserId!,
+          resultType: Number(log.args.resultType!),
+          blockNumber: log.blockNumber,
+          txHash: log.transactionHash!,
+        }),
+      })
+      return events[0] ?? null
+    },
+    staleTime: 5 * 60_000,
+  })
+}
+
+/** Get an agent profile by ID */
+export function useAgentProfile(agentId?: bigint) {
+  return useQuery({
+    queryKey: ['v3', 'agent', agentId?.toString()],
+    enabled: agentId !== undefined && agentId > 0n,
+    queryFn: async (): Promise<V3AgentProfile> => {
+      const result = await client.readContract({
+        address: CONTRACTS.arena,
+        abi: ARENA_ABI,
+        functionName: 'agents',
+        args: [agentId!],
+      }) as [Address, number, number, number]
+
+      return {
+        agentId: agentId!,
+        owner: result[0],
+        eloRating: Number(result[1]),
+        totalWins: Number(result[2]),
+        totalLosses: Number(result[3]),
       }
     },
     staleTime: 60_000,
   })
 }
 
-// ─── Arena hooks (ClawttackArena v2) ─────────────────────────────────
-
-export interface ArenaChallengeEvent {
-  battleId: `0x${string}`
-  challenger: `0x${string}`
-  stake: bigint
-  commitA: `0x${string}`
-  blockNumber: bigint
-  txHash: `0x${string}`
-}
-
-export interface ArenaAcceptEvent {
-  battleId: `0x${string}`
-  opponent: `0x${string}`
-  commitB: `0x${string}`
-  blockNumber: bigint
-  txHash: `0x${string}`
-}
-
-export interface ArenaTurnEvent {
-  battleId: `0x${string}`
-  agent: `0x${string}`
-  turnNumber: number
-  message: string
-  wordFound: boolean
-  blockNumber: bigint
-  txHash: `0x${string}`
-}
-
-export interface ArenaSettledEvent {
-  battleId: `0x${string}`
-  winner: `0x${string}`
-  finalTurn: number
-  reason: string
-  blockNumber: bigint
-  txHash: `0x${string}`
-}
-
-export function useArenaChallenges(live = false) {
+/** Resolve a BIP39 word by index */
+export function useWord(wordIndex?: number) {
   return useQuery({
-    queryKey: ['arena', 'challenges'],
-    queryFn: async (): Promise<ArenaChallengeEvent[]> => {
-      return getLogsChunked({
-        address: CONTRACTS.arena,
-        event: parseAbiItem('event ChallengeCreated(bytes32 indexed battleId, address indexed challenger, uint256 stake, bytes32 commitA)'),
-        fromBlock: ARENA_DEPLOY_BLOCK,
-        mapFn: (log) => ({
-          battleId: log.args.battleId!,
-          challenger: log.args.challenger!,
-          stake: log.args.stake!,
-          commitA: log.args.commitA!,
-          blockNumber: log.blockNumber,
-          txHash: log.transactionHash!,
-        }),
-      })
+    queryKey: ['v3', 'word', wordIndex],
+    enabled: wordIndex !== undefined,
+    queryFn: async (): Promise<string> => {
+      return await client.readContract({
+        address: CONTRACTS.wordDictionary,
+        abi: WORD_DICTIONARY_ABI,
+        functionName: 'word',
+        args: [wordIndex!],
+      }) as string
     },
-    staleTime: live ? 0 : 5 * 60_000,
-    refetchInterval: live ? 10_000 : false, // Check for new challenges every 10s if live
-    retry: 2,
-  })
-}
-
-export function useArenaAccepts(live = false) {
-  return useQuery({
-    queryKey: ['arena', 'accepts'],
-    queryFn: async (): Promise<ArenaAcceptEvent[]> => {
-      return getLogsChunked({
-        address: CONTRACTS.arena,
-        event: parseAbiItem('event ChallengeAccepted(bytes32 indexed battleId, address indexed opponent, bytes32 commitB)'),
-        fromBlock: ARENA_DEPLOY_BLOCK,
-        mapFn: (log) => ({
-          battleId: log.args.battleId!,
-          opponent: log.args.opponent!,
-          commitB: log.args.commitB!,
-          blockNumber: log.blockNumber,
-          txHash: log.transactionHash!,
-        }),
-      })
-    },
-    staleTime: live ? 0 : 5 * 60_000,
-    refetchInterval: live ? 5_000 : false, // Check for accepts every 5s if live
-    retry: 2,
-  })
-}
-
-export function useArenaTurns(battleId?: `0x${string}`, live = false) {
-  return useQuery({
-    queryKey: ['arena', 'turns', battleId],
-    enabled: !!battleId,
-    queryFn: async (): Promise<ArenaTurnEvent[]> => {
-      return getLogsChunked({
-        address: CONTRACTS.arena,
-        event: parseAbiItem('event TurnSubmitted(bytes32 indexed battleId, address indexed agent, uint8 turnNumber, string message, bool wordFound)'),
-        fromBlock: ARENA_DEPLOY_BLOCK,
-        args: { battleId },
-        mapFn: (log) => ({
-          battleId: log.args.battleId!,
-          agent: log.args.agent!,
-          turnNumber: Number(log.args.turnNumber!),
-          message: log.args.message!,
-          wordFound: log.args.wordFound!,
-          blockNumber: log.blockNumber,
-          txHash: log.transactionHash!,
-        }),
-      })
-    },
-    staleTime: live ? 0 : 5 * 60_000,
-    gcTime: 60 * 60_000,
-    refetchInterval: live ? 4_000 : false, // poll every 4s during live battles
-    retry: 2,
-  })
-}
-
-export interface ArenaTiming {
-  turnDeadline: bigint  // unix timestamp (seconds) when current turn expires
-  baseTimeout: bigint   // base timeout in seconds
-  createdAt: bigint
-  settledAt: bigint
-}
-
-export interface ArenaBattleCore {
-  challenger: `0x${string}`
-  opponent: `0x${string}`
-  stake: bigint
-  phase: number
-  currentTurn: number
-  maxTurns: number
-  winner: `0x${string}`
-}
-
-export function useArenaTiming(battleId?: `0x${string}`, live = false) {
-  return useQuery({
-    queryKey: ['arena', 'timing', battleId],
-    enabled: !!battleId,
-    queryFn: async (): Promise<ArenaTiming> => {
-      const result = await client.readContract({
-        address: CONTRACTS.arena,
-        abi: [{
-          type: 'function',
-          name: 'getBattleTiming',
-          inputs: [{ name: 'battleId', type: 'bytes32' }],
-          outputs: [
-            { name: 'turnDeadline', type: 'uint256' },
-            { name: 'baseTimeout', type: 'uint256' },
-            { name: 'createdAt', type: 'uint256' },
-            { name: 'settledAt', type: 'uint256' },
-          ],
-          stateMutability: 'view',
-        }],
-        functionName: 'getBattleTiming',
-        args: [battleId!],
-      }) as [bigint, bigint, bigint, bigint]
-
-      return {
-        turnDeadline: result[0],
-        baseTimeout: result[1],
-        createdAt: result[2],
-        settledAt: result[3],
-      }
-    },
-    staleTime: live ? 0 : 30_000,
-    refetchInterval: live ? 4_000 : false,
-    retry: 2,
-  })
-}
-
-export function useArenaBattleCore(battleId?: `0x${string}`, live = false) {
-  return useQuery({
-    queryKey: ['arena', 'core', battleId],
-    enabled: !!battleId,
-    queryFn: async (): Promise<ArenaBattleCore> => {
-      const result = await client.readContract({
-        address: CONTRACTS.arena,
-        abi: [{
-          type: 'function',
-          name: 'getBattleCore',
-          inputs: [{ name: 'battleId', type: 'bytes32' }],
-          outputs: [
-            { name: 'challenger', type: 'address' },
-            { name: 'opponent', type: 'address' },
-            { name: 'stake', type: 'uint256' },
-            { name: 'phase', type: 'uint8' },
-            { name: 'currentTurn', type: 'uint8' },
-            { name: 'maxTurns', type: 'uint8' },
-            { name: 'winner', type: 'address' },
-          ],
-          stateMutability: 'view',
-        }],
-        functionName: 'getBattleCore',
-        args: [battleId!],
-      }) as [`0x${string}`, `0x${string}`, bigint, number, number, number, `0x${string}`]
-
-      return {
-        challenger: result[0],
-        opponent: result[1],
-        stake: result[2],
-        phase: result[3],
-        currentTurn: result[4],
-        maxTurns: result[5],
-        winner: result[6],
-      }
-    },
-    staleTime: live ? 0 : 30_000,
-    refetchInterval: live ? 4_000 : false,
-    retry: 2,
-  })
-}
-
-export function useArenaSettlements(live = false) {
-  return useQuery({
-    queryKey: ['arena', 'settlements'],
-    queryFn: async (): Promise<ArenaSettledEvent[]> => {
-      return getLogsChunked({
-        address: CONTRACTS.arena,
-        event: parseAbiItem('event BattleSettled(bytes32 indexed battleId, address indexed winner, uint8 finalTurn, string reason)'),
-        fromBlock: ARENA_DEPLOY_BLOCK,
-        mapFn: (log) => ({
-          battleId: log.args.battleId!,
-          winner: log.args.winner!,
-          finalTurn: Number(log.args.finalTurn!),
-          reason: log.args.reason!,
-          blockNumber: log.blockNumber,
-          txHash: log.transactionHash!,
-        }),
-      })
-    },
-    staleTime: live ? 0 : 5 * 60_000,
-    gcTime: 60 * 60_000,
-    refetchInterval: live ? 6_000 : false, // poll every 6s during live battles
-    retry: 2,
+    staleTime: Infinity, // Words never change
   })
 }
