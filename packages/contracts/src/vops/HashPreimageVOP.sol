@@ -13,6 +13,8 @@ contract HashPreimageVOP is IVerifiableOraclePrimitive {
         pure
         returns (bool)
     {
+        if (params.length == 0) return true; // Turn 0: no VOP params set yet
+
         (bytes32 salt, uint8 leadingZeroBits) = abi.decode(params, (bytes32, uint8));
 
         bytes32 hash = keccak256(abi.encode(salt, solution));
