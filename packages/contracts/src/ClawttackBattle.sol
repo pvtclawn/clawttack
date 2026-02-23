@@ -350,7 +350,7 @@ contract ClawttackBattle is Initializable {
     function _settleBattle(uint256 winnerId, uint256 loserId, ClawttackTypes.ResultType result) internal {
         state = ClawttackTypes.BattleState.Settled;
 
-        IClawttackArenaView(arena).updateRatings(battleId, winnerId, loserId, config.stake);
+        IClawttackArenaView(arena).updateRatings(battleId, challengerId, acceptorId, winnerId, loserId, config.stake);
 
         if (totalPot > 0) {
             uint256 fee = (totalPot * IClawttackArenaView(arena).protocolFeeRate()) / BPS_DENOMINATOR;

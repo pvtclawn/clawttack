@@ -12,5 +12,5 @@ interface IClawttackArenaView {
         external
         view
         returns (address owner, uint32 eloRating, uint32 totalWins, uint32 totalLosses);
-    function updateRatings(uint256 battleId, uint256 winnerId, uint256 loserId, uint256 stake) external;
+    function updateRatings(uint256 battleId, uint256 challengerId, uint256 acceptorId, uint256 winnerId, uint256 loserId, uint256 stake) external;
 }

@@ -169,34 +169,68 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     /**
      * @notice Updates the persistent Elo ratings of agents after a battle concludes.
      * @dev Only callable by active Battle clones. Processes mathematical updates via EloMath.
-     * @param battleId The ID of the battle triggering the update.
-     * @param winnerId The ID of the winning agent (0 if a draw).
-     * @param loserId The ID of the losing agent (0 if a draw).
-     * @param battleStake The total stake of the battle. Unrated matches (stake < MIN) do not affect Elo.
+     * @param battleId      The ID of the battle triggering the update.
+     * @param challengerId_ The challenger agent ID.
+     * @param acceptorId_   The acceptor agent ID.
+     * @param winnerId      The ID of the winning agent (0 if a draw).
+     * @param loserId       The ID of the losing agent (0 if a draw).
+     * @param battleStake   The total stake. Unrated matches (stake < MIN) do not affect Elo.
      */
-    function updateRatings(uint256 battleId, uint256 winnerId, uint256 loserId, uint256 battleStake) external {
+    function updateRatings(
+        uint256 battleId,
+        uint256 challengerId_,
+        uint256 acceptorId_,
+        uint256 winnerId,
+        uint256 loserId,
+        uint256 battleStake
+    ) external {
         if (battles[battleId] != msg.sender) revert ClawttackErrors.InvalidCall();
         if (winnerId > agentsCount || loserId > agentsCount) revert ClawttackErrors.InvalidCall();
+        if (challengerId_ > agentsCount || acceptorId_ > agentsCount) revert ClawttackErrors.InvalidCall();
 
         if (winnerId != 0) {
             unchecked {
-                agents[winnerId].totalWins += 1;
-                agents[loserId].totalLosses += 1;
+                agents[winnerId].totalWins   += 1;
+                agents[loserId].totalLosses  += 1;
             }
         }
 
-        if (battleStake >= MIN_RATED_STAKE && winnerId != 0) {
+        if (battleStake < MIN_RATED_STAKE) return; // Unrated — skip rating update
+
+        if (winnerId != 0) {
+            // ─── Decisive result ────────────────────────────────────────────────
+            uint32 kWinner = EloMath.kFactor(agents[winnerId].totalWins + agents[winnerId].totalLosses);
+            uint32 kLoser  = EloMath.kFactor(agents[loserId].totalWins  + agents[loserId].totalLosses);
+
             (uint32 wRating, uint32 lRating) = EloMath.updateElo(
                 agents[winnerId].eloRating,
                 agents[loserId].eloRating,
-                32 // Fixed K-factor
+                kWinner,
+                kLoser
             );
-            
+
             agents[winnerId].eloRating = wRating;
-            agents[loserId].eloRating = lRating;
-            
+            agents[loserId].eloRating  = lRating;
+
             emit RatingUpdated(winnerId, wRating);
-            emit RatingUpdated(loserId, lRating);
+            emit RatingUpdated(loserId,  lRating);
+        } else {
+            // ─── Draw: pull ratings toward equilibrium ──────────────────────────
+            uint32 kA = EloMath.kFactor(agents[challengerId_].totalWins + agents[challengerId_].totalLosses);
+            uint32 kB = EloMath.kFactor(agents[acceptorId_].totalWins   + agents[acceptorId_].totalLosses);
+
+            (uint32 rA, uint32 rB) = EloMath.drawElo(
+                agents[challengerId_].eloRating,
+                agents[acceptorId_].eloRating,
+                kA,
+                kB
+            );
+
+            agents[challengerId_].eloRating = rA;
+            agents[acceptorId_].eloRating   = rB;
+
+            emit RatingUpdated(challengerId_, rA);
+            emit RatingUpdated(acceptorId_,   rB);
         }
     }
 }

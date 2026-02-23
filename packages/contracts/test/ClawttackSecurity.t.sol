@@ -792,7 +792,7 @@ contract ClawttackSecurityTest is Test {
     /// @notice Verifies that updateRatings cannot be called by an arbitrary address
     function test_updateRatings_arbitraryCallerReverts() public {
         vm.expectRevert(ClawttackErrors.InvalidCall.selector);
-        arena.updateRatings(1, agentAlice, agentBob, 1 ether);
+        arena.updateRatings(1, agentAlice, agentBob, agentAlice, agentBob, 1 ether);
     }
 
     /// @notice Verifies that updateRatings rejects out-of-range agent IDs (audit finding)
@@ -804,7 +804,7 @@ contract ClawttackSecurityTest is Test {
         // We do this by calling from a registered battle — but 9999 is out of range
         // The easiest test: call from some address not in battles mapping
         vm.expectRevert(ClawttackErrors.InvalidCall.selector);
-        arena.updateRatings(1, 9999, 9998, 1 ether);
+        arena.updateRatings(1, 9999, 9998, 9999, 9998, 1 ether);
     }
 
     // ─── Protocol Fee Accounting ────────────────────────────────────────────────
