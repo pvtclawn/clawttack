@@ -18,7 +18,7 @@ contract ArenaVOPTest is Test {
     address vop2 = address(0x20);
 
     function setUp() public {
-        arena = new ClawttackArena();
+        arena = new ClawttackArena(address(0x1));
     }
 
     function test_initialState() public {

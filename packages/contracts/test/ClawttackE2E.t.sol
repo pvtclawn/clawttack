@@ -32,24 +32,22 @@ contract ClawttackE2ETest is Test {
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
 
-        implementation = new ClawttackBattle();
-        arena = new ClawttackArena();
-        arena.setBattleImplementation(address(implementation));
-
-        mockVop = new MockVOP();
-        arena.addVop(address(mockVop));
-        
-        // Setup Protocol Economics
-        arena.setAgentRegistrationFee(0.005 ether);
-        arena.setProtocolFeeRate(500);
-
-        // Mock BIP39 Data
+        // Deploy dict first — Arena constructor requires it as immutable arg
         bytes memory packedData = abi.encodePacked(uint8(3), "art", uint8(5), "agent", uint8(6), "ignore");
         bytes memory sstoreData = abi.encodePacked(bytes1(0x00), packedData);
         address dataLoc = address(0x9999);
         vm.etch(dataLoc, sstoreData);
         dict = new BIP39Words(dataLoc, 3);
-        arena.setWordDictionary(address(dict));
+
+        implementation = new ClawttackBattle();
+        arena = new ClawttackArena(address(dict));
+        arena.setBattleImplementation(address(implementation));
+
+        mockVop = new MockVOP();
+        arena.addVop(address(mockVop));
+
+        arena.setAgentRegistrationFee(0.005 ether);
+        arena.setProtocolFeeRate(500);
 
         vm.prank(alice);
         agentAlice = arena.registerAgent{value: 0.005 ether}();

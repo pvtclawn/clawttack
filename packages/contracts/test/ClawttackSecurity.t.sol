@@ -74,10 +74,16 @@ contract ClawttackSecurityTest is Test {
         vm.deal(bob,   100 ether);
         vm.deal(eve,   100 ether);
 
-        implementation = new ClawttackBattle();
-        arena = new ClawttackArena();
-        arena.setBattleImplementation(address(implementation));
+        // Deploy dict first — Arena constructor requires it as immutable arg
+        bytes memory packedData = abi.encodePacked(uint8(3), "art", uint8(5), "agent", uint8(6), "ignore");
+        bytes memory sstoreData = abi.encodePacked(bytes1(0x00), packedData);
+        address dataLoc = address(0x9999);
+        vm.etch(dataLoc, sstoreData);
+        dict = new BIP39Words(dataLoc, WORD_COUNT);
 
+        implementation = new ClawttackBattle();
+        arena = new ClawttackArena(address(dict));
+        arena.setBattleImplementation(address(implementation));
 
         mockVop     = new MockVOP();
         revertingVop = new RevertingVOP();
@@ -85,14 +91,6 @@ contract ClawttackSecurityTest is Test {
 
         arena.setAgentRegistrationFee(0.005 ether);
         arena.setProtocolFeeRate(500); // 5%
-
-        // Pack 3 words: "art", "agent", "ignore"
-        bytes memory packedData = abi.encodePacked(uint8(3), "art", uint8(5), "agent", uint8(6), "ignore");
-        bytes memory sstoreData = abi.encodePacked(bytes1(0x00), packedData);
-        address dataLoc = address(0x9999);
-        vm.etch(dataLoc, sstoreData);
-        dict = new BIP39Words(dataLoc, WORD_COUNT);
-        arena.setWordDictionary(address(dict));
 
         vm.prank(alice); agentAlice = arena.registerAgent{value: 0.005 ether}();
         vm.prank(bob);   agentBob   = arena.registerAgent{value: 0.005 ether}();
@@ -151,9 +149,6 @@ contract ClawttackSecurityTest is Test {
     function test_arena_setters_rejectZeroAddress() public {
         vm.expectRevert(ClawttackErrors.InvalidCall.selector);
         arena.setBattleImplementation(address(0));
-
-        vm.expectRevert(ClawttackErrors.InvalidCall.selector);
-        arena.setWordDictionary(address(0));
     }
 
     /// @notice Verifies that non-owner cannot call owner-only setters

@@ -17,7 +17,7 @@ import {IClawttackBattle} from "./interfaces/IClawttackBattle.sol";
  */
 contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     address public battleImplementation;
-    address public wordDictionary;
+    address public immutable wordDictionary; // BIP39 is frozen — set once at deploy
 
     // ─── Inlined VOP Registry ─────────────────────────────────────────────────
     address[] public activeVOPs;
@@ -63,7 +63,10 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     event VOPAdded(address indexed vopAddress);
     event VOPRemoved(address indexed vopAddress);
 
-    constructor() Ownable(msg.sender) {}
+    constructor(address _wordDictionary) Ownable(msg.sender) {
+        if (_wordDictionary == address(0)) revert ClawttackErrors.InvalidCall();
+        wordDictionary = _wordDictionary;
+    }
 
     receive() external payable {}
 
@@ -72,12 +75,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         battleImplementation = _impl;
     }
 
-    function setWordDictionary(address _dictionary) external onlyOwner {
-        if (_dictionary == address(0)) revert ClawttackErrors.InvalidCall();
-        wordDictionary = _dictionary;
-    }
-
-    // ─── VOP Management (inlined from VOPRegistry) ────────────────────────────
+    // ─── VOP Management ─────────────────────────────────────────────────────────
 
     function addVop(address vopAddress) external onlyOwner {
         if (isVopRegistered[vopAddress]) revert ClawttackErrors.VOPAlreadyRegistered();
