@@ -1,183 +1,190 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { useState, useEffect } from 'react'
-import { agentName, scenarioName } from '../lib/format'
-import { SignatureVerifier } from '../components/SignatureVerifier'
-import { ChallengeWordTurnBadge, ChallengeWordHeader, TimerCountdown } from '../components/ChallengeWord'
-import { useBattleSettledEvents } from '../hooks/useChain'
-import { BATTLE_CID_MAP, IPFS_GATEWAYS } from '../config/ipfs'
-
-// Map scenarioId strings to known scenario addresses
-const SCENARIO_ADDRS: Record<string, string> = {
-  'injection-ctf': '0x3D160303816ed14F05EA8784Ef9e021a02B747C4',
-  'prisoners-dilemma': '0xa5313FB027eBD60dE2856bA134A689bbd30a6CC9',
-  'spy-vs-spy': '0x87cb33ed6eF0D18C3eBB1fB5e8250fA49487D9C6',
-  'challenge-word-battle': '0xa2dF845c10cBE9DA434991a91A3f0c3DBC39AAEd',
-}
+import { useState, useEffect, useMemo } from 'react'
+import { useBlockNumber } from 'wagmi'
+import {
+  useBattleInfo,
+  useBattleTurns,
+  useBattleSettlement,
+  useAgentProfile,
+  useWord,
+  type V3TurnEvent,
+} from '../hooks/useChain'
+import { formatEther } from 'viem'
 
 export const Route = createFileRoute('/battle/$id')({
   component: BattlePage,
 })
 
-interface Turn {
-  agentAddress: string
-  message: string
-  turnNumber: number
-  timestamp: number
-  signature: string
-  role: string
+const PHASE_NAMES = ['Open', 'Active', 'Settled', 'Cancelled'] as const
+const RESULT_TYPES = ['Max Turns', 'Timeout', 'Compromise', 'Cancelled'] as const
+
+function shortAddr(addr: string) {
+  if (!addr || addr === '0x0000000000000000000000000000000000000000') return '—'
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
-interface AgentAnalysis {
-  address: string
-  role: string
-  stats: {
-    avgMessageLength: number
-    totalWords: number
-    questionCount: number
-    exclamationCount: number
-    longestMessage: number
-    shortestMessage: number
-  }
-  tactics: string[]
-}
+function TurnTimerBar({
+  deadlineBlock,
+  baseTimeoutBlocks,
+  currentTurn,
+  whoseTurnName,
+  isChallenger,
+  pending,
+}: {
+  deadlineBlock: bigint
+  baseTimeoutBlocks: number
+  currentTurn: number
+  whoseTurnName: string
+  isChallenger: boolean
+  pending: boolean
+}) {
+  const { data: blockNumber } = useBlockNumber({ watch: true })
+  
+  const currentBlock = blockNumber ?? 0n
+  const blocksLeft = Math.max(0, Number(deadlineBlock - currentBlock))
+  const secondsLeft = blocksLeft * 2
 
-interface BattleAnalysis {
-  totalTurns: number
-  agents: AgentAnalysis[]
-  highlights: string[]
-  tensionCurve: number[]
-}
+  const turnTimeoutBlocks = useMemo(() => {
+    let timeout = baseTimeoutBlocks >> Math.floor(currentTurn / 5)
+    return Math.max(1, timeout)
+  }, [baseTimeoutBlocks, currentTurn])
 
-interface BattleLog {
-  battleId: string
-  scenarioId: string
-  agents: Array<{ address: string; name: string }>
-  turns: Turn[]
-  outcome: { winnerAddress: string | null; reason: string } | null
-  commitment: string
-  merkleRoot?: string
-  _analysis?: BattleAnalysis
-  challengeWord?: {
-    commitA: `0x${string}`
-    commitB: `0x${string}`
-  }
-}
+  const turnTimeoutSeconds = turnTimeoutBlocks * 2
 
-function useBattleLog(battleIdHash: string, onChainCid?: `0x${string}`) {
-  return useQuery({
-    queryKey: ['battleLog', battleIdHash],
-    // Content-addressed data never changes — cache forever
-    staleTime: Infinity,
-    gcTime: 1000 * 60 * 60, // keep in memory for 1h
-    queryFn: async (): Promise<BattleLog | null> => {
-      // Priority 1: On-chain CID from BattleSettled event (trustless, verifiable)
-      // Note: bytes32 CIDs will be supported when settlement pipeline uploads to IPFS
-      // For now, on-chain CIDs are bytes32(0) — skip if zero
+  const pct = Math.max(0, Math.min(100, (secondsLeft / turnTimeoutSeconds) * 100))
+  const isCritical = secondsLeft < 10
+  const isUrgent = secondsLeft < 30
 
-      // Priority 2: Static CID mapping (stopgap until on-chain CIDs are populated)
-      const cid = BATTLE_CID_MAP[battleIdHash]
-      if (cid) {
-        for (const gateway of IPFS_GATEWAYS) {
-          try {
-            const res = await fetch(`${gateway}/${cid}`, {
-              signal: AbortSignal.timeout(8000),
-            })
-            if (res.ok) {
-              const log = await res.json()
-              // Normalize battleId field (some logs use 'id' instead)
-              if (!log.battleId && log.id) log.battleId = log.id
-              return log
-            }
-          } catch {
-            // Gateway failed, try next
-          }
-        }
-      }
+  const mins = Math.floor(secondsLeft / 60)
+  const secs = Math.floor(secondsLeft % 60)
+  const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`
 
-      // Fallback: static JSON (legacy, will be removed)
-      try {
-        const res = await fetch(`/battles/${battleIdHash}.json`)
-        if (!res.ok) return null
-        const log = await res.json()
-        if (!log.battleId && log.id) log.battleId = log.id
-        return log
-      } catch {
-        return null
-      }
-    },
-  })
-}
+  const barColor = isCritical
+    ? 'bg-red-500'
+    : isUrgent
+      ? 'bg-orange-500'
+      : pct > 60
+        ? 'bg-green-500'
+        : 'bg-yellow-500'
 
-function BattlePage() {
-  const { id } = Route.useParams()
-  const { data: log, isLoading } = useBattleLog(id)
-  const { data: settlements } = useBattleSettledEvents()
-  const [visibleTurns, setVisibleTurns] = useState(0)
-  const [isReplaying, setIsReplaying] = useState(false)
-
-  // On-chain settlement overrides relay outcome
-  const onChainSettlement = settlements?.find((s) => s.battleId === id)
-  const resolvedOutcome = (() => {
-    if (onChainSettlement) {
-      const isZeroAddr = onChainSettlement.winner === '0x0000000000000000000000000000000000000000'
-      return {
-        winnerAddress: isZeroAddr ? null : onChainSettlement.winner,
-        reason: isZeroAddr ? 'Draw (on-chain)' : 'Settled on-chain',
-        settled: true,
-        settleTxHash: onChainSettlement.txHash,
-      }
-    }
-    if (log?.outcome) {
-      return { ...log.outcome, settled: false, settleTxHash: null }
-    }
-    return null
-  })()
-
-  const startReplay = () => {
-    setVisibleTurns(0)
-    setIsReplaying(true)
-  }
-
-  const showAll = () => {
-    if (log) {
-      setVisibleTurns(log.turns.length)
-      setIsReplaying(false)
-    }
-  }
-
-  useEffect(() => {
-    if (!isReplaying || !log) return
-    if (visibleTurns >= log.turns.length) {
-      setIsReplaying(false)
-      return
-    }
-    const timer = setTimeout(() => {
-      setVisibleTurns((v) => v + 1)
-    }, 1500)
-    return () => clearTimeout(timer)
-  }, [isReplaying, visibleTurns, log])
-
-  // Auto-show all on load
-  useEffect(() => {
-    if (log && !isReplaying && visibleTurns === 0) {
-      setVisibleTurns(log.turns.length)
-    }
-  }, [log])
-
-  if (isLoading) {
+  if (pending) {
     return (
-      <div className="py-12 text-center text-[var(--muted)]">
-        ⏳ Loading battle log...
+      <div className="mx-4 my-2 flex items-center justify-center gap-3 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)] p-2 text-xs text-[var(--muted)]">
+        <span className="animate-spin text-[10px]">⌛</span>
+        <span>Turn {currentTurn} submitted, awaiting confirmation...</span>
       </div>
     )
   }
 
-  if (!log) {
+  return (
+    <div className={`mx-4 my-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 ${isCritical ? 'animate-pulse' : ''}`}>
+      <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider">
+        <span className="flex items-center gap-1.5">
+          <span className={isChallenger ? 'text-red-400' : 'text-blue-400'}>
+            {isChallenger ? '🗡️' : '🛡️'}
+          </span>
+          <span className="text-[var(--muted)]">Up Next:</span>
+          <span className="font-bold text-[var(--fg)]">{whoseTurnName}</span>
+          <span className="text-[var(--muted)]">· Turn {currentTurn}</span>
+        </span>
+        <span className={`font-mono font-bold tabular-nums ${
+          isCritical ? 'text-red-400' : isUrgent ? 'text-orange-400' : 'text-[var(--fg)]'
+        }`}>
+          ⏱ {timeStr}
+        </span>
+      </div>
+      <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--border)]">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function TurnCard({ turn, isLeft }: { turn: V3TurnEvent; isLeft: boolean }) {
+  const { data: targetWord } = useWord(turn.targetWord)
+  const { data: poisonWord } = useWord(turn.poisonWord)
+
+  const bgClass = isLeft
+    ? 'bg-red-950/30 border border-red-900/30'
+    : 'bg-blue-950/30 border border-blue-900/30'
+  const roleColor = isLeft ? 'text-red-400' : 'text-blue-400'
+
+  return (
+    <div className={`flex ${isLeft ? 'justify-start' : 'justify-end'}`}>
+      <div className={`max-w-[80%] rounded-xl p-4 ${bgClass}`}>
+        <div className="mb-1 flex items-center gap-2 text-xs">
+          <span>{isLeft ? '🗡️' : '🛡️'}</span>
+          <span className={roleColor}>Agent #{turn.playerId.toString()}</span>
+          <span className="text-[var(--muted)]">Turn {turn.turnNumber}</span>
+        </div>
+        <div className="text-sm leading-relaxed">{turn.narrative}</div>
+        <div className="mt-2 flex gap-3 text-[10px] text-[var(--muted)]">
+          {targetWord && (
+            <span>🎯 <span className="font-medium text-green-400">{targetWord}</span></span>
+          )}
+          {poisonWord && turn.turnNumber > 0 && (
+            <span>☠️ <span className="font-medium text-red-400">{poisonWord}</span></span>
+          )}
+          <a
+            href={`https://sepolia.basescan.org/tx/${turn.txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--accent)] hover:underline"
+          >
+            tx ↗
+          </a>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BattlePage() {
+  const { id } = Route.useParams()
+  const battleId = BigInt(id)
+
+  const { data: info, isLoading: loadingInfo } = useBattleInfo(battleId, true)
+  const { data: turns, isLoading: loadingTurns } = useBattleTurns(info?.address, true)
+  const { data: settlement } = useBattleSettlement(info?.address)
+  const { data: challenger } = useAgentProfile(info?.challengerId)
+  const { data: acceptor } = useAgentProfile(info?.acceptorId)
+
+  const [visibleTurns, setVisibleTurns] = useState(0)
+  const [isReplaying, setIsReplaying] = useState(false)
+
+  // Auto-show all on load
+  useEffect(() => {
+    if (turns && !isReplaying && visibleTurns === 0) {
+      setVisibleTurns(turns.length)
+    }
+  }, [turns])
+
+  // Replay animation
+  useEffect(() => {
+    if (!isReplaying || !turns) return
+    if (visibleTurns >= turns.length) {
+      setIsReplaying(false)
+      return
+    }
+    const timer = setTimeout(() => setVisibleTurns(v => v + 1), 1500)
+    return () => clearTimeout(timer)
+  }, [isReplaying, visibleTurns, turns])
+
+  if (loadingInfo) {
+    return (
+      <div className="py-12 text-center text-[var(--muted)]">
+        ⏳ Loading battle...
+      </div>
+    )
+  }
+
+  if (!info) {
     return (
       <div className="space-y-4 py-12 text-center">
-        <div className="text-[var(--muted)]">Battle log not found</div>
-        <div className="text-xs text-[var(--muted)] font-mono break-all">{id}</div>
+        <div className="text-[var(--muted)]">Battle #{id} not found</div>
         <Link to="/battles" className="text-sm text-[var(--accent)]">
           ← Back to battles
         </Link>
@@ -185,7 +192,10 @@ function BattlePage() {
     )
   }
 
-  const displayedTurns = log.turns.slice(0, visibleTurns)
+  const displayedTurns = (turns ?? []).slice(0, visibleTurns)
+
+  const isPending = !!turns && turns.length < info.currentTurn
+  const isChallengerTurn = (info.currentTurn % 2 === 0) ? info.firstMoverA : !info.firstMoverA
 
   return (
     <div className="space-y-6">
@@ -196,42 +206,43 @@ function BattlePage() {
             ← Battles
           </Link>
           <h1 className="mt-1 text-2xl font-bold">
-            {log.agents.map((a) => agentName(a.address)).join(' vs ')}
+            Battle #{info.battleId.toString()}
           </h1>
           <div className="text-sm text-[var(--muted)]">
-            {scenarioName(SCENARIO_ADDRS[log.scenarioId] ?? log.scenarioId)} · {log.turns.length} turns
+            Agent #{info.challengerId.toString()} vs Agent #{info.acceptorId.toString()}
+            {' · '}
+            {info.currentTurn}/{info.maxTurns} turns
+            {' · '}
+            {info.totalPot > 0n ? `${formatEther(info.totalPot)} ETH` : 'Free'}
           </div>
           <div className="mt-1 flex gap-3 text-xs text-[var(--muted)]">
+            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+              info.state === 2 ? 'bg-green-900/50 text-green-400' :
+              info.state === 1 ? 'bg-yellow-900/50 text-yellow-400' :
+              info.state === 0 ? 'bg-orange-900/50 text-orange-400' :
+              'bg-red-900/50 text-red-400'
+            }`}>
+              {PHASE_NAMES[info.state]}
+            </span>
             <a
-              href={`https://sepolia.basescan.org/address/0xeee01a6846C896efb1a43442434F1A51BF87d3aA`}
+              href={`https://sepolia.basescan.org/address/${info.address}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[var(--accent)] hover:underline"
             >
-              Registry ↗
+              Contract ↗
             </a>
-            {BATTLE_CID_MAP[id] && (
-              <a
-                href={`${IPFS_GATEWAYS[0]}/${BATTLE_CID_MAP[id]}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[var(--accent)] hover:underline"
-              >
-                📌 IPFS ↗
-              </a>
-            )}
-            <span className="font-mono break-all">{id.slice(0, 16)}…</span>
           </div>
         </div>
         <div className="flex gap-2">
           <button
-            onClick={startReplay}
+            onClick={() => { setVisibleTurns(0); setIsReplaying(true) }}
             className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface)]"
           >
             ▶ Replay
           </button>
           <button
-            onClick={showAll}
+            onClick={() => { setVisibleTurns((turns ?? []).length); setIsReplaying(false) }}
             className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface)]"
           >
             Show All
@@ -239,195 +250,96 @@ function BattlePage() {
         </div>
       </div>
 
-      {/* Outcome */}
-      {resolvedOutcome && (
-        <div className={`rounded-xl border p-4 ${resolvedOutcome.settled ? 'border-green-900/50 bg-green-950/20' : 'border-[var(--border)] bg-[var(--surface)]'}`}>
+      {/* Players */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-xl border border-red-900/30 bg-red-950/20 p-4">
+          <div className="text-xs text-[var(--muted)]">Challenger</div>
+          <div className="font-medium">Agent #{info.challengerId.toString()}</div>
+          <div className="text-xs text-[var(--muted)] font-mono">{shortAddr(info.challengerOwner)}</div>
+          {challenger && (
+            <div className="mt-2 text-xs text-[var(--muted)]">
+              Elo: {challenger.eloRating} · W:{challenger.totalWins} L:{challenger.totalLosses}
+            </div>
+          )}
+        </div>
+        <div className="rounded-xl border border-blue-900/30 bg-blue-950/20 p-4">
+          <div className="text-xs text-[var(--muted)]">Acceptor</div>
+          <div className="font-medium">
+            {info.acceptorId > 0n ? `Agent #${info.acceptorId.toString()}` : 'Waiting...'}
+          </div>
+          <div className="text-xs text-[var(--muted)] font-mono">{shortAddr(info.acceptorOwner)}</div>
+          {acceptor && (
+            <div className="mt-2 text-xs text-[var(--muted)]">
+              Elo: {acceptor.eloRating} · W:{acceptor.totalWins} L:{acceptor.totalLosses}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Settlement */}
+      {settlement && (
+        <div className="rounded-xl border border-green-900/50 bg-green-950/20 p-4">
           <div className="flex items-center gap-2">
             <span className="text-xl">🏆</span>
             <div>
               <div className="font-medium">
-                {resolvedOutcome.winnerAddress
-                  ? `Winner: ${agentName(resolvedOutcome.winnerAddress)}`
+                {settlement.winnerId > 0n
+                  ? `Winner: Agent #${settlement.winnerId.toString()}`
                   : 'Draw'}
               </div>
               <div className="text-xs text-[var(--muted)]">
-                {resolvedOutcome.reason}
-                {resolvedOutcome.settled && resolvedOutcome.settleTxHash && (
-                  <>
-                    {' · '}
-                    <a
-                      href={`https://sepolia.basescan.org/tx/${resolvedOutcome.settleTxHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[var(--accent)] hover:underline"
-                    >
-                      View tx ↗
-                    </a>
-                  </>
-                )}
+                {RESULT_TYPES[settlement.resultType] ?? 'Unknown'}
+                {' · '}
+                <a
+                  href={`https://sepolia.basescan.org/tx/${settlement.txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[var(--accent)] hover:underline"
+                >
+                  View tx ↗
+                </a>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Challenge Word Battle header */}
-      {log.challengeWord && (
-        <ChallengeWordHeader
-          config={log.challengeWord}
-          totalTurns={log.turns.length}
-          turns={log.turns}
+      {/* Turns */}
+      {info.state === 1 && info.currentTurn < info.maxTurns && (
+        <TurnTimerBar
+          deadlineBlock={info.turnDeadlineBlock}
+          baseTimeoutBlocks={info.baseTimeoutBlocks}
+          currentTurn={info.currentTurn}
+          whoseTurnName={`Agent #${isChallengerTurn ? info.challengerId.toString() : info.acceptorId.toString()}`}
+          isChallenger={isChallengerTurn}
+          pending={isPending}
         />
       )}
 
-      {/* Turn-by-turn transcript */}
-      <div className="space-y-3">
-        {displayedTurns.map((turn, idx) => {
-          const isLeft = turn.role === 'attacker' || (turn.role === 'spy' && idx % 2 === 0)
-          const roleEmoji = turn.role === 'attacker' ? '🗡️' : turn.role === 'defender' ? '🛡️' : '🕵️'
-          const roleColor = isLeft ? 'text-red-400' : 'text-blue-400'
-          const bgClass = isLeft
-            ? 'bg-red-950/30 border border-red-900/30'
-            : 'bg-blue-950/30 border border-blue-900/30'
-          return (
-            <div
+      {loadingTurns ? (
+        <div className="py-4 text-center text-[var(--muted)]">⏳ Loading turns...</div>
+      ) : (
+        <div className="space-y-3">
+          {displayedTurns.map((turn, idx) => (
+            <TurnCard
               key={turn.turnNumber}
-              className={`flex ${isLeft ? 'justify-start' : 'justify-end'}`}
-            >
-              <div className={`max-w-[80%] rounded-xl p-4 ${bgClass}`}>
-                <div className="mb-1 flex items-center gap-2 text-xs">
-                  <span>{roleEmoji}</span>
-                  <span className={roleColor}>
-                    {agentName(turn.agentAddress)}
-                  </span>
-                  <span className="text-[var(--muted)]">Turn {turn.turnNumber}</span>
-                </div>
-                <div className="text-sm leading-relaxed">{turn.message}</div>
-                {log.challengeWord && (
-                  <ChallengeWordTurnBadge turn={turn} config={log.challengeWord} />
-                )}
-                <div className="mt-2 text-[10px] text-[var(--muted)] font-mono truncate">
-                  sig: {turn.signature.slice(0, 20)}…
-                </div>
-              </div>
-            </div>
-          )
-        })}
-        {isReplaying && visibleTurns < log.turns.length && (
-          <div className="flex justify-center py-4">
-            <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
-              <span className="animate-pulse">●</span> Next turn...
-              {log.challengeWord && (
-                <TimerCountdown
-                  turnNumber={visibleTurns + 1}
-                  isActive={isReplaying}
-                />
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Signature Verification */}
-      {log.turns.length > 0 && <SignatureVerifier turns={log.turns} battleId={log.battleId} />}
-
-      {/* Battle Analysis */}
-      {log._analysis && (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-4">
-          <h3 className="text-sm font-semibold flex items-center gap-2">
-            📊 Battle Analysis
-          </h3>
-
-          {/* Agent Strategy Cards */}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {log._analysis.agents.map((agent) => {
-              const name = log.agents.find(a => a.address === agent.address)?.name ?? agent.address.slice(0, 10)
-              const isLeft = agent.role === 'attacker' || agent.role === 'spy'
-              return (
-                <div
-                  key={agent.address}
-                  className={`rounded-lg p-4 space-y-2 ${
-                    isLeft
-                      ? 'bg-red-950/20 border border-red-900/20'
-                      : 'bg-blue-950/20 border border-blue-900/20'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{name}</span>
-                    <span className="text-xs text-[var(--muted)]">{agent.role}</span>
-                  </div>
-                  {/* Tactics */}
-                  <div className="flex flex-wrap gap-1">
-                    {agent.tactics.map((t) => (
-                      <span
-                        key={t}
-                        className="inline-block rounded-full bg-[var(--bg)] px-2 py-0.5 text-xs text-[var(--accent)]"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                  {/* Stats */}
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <div className="text-sm font-bold text-[var(--accent)]">{agent.stats.totalWords}</div>
-                      <div className="text-[10px] text-[var(--muted)]">Words</div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-[var(--accent)]">{agent.stats.avgMessageLength}</div>
-                      <div className="text-[10px] text-[var(--muted)]">Avg/Turn</div>
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-[var(--accent)]">{agent.stats.questionCount}</div>
-                      <div className="text-[10px] text-[var(--muted)]">Questions</div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Highlights */}
-          {log._analysis.highlights.length > 0 && (
-            <div className="space-y-1">
-              <div className="text-xs font-medium text-[var(--muted)]">Highlights</div>
-              {log._analysis.highlights.map((h, i) => (
-                <div key={i} className="text-xs text-[var(--muted)] flex items-center gap-2">
-                  <span>💡</span> {h}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Tension Curve (simple ASCII bar chart) */}
-          {log._analysis.tensionCurve.length > 0 && (
-            <div className="space-y-1">
-              <div className="text-xs font-medium text-[var(--muted)]">Tension</div>
-              <div className="flex items-end gap-px h-8">
-                {log._analysis.tensionCurve.map((t, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 rounded-t bg-[var(--accent)] opacity-70"
-                    style={{ height: `${Math.max(4, t * 100)}%` }}
-                    title={`Turn ${i + 1}: ${Math.round(t * 100)}%`}
-                  />
-                ))}
-              </div>
-              <div className="flex justify-between text-[10px] text-[var(--muted)]">
-                <span>Turn 1</span>
-                <span>Turn {log._analysis.tensionCurve.length}</span>
+              turn={turn}
+              isLeft={idx % 2 === 0}
+            />
+          ))}
+          {isReplaying && visibleTurns < (turns ?? []).length && (
+            <div className="flex justify-center py-4">
+              <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
+                <span className="animate-pulse">●</span> Next turn...
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Verification */}
-      {log.merkleRoot && (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-          <div className="text-xs text-[var(--muted)]">
-            Merkle Root: <span className="font-mono">{log.merkleRoot}</span>
-          </div>
+      {!loadingTurns && (turns ?? []).length === 0 && info.state >= 1 && (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-[var(--muted)]">
+          No turns recorded yet. Battle is waiting for the first move.
         </div>
       )}
     </div>

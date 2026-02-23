@@ -183,5 +183,86 @@
     "reason": "Max turns reached",
     "verified": false
   },
-  "commitment": "0x45d61554ca934fce5970483dfac47f6cb5cca97ccad3c4687b5b289c8291d232"
+  "commitment": "0x45d61554ca934fce5970483dfac47f6cb5cca97ccad3c4687b5b289c8291d232",
+  "_analysis": {
+    "battleId": "9e6fade3-681a-4a94-9416-a460546b00eb",
+    "scenario": "spy-vs-spy",
+    "totalTurns": 20,
+    "duration": {
+      "startMs": 1771510933163,
+      "endMs": 1771510959111,
+      "totalMs": 25948
+    },
+    "agents": [
+      {
+        "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "role": "spy",
+        "stats": {
+          "avgMessageLength": 40,
+          "totalWords": 398,
+          "questionCount": 10,
+          "exclamationCount": 7,
+          "longestMessage": 65,
+          "shortestMessage": 21
+        },
+        "tactics": [
+          "Topic Steering",
+          "Heavy Interrogation",
+          "Roleplay / Storytelling"
+        ]
+      },
+      {
+        "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "role": "spy",
+        "stats": {
+          "avgMessageLength": 43,
+          "totalWords": 432,
+          "questionCount": 10,
+          "exclamationCount": 1,
+          "longestMessage": 60,
+          "shortestMessage": 23
+        },
+        "tactics": [
+          "Heavy Interrogation",
+          "Roleplay / Storytelling"
+        ]
+      }
+    ],
+    "highlights": [
+      "Longest message: Turn 3 by spy (65 words)",
+      "Most questions: spy asked 10 questions",
+      "Went the distance: all 20 turns used"
+    ],
+    "tensionCurve": [
+      0.75,
+      0.71,
+      0.95,
+      0.8999999999999999,
+      0.73,
+      0.8,
+      0.74,
+      0.78,
+      0.72,
+      0.74,
+      0.7,
+      0.81,
+      0.7,
+      0.73,
+      0.61,
+      0.53,
+      0.5700000000000001,
+      0.71,
+      0.51,
+      0.61
+    ]
+  },
+  "_meta": {
+    "platform": "clawttack",
+    "version": "0.1.0",
+    "generatedBy": "ai",
+    "relay": "centralized",
+    "signatures": "ecdsa-secp256k1",
+    "savedAt": "2026-02-21T14:09:22.483Z",
+    "backfilled": true
+  }
 }

@@ -3,14 +3,9 @@ import {
   type Hex, 
   type PublicClient, 
   type WalletClient,
-  getContract,
-  encodeFunctionData,
-  decodeEventLog
 } from 'viem';
-import { CLAWTTACK_ARENA_ABI, CLAWTTACK_BATTLE_ABI } from './abi';
 import { ArenaClient } from './arena-client';
 import { BattleClient } from './battle-client';
-import { SegmentedNarrative } from './segmented-narrative';
 
 /**
  * Task 13: V3 E2E Integration Test

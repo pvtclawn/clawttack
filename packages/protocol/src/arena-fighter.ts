@@ -18,6 +18,7 @@ import {
   parseEther,
   parseAbiItem,
 } from 'viem';
+import { MempoolWatcher } from './mempool';
 
 // --- ABI (minimal, only the functions we call) ---
 
@@ -295,6 +296,9 @@ export interface ArenaFighterConfig {
   publicClient: PublicClient;
   walletClient: WalletClient;
   contractAddress: Address;
+  mempoolWatcher?: MempoolWatcher;
+  /** Number of block confirmations to wait for before submitting a turn. Default: 1 */
+  finalityDepth?: number;
   /** Block number the Arena contract was deployed at. Used for event queries. Default: 0 */
   deployBlock?: bigint;
   /**
@@ -379,6 +383,8 @@ export class ArenaFighter {
   private contractAddress: Address;
   private deployBlock: bigint;
   private onTurnBroadcast?: (turn: ArenaTurnBroadcast) => void | Promise<void>;
+  private mempoolWatcher?: MempoolWatcher;
+  private finalityDepth: number;
 
   constructor(config: ArenaFighterConfig) {
     this.publicClient = config.publicClient;
@@ -386,6 +392,28 @@ export class ArenaFighter {
     this.contractAddress = config.contractAddress;
     this.deployBlock = config.deployBlock ?? 0n;
     this.onTurnBroadcast = config.onTurnBroadcast;
+    this.mempoolWatcher = config.mempoolWatcher;
+    this.finalityDepth = config.finalityDepth ?? 1;
+  }
+
+  /** Wrapper for RPC calls with exponential backoff */
+  private async withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+    let lastError: any;
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await fn();
+      } catch (err: any) {
+        lastError = err;
+        // Don't retry contract reverts
+        if (err.message?.includes('reverted') || err.name === 'ArenaError') {
+          throw err;
+        }
+        const delay = 1000 * Math.pow(2, i);
+        console.warn(`⚠️ RPC call failed (attempt ${i + 1}/${maxRetries}): ${err.message?.slice(0, 100)}. Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+    throw lastError;
   }
 
   // --- Seed Helpers ---
@@ -420,18 +448,20 @@ export class ArenaFighter {
 
     let txHash: Hex;
     try {
-      txHash = await this.walletClient.writeContract({
+      txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'createChallenge',
         args: [commit, maxTurns, BigInt(baseTimeout)],
         value: stake,
-      });
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
+      }));
     } catch (err) {
       throw parseRevertError(err);
     }
 
-    const receipt = await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+    const receipt = await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
 
     // Extract battleId from ChallengeCreated event
     const log = receipt.logs.find(
@@ -462,18 +492,20 @@ export class ArenaFighter {
 
     let txHash: Hex;
     try {
-      txHash = await this.walletClient.writeContract({
+      txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'acceptChallenge',
         args: [battleId, commit],
         value: stake,
-      });
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
+      }));
     } catch (err) {
       throw parseRevertError(err);
     }
 
-    await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+    await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
 
     return { seed: actualSeed, commit, txHash };
   }
@@ -481,13 +513,15 @@ export class ArenaFighter {
   /** Reveal both seeds to start the battle. Either participant can call. */
   async revealSeeds(battleId: Hex, seedA: string, seedB: string): Promise<Hex> {
     try {
-      const txHash = await this.walletClient.writeContract({
+      const txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'revealSeeds',
         args: [battleId, seedA, seedB],
-      });
-      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
+      }));
+      await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
     } catch (err) {
       throw parseRevertError(err);
@@ -500,13 +534,15 @@ export class ArenaFighter {
    */
   async revealSeed(battleId: Hex, seed: string): Promise<Hex> {
     try {
-      const txHash = await this.walletClient.writeContract({
+      const txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'revealSeed',
         args: [battleId, seed],
-      });
-      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
+      }));
+      await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
     } catch (err) {
       throw parseRevertError(err);
@@ -516,13 +552,15 @@ export class ArenaFighter {
   /** Submit a turn message. Must contain the challenge word for your turn. */
   async submitTurn(battleId: Hex, message: string): Promise<Hex> {
     try {
-      const txHash = await this.walletClient.writeContract({
+      const txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'submitTurn',
         args: [battleId, message],
-      });
-      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
+      }));
+      await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
     } catch (err) {
       throw parseRevertError(err);
@@ -532,13 +570,15 @@ export class ArenaFighter {
   /** Claim timeout if opponent didn't submit in time. */
   async claimTimeout(battleId: Hex): Promise<Hex> {
     try {
-      const txHash = await this.walletClient.writeContract({
+      const txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'claimTimeout',
         args: [battleId],
-      });
-      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
+      }));
+      await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
     } catch (err) {
       throw parseRevertError(err);
@@ -548,13 +588,15 @@ export class ArenaFighter {
   /** Cancel an open (unaccepted) challenge. */
   async cancelChallenge(battleId: Hex): Promise<Hex> {
     try {
-      const txHash = await this.walletClient.writeContract({
+      const txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: this.contractAddress,
         abi: ARENA_ABI,
         functionName: 'cancelChallenge',
         args: [battleId],
-      });
-      await this.publicClient.waitForTransactionReceipt({ hash: txHash });
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
+      }));
+      await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
     } catch (err) {
       throw parseRevertError(err);
@@ -565,22 +607,22 @@ export class ArenaFighter {
 
   /** Get the challenge word for a specific turn. */
   async getChallengeWord(battleId: Hex, turnNumber: number): Promise<string> {
-    return this.publicClient.readContract({
+    return this.withRetry(() => this.publicClient.readContract({
       address: this.contractAddress,
       abi: ARENA_ABI,
       functionName: 'getChallengeWord',
       args: [battleId, turnNumber],
-    }) as Promise<string>;
+    })) as Promise<string>;
   }
 
   /** Get battle core state. */
   async getBattleCore(battleId: Hex): Promise<BattleCore> {
-    const result = (await this.publicClient.readContract({
+    const result = (await this.withRetry(() => this.publicClient.readContract({
       address: this.contractAddress,
       abi: ARENA_ABI,
       functionName: 'getBattleCore',
       args: [battleId],
-    })) as [Address, Address, bigint, number, number, number, Address];
+    }))) as [Address, Address, bigint, number, number, number, Address];
 
     return {
       challenger: result[0],
@@ -595,12 +637,12 @@ export class ArenaFighter {
 
   /** Get battle timing info. */
   async getBattleTiming(battleId: Hex): Promise<BattleTiming> {
-    const result = (await this.publicClient.readContract({
+    const result = (await this.withRetry(() => this.publicClient.readContract({
       address: this.contractAddress,
       abi: ARENA_ABI,
       functionName: 'getBattleTiming',
       args: [battleId],
-    })) as [bigint, bigint, bigint, bigint];
+    }))) as [bigint, bigint, bigint, bigint];
 
     return {
       turnDeadline: result[0],
@@ -612,32 +654,32 @@ export class ArenaFighter {
 
   /** Check whose turn it is. */
   async whoseTurn(battleId: Hex): Promise<Address> {
-    return this.publicClient.readContract({
+    return this.withRetry(() => this.publicClient.readContract({
       address: this.contractAddress,
       abi: ARENA_ABI,
       functionName: 'whoseTurn',
       args: [battleId],
-    }) as Promise<Address>;
+    })) as Promise<Address>;
   }
 
   /** Get time remaining for current turn. */
   async timeRemaining(battleId: Hex): Promise<bigint> {
-    return this.publicClient.readContract({
+    return this.withRetry(() => this.publicClient.readContract({
       address: this.contractAddress,
       abi: ARENA_ABI,
       functionName: 'timeRemaining',
       args: [battleId],
-    }) as Promise<bigint>;
+    })) as Promise<bigint>;
   }
 
   /** Get agent stats (Elo, wins, losses, draws). */
   async getAgentStats(agent: Address): Promise<AgentStats> {
-    const result = (await this.publicClient.readContract({
+    const result = (await this.withRetry(() => this.publicClient.readContract({
       address: this.contractAddress,
       abi: ARENA_ABI,
       functionName: 'agents',
       args: [agent],
-    })) as [number, number, number, number];
+    }))) as [number, number, number, number];
 
     return {
       elo: result[0],
@@ -650,6 +692,7 @@ export class ArenaFighter {
   /** Check if it's our turn. */
   async isMyTurn(battleId: Hex): Promise<boolean> {
     const [account] = await this.walletClient.getAddresses();
+    if (!account) return false;
     const current = await this.whoseTurn(battleId);
     return current.toLowerCase() === account.toLowerCase();
   }
@@ -730,27 +773,41 @@ export class ArenaFighter {
 
   /**
    * Play a turn using a strategy function.
+   * Supports Spec v1.11 Tentative/Finality Split.
    *
    * 1. Fetches the challenge word for this turn
    * 2. Fetches all previous turn messages from on-chain events
    * 3. Calls the strategy to generate a response
    * 4. Validates the response contains the challenge word
-   * 5. Submits the turn on-chain
+   * 5. WAITS for at least 1 block confirmation of previous turn (if tentative)
+   * 6. Submits the turn on-chain
    *
    * @throws if strategy returns a message without the challenge word
    * @throws ArenaError on contract revert
    */
-  async playTurn(battleId: Hex, strategy: TurnStrategy): Promise<{ message: string; txHash: Hex }> {
+  async playTurn(battleId: Hex, strategy: TurnStrategy, opts: { tentativeTxHash?: Hex } = {}): Promise<{ message: string; txHash: Hex }> {
     const [account] = await this.walletClient.getAddresses();
-    const core = await this.getBattleCore(battleId);
+    if (!account) throw new Error('No account found in walletClient');
 
-    if (core.phase !== BattlePhase.Active) {
-      throw new ArenaError('InvalidPhase', `Battle is not active (phase: ${core.phase})`);
+    let core = await this.getBattleCore(battleId);
+
+    // If it's not our turn yet, check if there's a pending transaction for opponent
+    if (core.phase === BattlePhase.Active) {
+      const currentTurnAddress = await this.whoseTurn(battleId);
+      if (currentTurnAddress.toLowerCase() !== account.toLowerCase()) {
+        // Not our turn... check for tentative tx
+        if (!opts.tentativeTxHash) {
+          throw new ArenaError('NotYourTurn', `Not your turn (current: ${currentTurnAddress})`);
+        }
+
+        // We have a tentative hash! Wait for it to confirm before submitting,
+        // but we can start reasoning now.
+        console.log(`⏳ Opponent turn pending (${opts.tentativeTxHash}). Starting tentative reasoning...`);
+      }
     }
 
-    const currentTurnAddress = await this.whoseTurn(battleId);
-    if (currentTurnAddress.toLowerCase() !== account.toLowerCase()) {
-      throw new ArenaError('NotYourTurn', `Not your turn (current: ${currentTurnAddress})`);
+    if (core.phase !== BattlePhase.Active && core.phase !== BattlePhase.Committed) {
+      throw new ArenaError('InvalidPhase', `Battle is not active (phase: ${core.phase})`);
     }
 
     const turnNumber = core.currentTurn;
@@ -772,6 +829,7 @@ export class ArenaFighter {
       maxTurns: core.maxTurns,
     };
 
+    // --- PHASE 1: REASONING (TENTATIVE) ---
     const message = await strategy(ctx);
 
     // Validate: strategy must include the challenge word
@@ -782,18 +840,33 @@ export class ArenaFighter {
       );
     }
 
+    // --- PHASE 2: SUBMISSION (FINALIZED) ---
+    
+    // If we started from a tentative hash, wait for configured block confirmation
+    if (opts.tentativeTxHash) {
+      console.log(`⚓ Anchoring finality. Waiting for ${this.finalityDepth} confirmation(s) of ${opts.tentativeTxHash}...`);
+      await this.publicClient.waitForTransactionReceipt({ 
+        hash: opts.tentativeTxHash,
+        confirmations: this.finalityDepth 
+      });
+      // Refresh state after confirmation
+      core = await this.getBattleCore(battleId);
+    }
+
     const txHash = await this.submitTurn(battleId, message);
 
     // Broadcast turn to real-time channels (Waku, etc.) — fire and forget
     if (this.onTurnBroadcast) {
-      const [account] = await this.walletClient.getAddresses();
-      Promise.resolve(this.onTurnBroadcast({
-        battleId,
-        agent: account,
-        turnNumber,
-        message,
-        txHash,
-      })).catch(() => {}); // don't let broadcast errors affect gameplay
+      const [broadcastAccount] = await this.walletClient.getAddresses();
+      if (broadcastAccount) {
+        Promise.resolve(this.onTurnBroadcast({
+          battleId,
+          agent: broadcastAccount,
+          turnNumber,
+          message,
+          txHash,
+        })).catch(() => {}); // don't let broadcast errors affect gameplay
+      }
     }
 
     return { message, txHash };

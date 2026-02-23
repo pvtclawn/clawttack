@@ -19,26 +19,26 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
     // ─── Constants ───────────────────────────────────────────────────────────
 
-    uint256 public constant MIN_RATED_STAKE      = 0.001 ether;  // ~$3 on Base — meaningful anti-farming floor
-    uint256 public constant MAX_CREATION_FEE     = 0.01 ether;
-    uint256 public constant MAX_REGISTRATION_FEE = 0.1 ether;
-    uint256 public constant MAX_PROTOCOL_FEE_RATE = 1_000;       // BPS
+    uint256 public constant MIN_RATED_STAKE          = 0.001 ether;
+    uint256 public constant MAX_CREATION_FEE         = 0.01 ether;
+    uint256 public constant MAX_REGISTRATION_FEE     = 0.1 ether;
+    uint256 public constant MAX_PROTOCOL_FEE_RATE    = 1_000;
 
-    uint32 public constant DEFAULT_ELO_RATING    = 1500;
-    uint32 public constant MAX_ELO_DIFF          = 300;          // ~85% expected win — fairer matchmaking
+    uint32 public constant DEFAULT_ELO_RATING        = 1500;
+    uint32 public constant MAX_ELO_DIFF              = 300;
 
-    uint32 public constant MIN_TIMEOUT_BLOCKS    = 25;           // ~50s on Base — reliable under mempool load
-    uint32 public constant MAX_TIMEOUT_BLOCKS    = 300;          // ~10 min on Base — generous ceiling
-    uint32 public constant MIN_WARMUP_BLOCKS     = 15;           // ~30s on Base — agent monitoring setup
-    uint32 public constant MAX_WARMUP_BLOCKS     = 150;          // ~5 min on Base
+    uint32 public constant MIN_TIMEOUT_BLOCKS        = 25;
+    uint32 public constant MAX_TIMEOUT_BLOCKS        = 300;
+    uint32 public constant MIN_WARMUP_BLOCKS         = 15;
+    uint32 public constant MAX_WARMUP_BLOCKS         = 150;
 
-    uint8  public constant MIN_TURNS             = 12;           // 6 per player — minimum strategic depth
-    uint8  public constant MAX_TURNS             = 40;
-    uint8  public constant MAX_JOKERS            = 2;            // scarce resource, not a routine tool
+    uint8  public constant MIN_TURNS                 = 12;
+    uint8  public constant MAX_TURNS                 = 40;
+    uint8  public constant MAX_JOKERS                = 2;
 
     // ─── Immutables ──────────────────────────────────────────────────────────
 
-    address public immutable wordDictionary;                     // BIP39 is frozen — set once at deploy
+    address public immutable wordDictionary;
 
     // ─── Storage ─────────────────────────────────────────────────────────────
 
@@ -47,6 +47,8 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     uint256 public agentRegistrationFee;
     uint256 public battleCreationFee;
     uint256 public protocolFeeRate;
+
+    uint256 public protocolFees;
 
     uint256 public battlesCount;
     uint256 public agentsCount;
@@ -79,7 +81,9 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         wordDictionary = _wordDictionary;
     }
 
-    receive() external payable {}
+    receive() external payable {
+        protocolFees += msg.value;
+    }
 
     // ─── External: Admin ─────────────────────────────────────────────────────
 
@@ -106,10 +110,11 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         protocolFeeRate = _rate;
     }
 
-    function withdrawFees(address payable to) external onlyOwner nonReentrant {
-        uint256 balance = address(this).balance;
-        if (balance == 0) revert ClawttackErrors.InsufficientValue();
-        (bool success,) = to.call{value: balance}("");
+    function withdrawFees(address payable to) external onlyOwner {
+        uint256 amount = protocolFees;
+        if (amount == 0) revert ClawttackErrors.InsufficientValue();
+        protocolFees = 0;
+        (bool success,) = to.call{value: amount}("");
         if (!success) revert ClawttackErrors.TransferFailed();
     }
 
@@ -144,6 +149,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
      */
     function registerAgent() external payable nonReentrant returns (uint256 agentId) {
         if (msg.value != agentRegistrationFee) revert ClawttackErrors.InsufficientValue();
+        protocolFees += msg.value;
         unchecked { agentId = ++agentsCount; }
 
         agents[agentId] = ClawttackTypes.AgentProfile({
@@ -180,6 +186,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         if (config.warmupBlocks < MIN_WARMUP_BLOCKS || config.warmupBlocks > MAX_WARMUP_BLOCKS) revert ClawttackErrors.ConfigOutOfBounds();
 
         if (msg.value != config.stake + battleCreationFee) revert ClawttackErrors.InsufficientValue();
+        protocolFees += battleCreationFee;
 
         uint256 battleId;
         unchecked { battleId = ++battlesCount; }

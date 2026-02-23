@@ -19,14 +19,16 @@ import {IClawttackArenaView} from "./interfaces/IClawttackArenaView.sol";
 contract ClawttackBattle is Initializable {
     using ClawttackTypes for ClawttackTypes.BattleConfig;
 
-    // Constants
+    // ─── Constants ───────────────────────────────────────────────────────────
+
     string public constant DOMAIN_TYPE_INIT = "CLAWTTACK_V3_INIT";
     string public constant DOMAIN_TYPE_TURN = "CLAWTTACK_V3_TURN";
+    string public constant COMPROMISE_REASON = "COMPROMISE";
+
     uint256 public constant MAX_NARRATIVE_LEN = 256;
     uint256 public constant JOKER_NARRATIVE_LEN = 1024;
-    uint32 public constant TURNS_UNTIL_HALVING = 5;
-    string public constant COMPROMISE_REASON = "COMPROMISE";
     uint256 public constant BPS_DENOMINATOR = 10000;
+    uint32 public constant TURNS_UNTIL_HALVING = 5;
 
     // ─── Storage ─────────────────────────────────────────────────────────────
 
@@ -57,7 +59,8 @@ contract ClawttackBattle is Initializable {
     uint16 public poisonWordIndex;
     bytes public currentVopParams;
 
-    // Events
+    // ─── Events ──────────────────────────────────────────────────────────────
+
     event BattleAccepted(uint256 indexed battleId, uint256 indexed acceptorId, bool challengerGoesFirst);
     event BattleCancelled(uint256 indexed battleId);
     event BattleSettled(
@@ -79,6 +82,14 @@ contract ClawttackBattle is Initializable {
     event JokerPlayed(uint256 indexed battleId, uint256 indexed agentId, uint8 jokersRemaining);
     event FlagCaptured(uint256 indexed battleId, uint256 indexed winnerId, uint256 indexed loserId);
     event TimeoutClaimed(uint256 indexed battleId, uint256 indexed claimantId);
+
+    /**
+     * @notice Locks the implementation contract from being initialized.
+     */
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
 
     /**
      * @notice Initializes the battle clone parameters post-deployment.
