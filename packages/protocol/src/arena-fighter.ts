@@ -301,7 +301,6 @@ export interface ArenaFighterConfig {
   finalityDepth?: number;
   /** Block number the Arena contract was deployed at. Used for event queries. Default: 0 */
   deployBlock?: bigint;
-  deployBlock?: bigint;
   /**
    * Optional callback invoked after a turn is confirmed on-chain.
    * Use to broadcast turn data to Waku, IPFS, or other real-time channels.
@@ -455,6 +454,8 @@ export class ArenaFighter {
         functionName: 'createChallenge',
         args: [commit, maxTurns, BigInt(baseTimeout)],
         value: stake,
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
       }));
     } catch (err) {
       throw parseRevertError(err);
@@ -497,6 +498,8 @@ export class ArenaFighter {
         functionName: 'acceptChallenge',
         args: [battleId, commit],
         value: stake,
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
       }));
     } catch (err) {
       throw parseRevertError(err);
@@ -515,6 +518,8 @@ export class ArenaFighter {
         abi: ARENA_ABI,
         functionName: 'revealSeeds',
         args: [battleId, seedA, seedB],
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
       }));
       await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
@@ -534,6 +539,8 @@ export class ArenaFighter {
         abi: ARENA_ABI,
         functionName: 'revealSeed',
         args: [battleId, seed],
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
       }));
       await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
@@ -550,6 +557,8 @@ export class ArenaFighter {
         abi: ARENA_ABI,
         functionName: 'submitTurn',
         args: [battleId, message],
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
       }));
       await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
@@ -566,6 +575,8 @@ export class ArenaFighter {
         abi: ARENA_ABI,
         functionName: 'claimTimeout',
         args: [battleId],
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
       }));
       await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
@@ -582,6 +593,8 @@ export class ArenaFighter {
         abi: ARENA_ABI,
         functionName: 'cancelChallenge',
         args: [battleId],
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
       }));
       await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
       return txHash;
@@ -679,6 +692,7 @@ export class ArenaFighter {
   /** Check if it's our turn. */
   async isMyTurn(battleId: Hex): Promise<boolean> {
     const [account] = await this.walletClient.getAddresses();
+    if (!account) return false;
     const current = await this.whoseTurn(battleId);
     return current.toLowerCase() === account.toLowerCase();
   }
@@ -773,6 +787,8 @@ export class ArenaFighter {
    */
   async playTurn(battleId: Hex, strategy: TurnStrategy, opts: { tentativeTxHash?: Hex } = {}): Promise<{ message: string; txHash: Hex }> {
     const [account] = await this.walletClient.getAddresses();
+    if (!account) throw new Error('No account found in walletClient');
+
     let core = await this.getBattleCore(battleId);
 
     // If it's not our turn yet, check if there's a pending transaction for opponent
@@ -841,14 +857,16 @@ export class ArenaFighter {
 
     // Broadcast turn to real-time channels (Waku, etc.) — fire and forget
     if (this.onTurnBroadcast) {
-      const [account] = await this.walletClient.getAddresses();
-      Promise.resolve(this.onTurnBroadcast({
-        battleId,
-        agent: account,
-        turnNumber,
-        message,
-        txHash,
-      })).catch(() => {}); // don't let broadcast errors affect gameplay
+      const [broadcastAccount] = await this.walletClient.getAddresses();
+      if (broadcastAccount) {
+        Promise.resolve(this.onTurnBroadcast({
+          battleId,
+          agent: broadcastAccount,
+          turnNumber,
+          message,
+          txHash,
+        })).catch(() => {}); // don't let broadcast errors affect gameplay
+      }
     }
 
     return { message, txHash };

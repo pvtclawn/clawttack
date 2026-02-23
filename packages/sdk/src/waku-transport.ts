@@ -736,8 +736,8 @@ export class WakuTransport implements ITransport {
       this.config.turnTimeoutMs,
     );
     // Pass through dynamic timeout function if configured
-    if (this.config.turnTimeoutFn) {
-      connection.turnTimeoutFn = this.config.turnTimeoutFn;
+    if ((this.config as any).turnTimeoutFn) {
+      (connection as any).turnTimeoutFn = (this.config as any).turnTimeoutFn;
     }
     this.connections.set(connId, connection);
 
@@ -819,8 +819,8 @@ export class WakuTransport implements ITransport {
       bootstrapPeers: [multiaddr],
       networkConfig: {
         clusterId: this.config.clusterId,
-        shards: [this.config.shardId],
-      },
+        contentTopics: [this.config.topicPrefix],
+      } as any,
       libp2p: {
         filterMultiaddrs: false,
         hideWebSocketInfo: true,

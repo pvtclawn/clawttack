@@ -52,7 +52,7 @@ export interface BattleEndData {
 /** Transport connection for a single battle */
 export interface ITransportConnection {
   /** Register as a participant in the battle */
-  register(agentAddress: string): Promise<void>;
+  register(agentAddress: string, signature?: string, signedTimestamp?: number): Promise<void>;
 
   /** Send a signed turn */
   sendTurn(turn: {

@@ -110,7 +110,7 @@ export function createGatewayStrategy(config: GatewayStrategyConfig) {
     const now = Date.now();
     const windowStart = now - 60_000;
     // Remove timestamps outside the window
-    while (requestTimestamps.length > 0 && requestTimestamps[0] < windowStart) {
+    while (requestTimestamps.length > 0 && requestTimestamps[0]! < windowStart) {
       requestTimestamps.shift();
     }
     if (requestTimestamps.length >= maxRequestsPerMinute) {

@@ -84,7 +84,7 @@ contract BIP39WordsTest is Test {
     }
 
     function test_wordCount() public view {
-        assertEq(bip39.WORD_COUNT(), 12);
+        assertEq(bip39.wordCount(), 12);
     }
 
     function test_firstWord() public view {

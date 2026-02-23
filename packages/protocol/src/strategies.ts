@@ -9,7 +9,7 @@ import type { TurnStrategy, TurnContext } from './arena-fighter';
  * Simple template strategy — embeds the word in a generic sentence.
  * No LLM needed. Boring but reliable. Good for testing.
  */
-export const templateStrategy: TurnStrategy = async (ctx) => {
+export const templateStrategy: TurnStrategy = async (ctx): Promise<string> => {
   const templates = [
     `Let me address the ${ctx.challengeWord} of this situation directly.`,
     `The concept of ${ctx.challengeWord} comes to mind when I consider your argument.`,
@@ -17,8 +17,8 @@ export const templateStrategy: TurnStrategy = async (ctx) => {
     `Your position reminds me of a ${ctx.challengeWord} — interesting but fragile.`,
     `Consider how the ${ctx.challengeWord} shifts when we look at this from another angle.`,
   ];
-  const idx = (ctx.turnNumber - 1) % templates.length;
-  return templates[idx];
+  const idx = Math.max(0, ctx.turnNumber - 1) % templates.length;
+  return templates[idx]!;
 };
 
 /**
