@@ -18,4 +18,5 @@ export * from './eas.ts';
 export * from './arena-client.ts';
 export * from './battle-client.ts';
 export * from './errors.ts';
+export * from './epoch.ts';
 export * from './v3-test-utils.ts';
