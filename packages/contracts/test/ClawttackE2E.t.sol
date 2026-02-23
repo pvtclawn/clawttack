@@ -62,30 +62,6 @@ contract ClawttackE2ETest is Test {
         agentBob = arena.registerAgent{value: 0.005 ether}();
     }
 
-    function _encodeSegments(address battle, string memory text, bytes memory truth) internal view returns (bytes32[32] memory segments) {
-        ClawttackBattle b = ClawttackBattle(payable(battle));
-        // Challenge #79: Included address(this) in the hash
-        uint256 truthIndex = uint256(keccak256(abi.encodePacked(b.DOMAIN_TYPE_INDEX(), b.sequenceHash(), b.battleId(), address(b)))) % 32;
-        
-        bytes32 truthHash = keccak256(truth);
-        bytes memory textBytes = bytes(text);
-        
-        uint256 offset = 0;
-        for (uint256 i = 0; i < 32; i++) {
-            if (i == truthIndex) {
-                segments[i] = truthHash;
-            } else {
-                bytes32 chunk;
-                for (uint256 j = 0; j < 32; j++) {
-                    if (offset + j < textBytes.length) {
-                        chunk |= bytes32(textBytes[offset + j]) >> (j * 8);
-                    }
-                }
-                segments[i] = chunk;
-                offset += 32;
-            }
-        }
-    }
 
     receive() external payable {}
 
@@ -113,10 +89,10 @@ contract ClawttackE2ETest is Test {
             // If we are caught in an RNG trap where the target word IS the poison word,
             // we MUST use a Joker to bypass linguistic verification entirely.
             if (i > 0 && targetIdx == poisonIdx) {
-                string memory narrative = "This is a Joker bypass string that must be physically longer than 256 characters so let us pad it out right now. Pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad.";
+                string memory narrative = "This is a Joker bypass string that must be physically longer than 256 characters so let us pad it out right now. Pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad.";
                 payload = ClawttackTypes.TurnPayload({
                     solution: 0,
-                    segments: _encodeSegments(address(battle), narrative, ""),
+                    narrative: narrative,
                     nextVopParams: "",
                     poisonWordIndex: uint16((targetIdx + 1) % 3)
                 });
@@ -128,7 +104,7 @@ contract ClawttackE2ETest is Test {
                 );
                 payload = ClawttackTypes.TurnPayload({
                     solution: 42,
-                    segments: _encodeSegments(address(battle), narrative, ""),
+                    narrative: narrative,
                     nextVopParams: "",
                     poisonWordIndex: uint16((targetIdx + 1) % 3) // Set a distinct poison word
                 });
@@ -235,7 +211,7 @@ contract ClawttackE2ETest is Test {
             
             ClawttackTypes.TurnPayload memory payload = ClawttackTypes.TurnPayload({
                 solution: 42,
-                segments: _encodeSegments(address(battle), narrative, ""),
+                narrative: narrative,
                 nextVopParams: "",
                 poisonWordIndex: uint16((targetIdx + 1) % 3)
             });
@@ -291,7 +267,7 @@ contract ClawttackE2ETest is Test {
             bytes1 poisonFirst = bytes1(0);
             if (bytes(actualPoison).length > 0) poisonFirst = bytes(actualPoison)[0];
             
-            // Worst case string: 992 bytes (31 segments), filled with alternating characters matching the 
+            // Worst case string: up to 1024 bytes (joker limit), filled with alternating characters.
             // first char of the poison word and target word. Target word is placed at the very end.
             bytes memory worstCaseNarrative = new bytes(992);
             
@@ -320,7 +296,7 @@ contract ClawttackE2ETest is Test {
             
             ClawttackTypes.TurnPayload memory payload = ClawttackTypes.TurnPayload({
                 solution: 42,
-                segments: _encodeSegments(address(battle), string(worstCaseNarrative), ""),
+                narrative: string(worstCaseNarrative),
                 nextVopParams: "",
                 poisonWordIndex: uint16((targetIdx + 1) % 3)
             });

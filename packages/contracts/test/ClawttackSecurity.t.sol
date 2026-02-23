@@ -130,33 +130,6 @@ contract ClawttackSecurityTest is Test {
         vm.roll(block.number + config.warmupBlocks + 1);
     }
 
-    /// @dev Packs a narrative string + nextVopParams into the 32-slot ACR segments format.
-    ///      Slot at truthIndex = keccak256(nextVopParams); all other slots = 32-byte text chunks.
-    function _encodeSegments(address battle, string memory text, bytes memory nextVop)
-        internal view returns (bytes32[32] memory segments)
-    {
-        ClawttackBattle b = ClawttackBattle(payable(battle));
-        uint256 truthIndex = uint256(
-            keccak256(abi.encodePacked(b.DOMAIN_TYPE_INDEX(), b.sequenceHash(), b.battleId(), address(b)))
-        ) % 32;
-        bytes32 truthHash = keccak256(nextVop);
-        bytes memory textBytes = bytes(text);
-        uint256 offset = 0;
-        for (uint256 i = 0; i < 32; i++) {
-            if (i == truthIndex) {
-                segments[i] = truthHash;
-            } else {
-                bytes32 chunk;
-                for (uint256 j = 0; j < 32; j++) {
-                    if (offset + j < textBytes.length) {
-                        chunk |= bytes32(textBytes[offset + j]) >> (j * 8);
-                    }
-                }
-                segments[i] = chunk;
-                offset += 32;
-            }
-        }
-    }
 
     function _submitPass(ClawttackBattle battle, address player, uint16 poison) internal {
         uint16 targetIdx = battle.targetWordIndex();
@@ -166,13 +139,14 @@ contract ClawttackSecurityTest is Test {
         );
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
             solution: 42,
-            segments: _encodeSegments(address(battle), narrative, ""),
+            narrative: narrative,
             nextVopParams: "",
             poisonWordIndex: poison
         });
         vm.prank(player);
         battle.submitTurn(p);
     }
+
 
     // ─── Arena Ownership & Admin ────────────────────────────────────────────────
 
@@ -355,7 +329,7 @@ contract ClawttackSecurityTest is Test {
     function test_submitTurn_nonParticipant_reverts() public {
         ClawttackBattle battle = _createAndAccept(0);
         ClawttackTypes.TurnPayload memory p =
-            ClawttackTypes.TurnPayload({solution: 42, segments: _encodeSegments(address(battle), "x", ""), nextVopParams: "", poisonWordIndex: 0});
+            ClawttackTypes.TurnPayload({solution: 42, narrative: "x", nextVopParams: "", poisonWordIndex: 0});
 
         vm.prank(eve);
         vm.expectRevert(ClawttackErrors.NotParticipant.selector);
@@ -373,7 +347,7 @@ contract ClawttackSecurityTest is Test {
         string memory target = dict.word(targetIdx);
         string memory narrative = string(abi.encodePacked("Long narrative about ", target, " that is quite long."));
         ClawttackTypes.TurnPayload memory p =
-            ClawttackTypes.TurnPayload({solution: 42, segments: _encodeSegments(address(battle), narrative, ""), nextVopParams: "", poisonWordIndex: 0});
+            ClawttackTypes.TurnPayload({solution: 42, narrative: narrative, nextVopParams: "", poisonWordIndex: 0});
 
         vm.prank(wrongPlayer);
         vm.expectRevert(ClawttackErrors.UnauthorizedTurn.selector);
@@ -393,7 +367,7 @@ contract ClawttackSecurityTest is Test {
         string memory target = dict.word(targetIdx);
         string memory narrative = string(abi.encodePacked("Long narrative about ", target, " that is quite long."));
         ClawttackTypes.TurnPayload memory p =
-            ClawttackTypes.TurnPayload({solution: 42, segments: _encodeSegments(address(battle), narrative, ""), nextVopParams: "", poisonWordIndex: 0});
+            ClawttackTypes.TurnPayload({solution: 42, narrative: narrative, nextVopParams: "", poisonWordIndex: 0});
 
         vm.prank(player);
         vm.expectRevert(ClawttackErrors.TurnDeadlineExpired.selector);
@@ -418,7 +392,7 @@ contract ClawttackSecurityTest is Test {
         bytes memory nonEmptyParams = abi.encode(uint256(999)); // triggers verify() on turn 1
         ClawttackTypes.TurnPayload memory p1 = ClawttackTypes.TurnPayload({
             solution: 42,
-            segments: _encodeSegments(address(battle), narrative0, nonEmptyParams),
+            narrative: narrative0,
             nextVopParams: nonEmptyParams,
             poisonWordIndex: WORD_IGNORE
         });
@@ -436,7 +410,7 @@ contract ClawttackSecurityTest is Test {
         string memory narrative2 = string(abi.encodePacked("Long narrative safely including the target word: ", target2, ", as demanded here."));
         ClawttackTypes.TurnPayload memory p2 = ClawttackTypes.TurnPayload({
             solution: 0, // Wrong, but VOP is mocked to revert → auto-pass
-            segments: _encodeSegments(address(battle), narrative2, ""),
+            narrative: narrative2,
             nextVopParams: "",
             poisonWordIndex: WORD_IGNORE
         });
@@ -459,7 +433,7 @@ contract ClawttackSecurityTest is Test {
         string memory narrative = string(abi.encodePacked("Long narrative safely featuring the required target word: ", tWord, ", and no other issues."));
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
             solution: 0, // Any solution should pass since params are empty
-            segments: _encodeSegments(address(battle), narrative, ""),
+            narrative: narrative,
             nextVopParams: "",
             poisonWordIndex: WORD_IGNORE
         });
@@ -483,7 +457,7 @@ contract ClawttackSecurityTest is Test {
         bytes memory vopParams = abi.encode("any_salt"); // non-empty, triggers verify on next turn
         ClawttackTypes.TurnPayload memory p1 = ClawttackTypes.TurnPayload({
             solution: 42,
-            segments: _encodeSegments(address(battle), narrative, vopParams),
+            narrative: narrative,
             nextVopParams: vopParams,
             poisonWordIndex: WORD_IGNORE
         });
@@ -497,7 +471,7 @@ contract ClawttackSecurityTest is Test {
             string(abi.encodePacked("Another long narrative safely featuring the required word: ", tWord2, ", done now."));
         ClawttackTypes.TurnPayload memory p2 = ClawttackTypes.TurnPayload({
             solution: 999, // WRONG — MockVOP expects 42
-            segments: _encodeSegments(address(battle), narrative2, ""),
+            narrative: narrative2,
             nextVopParams: "",
             poisonWordIndex: WORD_IGNORE
         });
@@ -524,7 +498,7 @@ contract ClawttackSecurityTest is Test {
         // Submit with an out-of-bounds poisonWordIndex
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
             solution: 42,
-            segments: _encodeSegments(address(battle), narrative, ""),
+            narrative: narrative,
             nextVopParams: "",
             poisonWordIndex: 1000 // Way out of bounds (dict has only 3 words)
         });
@@ -669,10 +643,7 @@ contract ClawttackSecurityTest is Test {
     // ─── Joker Mechanic ─────────────────────────────────────────────────────────
 
     /// @notice Verifies Joker deduction on long narratives and exhaustion revert
-    /// @dev SKIPPED: upstream refactor removed joker enforcement from submitTurn.
-    ///      jokersRemainingA/B are initialized but never decremented. Re-enable when re-implemented.
     function test_joker_exhaustion_reverts() public {
-        return; // joker enforcement removed from submitTurn in upstream refactor
         // Use maxJokers=1 for a minimal, deterministic test
         ClawttackTypes.BattleConfig memory cfg = ClawttackTypes.BattleConfig({
             stake: 0,
@@ -704,7 +675,7 @@ contract ClawttackSecurityTest is Test {
         // Joker 1 (PlayerA, turn 0) -- no poison on turn 0
         ClawttackTypes.TurnPayload memory p1 = ClawttackTypes.TurnPayload({
             solution: 42,
-            segments: _encodeSegments(address(battle), jokerNarrative, ""),
+            narrative: jokerNarrative,
             nextVopParams: "",
             poisonWordIndex: WORD_ART // set art as poison for playerB
         });
@@ -719,7 +690,7 @@ contract ClawttackSecurityTest is Test {
         string memory safeNarrative = string(abi.encodePacked("Long narrative safely containing the required word: ", t1word, ", nothing more here at all."));
         ClawttackTypes.TurnPayload memory p2 = ClawttackTypes.TurnPayload({
             solution: 42,
-            segments: _encodeSegments(address(battle), safeNarrative, ""),
+            narrative: safeNarrative,
             nextVopParams: "",
             poisonWordIndex: WORD_IGNORE // set ignore as poison for playerA next
         });
@@ -735,7 +706,7 @@ contract ClawttackSecurityTest is Test {
         string memory jokerNarrative2 = string(abi.encodePacked("art agent ", t2word, " ", string(pad)));
         ClawttackTypes.TurnPayload memory p3 = ClawttackTypes.TurnPayload({
             solution: 42,
-            segments: _encodeSegments(address(battle), jokerNarrative2, ""),
+            narrative: jokerNarrative2,
             nextVopParams: "",
             poisonWordIndex: WORD_ART
         });

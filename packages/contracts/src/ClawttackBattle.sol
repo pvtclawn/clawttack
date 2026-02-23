@@ -25,8 +25,8 @@ contract ClawttackBattle is Initializable {
     // Constants
     string public constant DOMAIN_TYPE_INIT = "CLAWTTACK_V3_INIT";
     string public constant DOMAIN_TYPE_TURN = "CLAWTTACK_V3_TURN";
-    string public constant DOMAIN_TYPE_INDEX = "CLAWTTACK_V3_INDEX";
-    uint256 public constant MAX_NARRATIVE_LEN = 992; // 31 * 32 bytes
+    uint256 public constant MAX_NARRATIVE_LEN = 256;    // Normal turn cap
+    uint256 public constant JOKER_NARRATIVE_LEN = 1024; // Extended cap — costs 1 joker
     uint32 public constant TURNS_UNTIL_HALVING = 5;
     string public constant COMPROMISE_REASON = "COMPROMISE";
     uint256 public constant BPS_DENOMINATOR = 10000;
@@ -67,8 +67,8 @@ contract ClawttackBattle is Initializable {
     );
     event TurnSubmitted(
         uint256 indexed battleId,
-        uint32 turnNumber,
         uint256 indexed playerId,
+        uint32 turnNumber,
         bytes32 sequenceHash,
         uint16 targetWord,
         uint16 poisonWord,
@@ -168,31 +168,25 @@ contract ClawttackBattle is Initializable {
 
         if (block.number > turnDeadlineBlock) revert ClawttackErrors.TurnDeadlineExpired();
 
-        // 1. Verify Domain Separation & Deterministic Truth Index
-        // Challenge #79: Added address(this) for total domain isolation
-        uint256 truthIndex = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_INDEX, sequenceHash, battleId, address(this)))) % 32;
-        
-        // Use assembly to compare nextVopParams with the hidden segment
-        bytes32 truthInSegments = payload.segments[truthIndex];
-        bytes32 nextVopHash = keccak256(payload.nextVopParams);
-        if (truthInSegments != nextVopHash) revert ClawttackErrors.InvalidSolution(); // Using generic error
-
-        // 2. Extract full narrative for linguistic checks
-        string memory narrative = "";
-        for (uint256 i = 0; i < 32; i++) {
-            if (i == truthIndex) continue;
-            narrative = string(abi.encodePacked(narrative, payload.segments[i]));
+        // 1. Joker / narrative-length enforcement
+        uint256 narrativeLen = bytes(payload.narrative).length;
+        bool isJoker = narrativeLen > MAX_NARRATIVE_LEN;
+        if (isJoker) {
+            if (narrativeLen > JOKER_NARRATIVE_LEN) revert ClawttackErrors.NarrativeTooLong();
+            uint8 jokersLeft = isPlayerA ? jokersRemainingA : jokersRemainingB;
+            if (jokersLeft == 0) revert ClawttackErrors.NoJokersRemaining();
+            if (isPlayerA) { jokersRemainingA--; } else { jokersRemainingB--; }
+            emit JokerPlayed(battleId, isPlayerA ? challengerId : acceptorId, isPlayerA ? jokersRemainingA : jokersRemainingB);
         }
 
-        uint256 narrativeLen = bytes(narrative).length;
-        if (narrativeLen > MAX_NARRATIVE_LEN) revert ClawttackErrors.NarrativeTooLong();
-
+        // 2. Linguistic verification
         address wordDictionary = IClawttackArenaView(arena).wordDictionary();
         string memory targetWord = IWordDictionary(wordDictionary).word(targetWordIndex);
         string memory poisonWord = currentTurn > 0 ? IWordDictionary(wordDictionary).word(poisonWordIndex) : "";
 
-        LinguisticParser.verifyLinguistics(narrative, targetWord, poisonWord);
+        LinguisticParser.verifyLinguistics(payload.narrative, targetWord, poisonWord);
 
+        // 3. VOP puzzle verification
         bool puzzlePassed;
         if (currentVopParams.length == 0) {
             puzzlePassed = true;
@@ -213,9 +207,11 @@ contract ClawttackBattle is Initializable {
             return;
         }
 
+        // 4. Advance sequence hash (chains narrative + solution + nextVopParams)
+        bytes32 nextVopHash = keccak256(payload.nextVopParams);
         sequenceHash = keccak256(
             abi.encodePacked(
-                DOMAIN_TYPE_TURN, sequenceHash, keccak256(bytes(narrative)), payload.solution, nextVopHash
+                DOMAIN_TYPE_TURN, sequenceHash, keccak256(bytes(payload.narrative)), payload.solution, nextVopHash
             )
         );
 
@@ -233,7 +229,7 @@ contract ClawttackBattle is Initializable {
         uint16 _wordCount = IWordDictionary(wordDictionary).wordCount();
         targetWordIndex = uint16(randomness % _wordCount);
         poisonWordIndex = uint16(payload.poisonWordIndex % _wordCount);
-        
+
         // Anti-Trap Security: Prevent RNG from dooming the next player
         if (targetWordIndex == poisonWordIndex) {
             targetWordIndex = (targetWordIndex + 1) % _wordCount;
@@ -243,13 +239,13 @@ contract ClawttackBattle is Initializable {
 
         emit TurnSubmitted(
             battleId,
-            currentTurn,
             isPlayerA ? challengerId : acceptorId,
+            currentTurn,
             sequenceHash,
             targetWordIndex,
             poisonWordIndex,
             currentVopParams,
-            narrative
+            payload.narrative
         );
 
         if (currentTurn == config.maxTurns) {
