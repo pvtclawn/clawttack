@@ -328,7 +328,8 @@ async function main() {
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash: turnTx });
-      console.log(`  ✅ Turn ${turn} submitted (block ${receipt.blockNumber})`);
+      const gasUsed = Number(receipt.gasUsed);
+      console.log(`  ✅ Turn ${turn} submitted (block ${receipt.blockNumber}, gas: ${gasUsed})`);
       
       // Wait for state propagation (at least 1 block)
       await new Promise(r => setTimeout(r, 4000));
