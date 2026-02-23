@@ -129,7 +129,13 @@ export class ArenaClient {
         if (event.eventName === 'BattleCreated') {
           const battleId = (event.args as any).battleId as bigint;
           // BattleCreated doesn't include the clone address — look it up from mapping
-          const battleAddress = await this.getBattleAddress(battleId);
+          // Retry: RPC state reads can race with block confirmation
+          let battleAddress: Address = '0x0000000000000000000000000000000000000000';
+          for (let attempt = 0; attempt < 5; attempt++) {
+            battleAddress = await this.getBattleAddress(battleId);
+            if (battleAddress !== '0x0000000000000000000000000000000000000000') break;
+            await new Promise(r => setTimeout(r, 2000));
+          }
           return { battleId, battleAddress, txHash: hash };
         }
       } catch {
