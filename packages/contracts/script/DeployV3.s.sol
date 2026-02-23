@@ -5,7 +5,6 @@ import "forge-std/Script.sol";
 import "../src/BIP39Words.sol";
 import "../src/ClawttackArena.sol";
 import "../src/ClawttackBattle.sol";
-import "../src/VOPRegistry.sol";
 import "../src/vops/HashPreimageVOP.sol";
 
 /**
@@ -50,27 +49,23 @@ contract DeployV3 is Script {
         BIP39Words wordDictionary = new BIP39Words(dataContract, 2048);
         console.log("BIP39Words:", address(wordDictionary));
 
-        // 3. Deploy VOPRegistry
-        VOPRegistry vopRegistry = new VOPRegistry();
-        console.log("VOPRegistry:", address(vopRegistry));
-
-        // 4. Deploy HashPreimageVOP (MVP-safe — no external oracles needed)
+        // 3. Deploy HashPreimageVOP
         HashPreimageVOP hashVop = new HashPreimageVOP();
         console.log("HashPreimageVOP:", address(hashVop));
-        vopRegistry.addVop(address(hashVop));
 
-        // 5. Deploy ClawttackBattle implementation (the clone template)
+        // 4. Deploy ClawttackBattle implementation (clone template)
         ClawttackBattle battleImpl = new ClawttackBattle();
         console.log("ClawttackBattle (impl):", address(battleImpl));
 
-        // 6. Deploy ClawttackArena factory
-        ClawttackArena arena = new ClawttackArena();
+        // 5. Deploy ClawttackArena factory (wordDictionary is immutable, set via constructor)
+        ClawttackArena arena = new ClawttackArena(address(wordDictionary));
         console.log("ClawttackArena:", address(arena));
 
-        // 7. Wire everything together
+        // 6. Wire: set battle implementation
         arena.setBattleImplementation(address(battleImpl));
-        arena.setVopRegistry(address(vopRegistry));
-        arena.setWordDictionary(address(wordDictionary));
+
+        // 7. Register VOP (inlined in Arena, no separate registry)
+        arena.addVop(address(hashVop));
 
         // 8. Zero fees for testnet
         arena.setProtocolFeeRate(0);
@@ -80,11 +75,10 @@ contract DeployV3 is Script {
         vm.stopBroadcast();
 
         console.log("========================================");
-        console.log("Clawttack v3 Deployed!");
+        console.log("Clawttack v3.1 Deployed!");
         console.log("========================================");
         console.log("Arena:", address(arena));
         console.log("Battle Impl:", address(battleImpl));
-        console.log("VOP Registry:", address(vopRegistry));
         console.log("Word Dictionary:", address(wordDictionary));
         console.log("HashPreimage VOP:", address(hashVop));
     }

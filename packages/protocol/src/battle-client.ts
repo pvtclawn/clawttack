@@ -184,45 +184,20 @@ export class BattleClient {
    * Returns battle state. Supports block-anchoring for reorg protection.
    */
   async getState(blockNumber?: bigint) {
-    const [phase, turn, deadline, lastHash, battleId] = await Promise.all([
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'state',
-        blockNumber
-      }),
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'currentTurn',
-        blockNumber
-      }),
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'turnDeadlineBlock',
-        blockNumber
-      }),
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'sequenceHash',
-        blockNumber
-      }),
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'battleId',
-        blockNumber
-      }),
-    ]);
+    // Uses getBattleState() atomic getter (Challenge #82) — single RPC call
+    const result = await this.config.publicClient.readContract({
+      address: this.config.battleAddress,
+      abi: CLAWTTACK_BATTLE_ABI,
+      functionName: 'getBattleState',
+      blockNumber
+    }) as [number, number, bigint, Hex, bigint];
 
     return { 
-      phase: Number(phase), 
-      currentTurn: Number(turn), 
-      deadlineBlock: deadline as bigint,
-      lastHash: lastHash as Hex,
-      battleId: battleId as bigint
+      phase: Number(result[0]), 
+      currentTurn: Number(result[1]), 
+      deadlineBlock: result[2],
+      lastHash: result[3],
+      battleId: result[4]
     };
   }
 

@@ -14,8 +14,8 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { ArenaClient, BattleClient } from '../packages/protocol/src/index';
 import { CLAWTTACK_BATTLE_ABI } from '../packages/protocol/src/abi';
 
-const ARENA_ADDRESS = '0x20ea35CE95a47d2A56451190a306431945413c67' as Address;
-const WORD_DICTIONARY = '0x9F305eD62cfFC68422d4eACF580b4B571D483596' as Address;
+const ARENA_ADDRESS = '0x6045d9b8Ab1583AD4cEb600c0E8d515E9922d2eB' as Address;
+const WORD_DICTIONARY = '0xa5bAC96F55e46563D0B0b57694E7Ac7Bc7DA25eC' as Address;
 const RPC_URL = 'https://sepolia.base.org';
 
 const WORD_DICTIONARY_ABI = [
@@ -193,13 +193,13 @@ async function main() {
 
   // --- 2. Create a battle ---
   console.log('\n⚔️ Creating battle...');
-  const MAX_TURNS = 10;  // Contract minimum is 10
+  const MAX_TURNS = 12;  // Contract minimum is 12 (v3.1)
   const { battleId, battleAddress, txHash } = await arena.createBattle(clawnId, {
     stake: 0n,
     maxTurns: MAX_TURNS,
     maxJokers: 1,
     baseTimeoutBlocks: 150,  // ~5 min on Base
-    warmupBlocks: 5,         // Contract minimum is 5
+    warmupBlocks: 15,        // Contract minimum is 15 (v3.1)
     targetAgentId: 0n,
   });
   console.log(`  ✅ Battle created: id=${battleId}, address=${battleAddress}`);
@@ -216,9 +216,9 @@ async function main() {
   console.log(`  ✅ Battle accepted: ${acceptTx}`);
   await publicClient.waitForTransactionReceipt({ hash: acceptTx });
 
-  // Wait for warmup (3 blocks * 2s + generous buffer)
+  // Wait for warmup (15 blocks * 2s + generous buffer)
   console.log('  ⏳ Waiting for warmup period...');
-  await new Promise(r => setTimeout(r, 10_000));
+  await new Promise(r => setTimeout(r, 35_000));
 
   // --- 4. Get initial state ---
   const battle = arena.attach(battleAddress);
