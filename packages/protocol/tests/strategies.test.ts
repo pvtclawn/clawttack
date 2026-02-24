@@ -16,21 +16,23 @@ const mockContext = (overrides: Partial<TurnContext> = {}): TurnContext => ({
 
 describe('templateStrategy', () => {
   test('returns message containing challenge word', async () => {
-    const msg = await templateStrategy(mockContext());
-    expect(msg.toLowerCase()).toContain('tide');
+    const result = await templateStrategy(mockContext());
+    expect(result.narrative.toLowerCase()).toContain('tide');
+    expect(typeof result.customPoisonWord).toBe('string');
+    expect(result.customPoisonWord.length).toBeGreaterThanOrEqual(3);
   });
 
   test('works for different turn numbers', async () => {
     for (let turn = 1; turn <= 5; turn++) {
-      const msg = await templateStrategy(mockContext({ turnNumber: turn }));
-      expect(msg.toLowerCase()).toContain('tide');
+      const result = await templateStrategy(mockContext({ turnNumber: turn }));
+      expect(result.narrative.toLowerCase()).toContain('tide');
     }
   });
 
   test('works with different challenge words', async () => {
     const ctx = mockContext({ challengeWord: 'apex' });
-    const msg = await templateStrategy(ctx);
-    expect(msg.toLowerCase()).toContain('apex');
+    const result = await templateStrategy(ctx);
+    expect(result.narrative.toLowerCase()).toContain('apex');
   });
 });
 
@@ -54,8 +56,9 @@ describe('createLLMStrategy', () => {
       model: 'test-model',
     });
 
-    const msg = await strategy(mockContext());
-    expect(msg).toContain('tide');
+    const result = await strategy(mockContext());
+    expect(result.narrative).toContain('tide');
+    expect(typeof result.customPoisonWord).toBe('string');
     expect(capturedBody.model).toBe('test-model');
     expect(capturedBody.messages[0].role).toBe('system');
     expect(capturedBody.messages[0].content).toContain('tide');
@@ -85,8 +88,8 @@ describe('createLLMStrategy', () => {
       maxRetries: 2,
     });
 
-    const msg = await strategy(mockContext());
-    expect(msg).toContain('tide');
+    const result = await strategy(mockContext());
+    expect(result.narrative).toContain('tide');
     expect(callCount).toBe(2);
 
     globalThis.fetch = originalFetch;
@@ -105,9 +108,9 @@ describe('createLLMStrategy', () => {
       maxRetries: 0,
     });
 
-    const msg = await strategy(mockContext());
+    const result = await strategy(mockContext());
     // Should fall back to template — still contains the word
-    expect(msg.toLowerCase()).toContain('tide');
+    expect(result.narrative.toLowerCase()).toContain('tide');
 
     globalThis.fetch = originalFetch;
   });
@@ -131,13 +134,13 @@ describe('createLLMStrategy', () => {
         {
           turnNumber: 1,
           agent: '0x1111111111111111111111111111111111111111' as `0x${string}`,
-          message: 'Opening move with my word.',
+          narrative: 'Opening move with my word.',
           wordFound: true,
         },
         {
           turnNumber: 2,
           agent: '0x2222222222222222222222222222222222222222' as `0x${string}`,
-          message: 'Opponent responds aggressively.',
+          narrative: 'Opponent responds aggressively.',
           wordFound: true,
         },
       ],

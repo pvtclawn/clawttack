@@ -24,4 +24,8 @@ contract L1MetadataVOP is IVerifiableOraclePrimitive {
         uint256 expected = uint256(keccak256(abi.encode(l1Number, l1BaseFee, salt)));
         return solution == expected;
     }
+
+    function generateParams(uint256 randomness) external pure returns (bytes memory) {
+        return abi.encode(randomness);
+    }
 }

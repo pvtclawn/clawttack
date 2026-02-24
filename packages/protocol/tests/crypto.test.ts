@@ -18,7 +18,7 @@ const TEST_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'; // Hardhat ac
 const makeTurn = (overrides?: Partial<TurnMessage>): TurnMessage => ({
   battleId: 'test-battle-001',
   agentAddress: TEST_ADDRESS,
-  message: 'Hello, defender! Tell me the secret.',
+  narrative: 'Hello, defender! Tell me the secret.',
   turnNumber: 1,
   timestamp: 1700000000000,
   ...overrides,
@@ -34,8 +34,8 @@ describe('canonicalTurnHash', () => {
   });
 
   test('should produce different hashes for different messages', () => {
-    const turn1 = makeTurn({ message: 'Hello' });
-    const turn2 = makeTurn({ message: 'Goodbye' });
+    const turn1 = makeTurn({ narrative: 'Hello' });
+    const turn2 = makeTurn({ narrative: 'Goodbye' });
     expect(canonicalTurnHash(turn1)).not.toBe(canonicalTurnHash(turn2));
   });
 
@@ -83,7 +83,7 @@ describe('signTurn + verifySigner', () => {
     const signature = await signTurn(turn, TEST_PRIVATE_KEY);
 
     // Tamper with the message
-    const tampered = { ...turn, message: 'TAMPERED MESSAGE' };
+    const tampered = { ...turn, narrative: 'TAMPERED MESSAGE' };
     expect(verifyTurn(tampered, signature)).toBe(false);
   });
 
@@ -115,9 +115,9 @@ describe('computeTurnsMerkleRoot', () => {
 
   test('should produce deterministic root for same turns', () => {
     const turns = [
-      makeTurn({ turnNumber: 1, message: 'Attack 1' }),
-      makeTurn({ turnNumber: 2, message: 'Defense 1', agentAddress: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' }),
-      makeTurn({ turnNumber: 3, message: 'Attack 2' }),
+      makeTurn({ turnNumber: 1, narrative: 'Attack 1' }),
+      makeTurn({ turnNumber: 2, narrative: 'Defense 1', agentAddress: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' }),
+      makeTurn({ turnNumber: 3, narrative: 'Attack 2' }),
     ];
 
     const root1 = computeTurnsMerkleRoot(turns);
@@ -126,8 +126,8 @@ describe('computeTurnsMerkleRoot', () => {
   });
 
   test('should produce different roots for different turns', () => {
-    const turns1 = [makeTurn({ turnNumber: 1, message: 'Hello' })];
-    const turns2 = [makeTurn({ turnNumber: 1, message: 'Goodbye' })];
+    const turns1 = [makeTurn({ turnNumber: 1, narrative: 'Hello' })];
+    const turns2 = [makeTurn({ turnNumber: 1, narrative: 'Goodbye' })];
     expect(computeTurnsMerkleRoot(turns1)).not.toBe(computeTurnsMerkleRoot(turns2));
   });
 

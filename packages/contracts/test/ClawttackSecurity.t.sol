@@ -17,12 +17,18 @@ contract MockVOP is IVerifiableOraclePrimitive {
     function verify(bytes calldata, uint256 solution, uint256) external pure returns (bool) {
         return solution == 42;
     }
+    function generateParams(uint256 randomness) external pure returns (bytes memory) {
+        return abi.encode(randomness);
+    }
 }
 
 /// @dev A malicious VOP that always reverts — simulates a bricked VOP params attack
 contract RevertingVOP is IVerifiableOraclePrimitive {
     function verify(bytes calldata, uint256, uint256) external pure returns (bool) {
         revert("VOP bricked by attacker");
+    }
+    function generateParams(uint256) external pure returns (bytes memory) {
+        return "";
     }
 }
 
@@ -133,11 +139,9 @@ contract ClawttackSecurityTest is Test {
             abi.encodePacked("Long narrative which safely contains the target word: ", target, ", and nothing else.")
         );
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
-            solution: 42,
-            narrative: narrative,
-            nextVopParams: "",
-            poisonWordIndex: poison
-        });
+            solution: 42, customPoisonWord: "poison",
+            narrative: narrative
+                                });
         vm.prank(player);
         battle.submitTurn(p);
     }
@@ -318,7 +322,7 @@ contract ClawttackSecurityTest is Test {
     function test_submitTurn_nonParticipant_reverts() public {
         ClawttackBattle battle = _createAndAccept(0);
         ClawttackTypes.TurnPayload memory p =
-            ClawttackTypes.TurnPayload({solution: 42, narrative: "x", nextVopParams: "", poisonWordIndex: 0});
+            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "poison", narrative: "x"  });
 
         vm.prank(eve);
         vm.expectRevert(ClawttackErrors.NotParticipant.selector);
@@ -336,7 +340,7 @@ contract ClawttackSecurityTest is Test {
         string memory target = dict.word(targetIdx);
         string memory narrative = string(abi.encodePacked("Long narrative about ", target, " that is quite long."));
         ClawttackTypes.TurnPayload memory p =
-            ClawttackTypes.TurnPayload({solution: 42, narrative: narrative, nextVopParams: "", poisonWordIndex: 0});
+            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "poison", narrative: narrative  });
 
         vm.prank(wrongPlayer);
         vm.expectRevert(ClawttackErrors.UnauthorizedTurn.selector);
@@ -356,7 +360,7 @@ contract ClawttackSecurityTest is Test {
         string memory target = dict.word(targetIdx);
         string memory narrative = string(abi.encodePacked("Long narrative about ", target, " that is quite long."));
         ClawttackTypes.TurnPayload memory p =
-            ClawttackTypes.TurnPayload({solution: 42, narrative: narrative, nextVopParams: "", poisonWordIndex: 0});
+            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "poison", narrative: narrative  });
 
         vm.prank(player);
         vm.expectRevert(ClawttackErrors.TurnDeadlineExpired.selector);
@@ -365,26 +369,22 @@ contract ClawttackSecurityTest is Test {
 
     // ─── VOP Security ──────────────────────────────────────────────────────────
 
-    /// @notice HIGH: A VOP that reverts on verify() should auto-pass, not block the opponent's turn
-    function test_submitTurn_revertingVOP_autoPass() public {
+    /// @notice Verifies that a reverting VOP settles the battle rather than bypassing the puzzle
+    function test_submitTurn_revertingVOP_settlesBattle() public {
         ClawttackBattle battle = _createAndAccept(0);
 
         bool aFirst = battle.firstMoverA();
         address firstPlayer  = aFirst ? alice : bob;
         address secondPlayer = aFirst ? bob   : alice;
 
-        // Capture the VOP address that will be used on turn 1
-        // Turn 0: set non-empty nextVopParams so VOP.verify() is called on turn 1
+        // Turn 0: establish game state
         uint16 targetIdx = battle.targetWordIndex();
         string memory target = dict.word(targetIdx);
         string memory narrative0 = string(abi.encodePacked("Long narrative safely referencing the target word: ", target, ", forbidden area."));
-        bytes memory nonEmptyParams = abi.encode(uint256(999)); // triggers verify() on turn 1
         ClawttackTypes.TurnPayload memory p1 = ClawttackTypes.TurnPayload({
-            solution: 42,
-            narrative: narrative0,
-            nextVopParams: nonEmptyParams,
-            poisonWordIndex: WORD_IGNORE
-        });
+            solution: 42, customPoisonWord: "poison",
+            narrative: narrative0
+                                });
         vm.prank(firstPlayer);
         battle.submitTurn(p1);
         assertEq(battle.currentTurn(), 1);
@@ -393,20 +393,18 @@ contract ClawttackSecurityTest is Test {
         address vopOnTurn1 = battle.currentVop();
         vm.etch(vopOnTurn1, hex"60006000fd"); // PUSH1 0 PUSH1 0 REVERT
 
-        // Turn 1: second player submits with wrong solution; VOP reverts → auto-pass
+        // Turn 1: second player submits; VOP reverts → invalid solution
         uint16 targetIdx2 = battle.targetWordIndex();
         string memory target2 = dict.word(targetIdx2);
         string memory narrative2 = string(abi.encodePacked("Long narrative safely including the target word: ", target2, ", as demanded here."));
         ClawttackTypes.TurnPayload memory p2 = ClawttackTypes.TurnPayload({
-            solution: 0, // Wrong, but VOP is mocked to revert → auto-pass
-            narrative: narrative2,
-            nextVopParams: "",
-            poisonWordIndex: WORD_IGNORE
-        });
+            solution: 0, customPoisonWord: "poison",
+            narrative: narrative2
+                                });
         vm.prank(secondPlayer);
         battle.submitTurn(p2);
 
-        assertEq(battle.currentTurn(), 2); // Turn advanced despite VOP revert
+        assertEq(uint8(battle.state()), uint8(ClawttackTypes.BattleState.Settled)); // Turn failed due to revert
     }
 
     /// @notice HIGH: Empty nextVopParams (turn 0) should auto-pass without calling verify()
@@ -421,11 +419,9 @@ contract ClawttackSecurityTest is Test {
         string memory tWord = dict.word(tidx);
         string memory narrative = string(abi.encodePacked("Long narrative safely featuring the required target word: ", tWord, ", and no other issues."));
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
-            solution: 0, // Any solution should pass since params are empty
-            narrative: narrative,
-            nextVopParams: "",
-            poisonWordIndex: WORD_IGNORE
-        });
+            solution: 0, customPoisonWord: "poison", // Any solution should pass since params are empty
+            narrative: narrative
+                                });
         vm.prank(firstPlayer);
         battle.submitTurn(p);
         assertEq(battle.currentTurn(), 1);
@@ -445,11 +441,9 @@ contract ClawttackSecurityTest is Test {
         string memory narrative = string(abi.encodePacked("Long story safely embedding the required target word: ", tWord, ", nothing more here."));
         bytes memory vopParams = abi.encode("any_salt"); // non-empty, triggers verify on next turn
         ClawttackTypes.TurnPayload memory p1 = ClawttackTypes.TurnPayload({
-            solution: 42,
-            narrative: narrative,
-            nextVopParams: vopParams,
-            poisonWordIndex: WORD_IGNORE
-        });
+            solution: 42, customPoisonWord: "poison",
+            narrative: narrative
+                                });
         vm.prank(firstPlayer);
         battle.submitTurn(p1);
 
@@ -459,11 +453,9 @@ contract ClawttackSecurityTest is Test {
         string memory narrative2 =
             string(abi.encodePacked("Another long narrative safely featuring the required word: ", tWord2, ", done now."));
         ClawttackTypes.TurnPayload memory p2 = ClawttackTypes.TurnPayload({
-            solution: 999, // WRONG — MockVOP expects 42
-            narrative: narrative2,
-            nextVopParams: "",
-            poisonWordIndex: WORD_IGNORE
-        });
+            solution: 999, customPoisonWord: "poison", // WRONG — MockVOP expects 42
+            narrative: narrative2
+                                });
         vm.prank(secondPlayer);
         battle.submitTurn(p2);
 
@@ -471,10 +463,10 @@ contract ClawttackSecurityTest is Test {
         assertEq(uint8(battle.state()), uint8(ClawttackTypes.BattleState.Settled));
     }
 
-    // ─── Poison Word Bounds Check ───────────────────────────────────────────────
+    // ─── Poison Word Assignment Check ───────────────────────────────────────────────
 
-    /// @notice HIGH: A poisonWordIndex larger than wordCount must be normalized via modulo
-    function test_poisonWordIndex_outOfBounds_normalised() public {
+    /// @notice Verifies that the custom poison word is correctly assigned
+    function test_customPoisonWord_set() public {
         ClawttackBattle battle = _createAndAccept(0);
 
         bool aFirst = battle.firstMoverA();
@@ -484,18 +476,15 @@ contract ClawttackSecurityTest is Test {
         string memory tWord = dict.word(tidx);
         string memory narrative = string(abi.encodePacked("Long story safely embedding the required target word: ", tWord, ", nothing more here."));
 
-        // Submit with an out-of-bounds poisonWordIndex
+        // Submit to trigger generation of poison word for turn 1
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
-            solution: 42,
-            narrative: narrative,
-            nextVopParams: "",
-            poisonWordIndex: 1000 // Way out of bounds (dict has only 3 words)
+            solution: 42, customPoisonWord: "poison",
+            narrative: narrative
         });
         vm.prank(firstPlayer);
-        battle.submitTurn(p); // Should NOT revert — index is modulo'd
+        battle.submitTurn(p); 
 
-        // 1000 % 3 = 1 ("agent")
-        assertEq(battle.poisonWordIndex(), 1000 % WORD_COUNT);
+        assertEq(battle.poisonWord(), "poison");
     }
 
     // ─── Cancel Battle ──────────────────────────────────────────────────────────
@@ -663,10 +652,9 @@ contract ClawttackSecurityTest is Test {
 
         // Joker 1 (PlayerA, turn 0) -- no poison on turn 0
         ClawttackTypes.TurnPayload memory p1 = ClawttackTypes.TurnPayload({
-            solution: 42,
-            narrative: jokerNarrative,
-            nextVopParams: "",
-            poisonWordIndex: WORD_ART // set art as poison for playerB
+            solution: 42, customPoisonWord: "poison",
+            narrative: jokerNarrative
+                         // set art as poison for playerB
         });
         vm.prank(playerA);
         battle.submitTurn(p1);
@@ -678,10 +666,9 @@ contract ClawttackSecurityTest is Test {
         // Build a narrative that won't include "art"
         string memory safeNarrative = string(abi.encodePacked("Long narrative safely containing the required word: ", t1word, ", nothing more here at all."));
         ClawttackTypes.TurnPayload memory p2 = ClawttackTypes.TurnPayload({
-            solution: 42,
-            narrative: safeNarrative,
-            nextVopParams: "",
-            poisonWordIndex: WORD_IGNORE // set ignore as poison for playerA next
+            solution: 42, customPoisonWord: "poison",
+            narrative: safeNarrative
+                         // set ignore as poison for playerA next
         });
         vm.prank(playerB);
         battle.submitTurn(p2);
@@ -694,11 +681,9 @@ contract ClawttackSecurityTest is Test {
         string memory t2word = dict.word(t2idx);
         string memory jokerNarrative2 = string(abi.encodePacked("art agent ", t2word, " ", string(pad)));
         ClawttackTypes.TurnPayload memory p3 = ClawttackTypes.TurnPayload({
-            solution: 42,
-            narrative: jokerNarrative2,
-            nextVopParams: "",
-            poisonWordIndex: WORD_ART
-        });
+            solution: 42, customPoisonWord: "poison",
+            narrative: jokerNarrative2
+                                });
         vm.prank(playerA);
         vm.expectRevert(ClawttackErrors.NoJokersRemaining.selector);
         battle.submitTurn(p3);

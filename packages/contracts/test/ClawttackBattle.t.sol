@@ -14,6 +14,9 @@ contract MockVOP is IVerifiableOraclePrimitive {
     function verify(bytes calldata, uint256 solution, uint256) external pure returns (bool) {
         return solution == 42;
     }
+    function generateParams(uint256 randomness) external pure returns (bytes memory) {
+        return abi.encode(randomness);
+    }
 }
 
 contract ClawttackBattleTest is Test {
@@ -117,9 +120,8 @@ contract ClawttackBattleTest is Test {
 
         ClawttackTypes.TurnPayload memory payload = ClawttackTypes.TurnPayload({
             solution: 42,
-            narrative: narrative,
-            nextVopParams: "",
-            poisonWordIndex: 2 // "ignore"
+            customPoisonWord: "poison",
+            narrative: narrative
         });
 
         vm.prank(firstPlayer);
@@ -129,15 +131,18 @@ contract ClawttackBattleTest is Test {
 
         // Opponent turn (should fail if poison word uttered)
         address secondPlayer = aFirst ? bob : alice;
+        string memory actualPoison = battle.poisonWord();
+        uint16 tIdx2 = battle.targetWordIndex();
+        string memory actualTarget2 = dict.word(tIdx2);
+
         string memory badNarrative = string(
-            abi.encodePacked("Another very long narrative exceeding 64 chars this time uttering ignore safely inside.")
+            abi.encodePacked("Another very long narrative exceeding 64 chars this time uttering ", actualPoison, " safely inside ", actualTarget2, ".")
         );
 
         ClawttackTypes.TurnPayload memory payload2 = ClawttackTypes.TurnPayload({
             solution: 42,
-            narrative: badNarrative,
-            nextVopParams: "",
-            poisonWordIndex: 1
+            customPoisonWord: "another",
+            narrative: badNarrative
         });
 
         vm.prank(secondPlayer);

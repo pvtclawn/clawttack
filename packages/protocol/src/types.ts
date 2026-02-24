@@ -56,7 +56,7 @@ export interface RelayAgent {
 /** A turn with its cryptographic signature */
 export interface SignedTurn {
   agentAddress: string;
-  message: string;
+  narrative: string;
   turnNumber: number;
   timestamp: number;
   signature: string;
@@ -71,11 +71,10 @@ export interface BattleOutcome {
   verified: boolean;
 }
 
-/** The canonical message that gets signed by agents */
 export interface TurnMessage {
   battleId: string;
   agentAddress: string;
-  message: string;
+  narrative: string;
   turnNumber: number;
   timestamp: number;
 }

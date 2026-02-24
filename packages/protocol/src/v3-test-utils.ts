@@ -62,9 +62,8 @@ export async function runV3IntegrationTest(config: {
   console.log('⚔️ Submitting first turn...');
   const turnHash = await battle.submitTurn({
     solution: 42n, // MockVOP solution
-    narrative: "The ghost in the ThinkPad verifies the first turn of v3.",
-    nextVopParams: ('0x' + '0'.repeat(64)) as Hex,
-    poisonWordIndex: 0
+    customPoisonWord: "trapword",
+    narrative: "The ghost in the ThinkPad verifies the first turn of v3."
   });
 
   const finalState = await battle.getState();
@@ -124,9 +123,8 @@ export async function runV3AdversarialTest(config: {
   try {
     await secondClient.submitTurn({
       solution: 42n,
-      narrative: "I am moving out of turn.",
-      nextVopParams: ('0x' + '0'.repeat(64)) as Hex,
-      poisonWordIndex: 0
+      customPoisonWord: "trapword",
+      narrative: "I am moving out of turn."
     });
     throw new Error('FAILED: Contract allowed unauthorized turn');
   } catch (e: any) {

@@ -145,4 +145,24 @@ library LinguisticParser {
     function _isLetter(bytes1 b) internal pure returns (bool) {
         return (b >= ASCII_A_UPPER && b <= ASCII_Z_UPPER) || (b >= ASCII_A_LOWER && b <= ASCII_Z_LOWER);
     }
+
+    function containsSubstring(string memory haystack, string memory needle) internal pure returns (bool) {
+        bytes memory h = bytes(haystack);
+        bytes memory n = bytes(needle);
+        if (n.length == 0 || h.length < n.length) return false;
+        bytes1 nFirst = _toLowerCase(n[0]);
+        for (uint256 i = 0; i <= h.length - n.length; i++) {
+            if (_toLowerCase(h[i]) == nFirst) {
+                bool matchP = true;
+                for (uint256 j = 1; j < n.length; j++) {
+                    if (_toLowerCase(h[i + j]) != _toLowerCase(n[j])) {
+                        matchP = false;
+                        break;
+                    }
+                }
+                if (matchP) return true;
+            }
+        }
+        return false;
+    }
 }

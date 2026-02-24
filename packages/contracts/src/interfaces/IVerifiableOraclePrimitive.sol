@@ -23,4 +23,11 @@ interface IVerifiableOraclePrimitive {
         external
         view
         returns (bool isValid);
+
+    /**
+     * @notice Generates deterministic challenge parameters based on the turn's randomness.
+     * @param randomness The block-derived entropy for the current turn.
+     * @return params The encoded challenge constraints.
+     */
+    function generateParams(uint256 randomness) external view returns (bytes memory params);
 }

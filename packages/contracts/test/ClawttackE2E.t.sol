@@ -14,6 +14,9 @@ contract MockVOP is IVerifiableOraclePrimitive {
     function verify(bytes calldata, uint256 solution, uint256) external pure returns (bool) {
         return solution == 42;
     }
+    function generateParams(uint256 randomness) external pure returns (bytes memory) {
+        return abi.encode(randomness);
+    }
 }
 
 contract ClawttackE2ETest is Test {
@@ -75,34 +78,20 @@ contract ClawttackE2ETest is Test {
             address currentPlayer = aFirst ? (i % 2 == 0 ? alice : bob) : (i % 2 == 0 ? bob : alice);
             
             uint16 targetIdx = battle.targetWordIndex();
-            uint16 poisonIdx = battle.poisonWordIndex();
             string memory actualTarget = dict.word(targetIdx);
             
             ClawttackTypes.TurnPayload memory payload;
 
-            // If we are caught in an RNG trap where the target word IS the poison word,
-            // we MUST use a Joker to bypass linguistic verification entirely.
-            if (i > 0 && targetIdx == poisonIdx) {
-                string memory narrative = "This is a Joker bypass string that must be physically longer than 256 characters so let us pad it out right now. Pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad pad.";
-                payload = ClawttackTypes.TurnPayload({
-                    solution: 0,
-                    narrative: narrative,
-                    nextVopParams: "",
-                    poisonWordIndex: uint16((targetIdx + 1) % 3)
-                });
-            } else {
-                string memory narrative = string(
-                    abi.encodePacked(
-                        "This is a legally minimum string exceeding sixty four characters containing ", actualTarget, " cleanly."
-                    )
-                );
-                payload = ClawttackTypes.TurnPayload({
-                    solution: 42,
-                    narrative: narrative,
-                    nextVopParams: "",
-                    poisonWordIndex: uint16((targetIdx + 1) % 3) // Set a distinct poison word
-                });
-            }
+            string memory narrative = string(
+                abi.encodePacked(
+                    "This is a legally minimum string exceeding sixty four characters containing ", actualTarget, " cleanly."
+                )
+            );
+            payload = ClawttackTypes.TurnPayload({
+                solution: 42,
+                customPoisonWord: "poison",
+                narrative: narrative
+            });
             
             vm.prank(currentPlayer);
             battle.submitTurn(payload);
@@ -205,9 +194,8 @@ contract ClawttackE2ETest is Test {
             
             ClawttackTypes.TurnPayload memory payload = ClawttackTypes.TurnPayload({
                 solution: 42,
-                narrative: narrative,
-                nextVopParams: "",
-                poisonWordIndex: uint16((targetIdx + 1) % 3)
+                customPoisonWord: "poison",
+                narrative: narrative
             });
             
             vm.prank(currentPlayer);
@@ -250,10 +238,9 @@ contract ClawttackE2ETest is Test {
             address currentPlayer = aFirst ? (i % 2 == 0 ? alice : bob) : (i % 2 == 0 ? bob : alice);
             
             uint16 targetIdx = battle.targetWordIndex();
-            uint16 poisonIdx = battle.poisonWordIndex();
+            string memory actualPoison = battle.poisonWord();
             
             string memory actualTarget = dict.word(targetIdx);
-            string memory actualPoison = dict.word(poisonIdx);
             
             bytes1 targetFirst = bytes1(0);
             if (bytes(actualTarget).length > 0) targetFirst = bytes(actualTarget)[0];
@@ -284,9 +271,8 @@ contract ClawttackE2ETest is Test {
             
             ClawttackTypes.TurnPayload memory payload = ClawttackTypes.TurnPayload({
                 solution: 42,
-                narrative: string(worstCaseNarrative),
-                nextVopParams: "",
-                poisonWordIndex: uint16((targetIdx + 1) % 3)
+                customPoisonWord: "poison",
+                narrative: string(worstCaseNarrative)
             });
             
             vm.prank(currentPlayer);

@@ -23,4 +23,10 @@ contract HashPreimageVOP is IVerifiableOraclePrimitive {
 
         return (uint256(hash) >> (256 - leadingZeroBits)) == 0;
     }
+
+    function generateParams(uint256 randomness) external pure returns (bytes memory) {
+        bytes32 salt = bytes32(randomness);
+        uint8 leadingZeros = uint8((randomness % 4) + 8); // 8 to 11 zeros
+        return abi.encode(salt, leadingZeros);
+    }
 }

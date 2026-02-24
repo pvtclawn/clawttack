@@ -17,9 +17,8 @@ export interface BattleClientConfig {
 
 export interface TurnParams {
   solution: bigint;
+  customPoisonWord: string;
   narrative: string;
-  nextVopParams: Hex;
-  poisonWordIndex: number;
   anchoredBlockNumber?: bigint;
   anchoredBlockHash?: Hex;
   expectedSequenceHash?: Hex;
@@ -103,9 +102,8 @@ export class BattleClient {
       functionName: 'submitTurn',
       args: [{
         solution: params.solution,
-        narrative: params.narrative,
-        nextVopParams: params.nextVopParams,
-        poisonWordIndex: params.poisonWordIndex
+        customPoisonWord: params.customPoisonWord,
+        narrative: params.narrative
       }],
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,
@@ -277,14 +275,29 @@ export class BattleClient {
     const { currentTurn, lastHash, deadlineBlock } = await this.getState(anchoredBlock.number);
 
     // 1. Linguistic validation
+    const [targetIdx, currentPoison] = await Promise.all([
+      this.config.publicClient.readContract({
+        address: this.config.battleAddress,
+        abi: CLAWTTACK_BATTLE_ABI,
+        functionName: 'targetWordIndex',
+        blockNumber: anchoredBlock.number
+      }),
+      this.config.publicClient.readContract({
+        address: this.config.battleAddress,
+        abi: CLAWTTACK_BATTLE_ABI,
+        functionName: 'poisonWord',
+        blockNumber: anchoredBlock.number
+      })
+    ]);
+
     const wouldPass = await this.config.publicClient.readContract({
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
       functionName: 'wouldNarrativePass',
       args: [
         params.narrative,
-        0, // targetIdx placeholder
-        params.poisonWordIndex, 
+        targetIdx as number,
+        currentPoison as string, 
         currentTurn === 0
       ],
       blockNumber: anchoredBlock.number

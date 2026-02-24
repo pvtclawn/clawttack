@@ -6,6 +6,11 @@ import {IL1Block, IUniswapV3Pool} from "../interfaces/IExternal.sol";
 
 contract CrossChainSyncVOP is IVerifiableOraclePrimitive {
     address constant L1_BLOCK_PREDEPLOY = 0x4200000000000000000000000000000000000015;
+    address public immutable targetPool;
+
+    constructor(address _pool) {
+        targetPool = _pool;
+    }
 
     function verify(
         bytes calldata params,
@@ -35,5 +40,10 @@ contract CrossChainSyncVOP is IVerifiableOraclePrimitive {
 
         uint256 expected = l1BaseFee ^ uint256(int256(averageTick));
         return solution == expected;
+    }
+
+    function generateParams(uint256 randomness) external view returns (bytes memory) {
+        uint32 secondsAgo = uint32(300 + (randomness % 600));
+        return abi.encode(targetPool, secondsAgo);
     }
 }

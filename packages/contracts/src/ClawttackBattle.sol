@@ -58,7 +58,7 @@ contract ClawttackBattle is Initializable {
     bool public firstMoverA;
 
     uint16 public targetWordIndex;
-    uint16 public poisonWordIndex;
+    string public poisonWord;
     bytes public currentVopParams;
 
     // ─── Events ──────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ contract ClawttackBattle is Initializable {
         uint32 turnNumber,
         bytes32 sequenceHash,
         uint16 targetWord,
-        uint16 poisonWord,
+        string poisonWord,
         bytes nextVopParams,
         string narrative
     );
@@ -197,19 +197,26 @@ contract ClawttackBattle is Initializable {
         // 2. Linguistic verification
         address wordDictionary = IClawttackArenaView(arena).wordDictionary();
         string memory targetWord = IWordDictionary(wordDictionary).word(targetWordIndex);
-        string memory poisonWord = currentTurn > 0 ? IWordDictionary(wordDictionary).word(poisonWordIndex) : "";
+        string memory _currentPoison = currentTurn > 0 ? poisonWord : "";
 
-        LinguisticParser.verifyLinguistics(payload.narrative, targetWord, poisonWord);
+        LinguisticParser.verifyLinguistics(payload.narrative, targetWord, _currentPoison);
+
+        // Validate custom poison word
+        uint256 poisonLen = bytes(payload.customPoisonWord).length;
+        if (poisonLen < 3 || poisonLen > 32) revert ClawttackErrors.InvalidPoisonWord();
+        for (uint256 i = 0; i < poisonLen; i++) {
+            if (uint8(bytes(payload.customPoisonWord)[i]) > LinguisticParser.MAX_ASCII_VALUE) revert ClawttackErrors.InvalidPoisonWord();
+        }
 
         // 3. VOP puzzle verification
         bool puzzlePassed;
         if (currentVopParams.length == 0) {
-            puzzlePassed = true;
+            puzzlePassed = true; // Turn 0 has no required VOP solution
         } else {
             try IVerifiableOraclePrimitive(currentVop).verify(currentVopParams, payload.solution, turnDeadlineBlock) returns (bool _passed) {
                 puzzlePassed = _passed;
             } catch {
-                puzzlePassed = true; // Auto-pass if previous player bricked params
+                puzzlePassed = false; // Reverts mean the puzzle was not solved
             }
         }
 
@@ -222,11 +229,10 @@ contract ClawttackBattle is Initializable {
             return;
         }
 
-        // 4. Advance sequence hash (chains narrative + solution + nextVopParams)
-        bytes32 nextVopHash = keccak256(payload.nextVopParams);
+        // 4. Advance sequence hash (chains narrative + solution)
         sequenceHash = keccak256(
             abi.encodePacked(
-                DOMAIN_TYPE_TURN, sequenceHash, keccak256(bytes(payload.narrative)), payload.solution, nextVopHash
+                DOMAIN_TYPE_TURN, sequenceHash, keccak256(bytes(payload.narrative)), payload.solution
             )
         );
 
@@ -243,14 +249,18 @@ contract ClawttackBattle is Initializable {
         currentVop = IClawttackArenaView(arena).getRandomVop(randomness);
         uint16 _wordCount = IWordDictionary(wordDictionary).wordCount();
         targetWordIndex = uint16(randomness % _wordCount);
-        poisonWordIndex = uint16(payload.poisonWordIndex % _wordCount);
+        
+        string memory nextTargetWord = IWordDictionary(wordDictionary).word(targetWordIndex);
 
-        // Anti-Trap Security: Prevent RNG from dooming the next player
-        if (targetWordIndex == poisonWordIndex) {
-            targetWordIndex = (targetWordIndex + 1) % _wordCount;
+        // Anti-Trap Security: Prevent impossible constraints
+        if (LinguisticParser.containsSubstring(nextTargetWord, payload.customPoisonWord) || 
+            LinguisticParser.containsSubstring(payload.customPoisonWord, nextTargetWord)) {
+            revert ClawttackErrors.InvalidPoisonWord();
         }
 
-        currentVopParams = payload.nextVopParams;
+        poisonWord = payload.customPoisonWord;
+
+        currentVopParams = IVerifiableOraclePrimitive(currentVop).generateParams(randomness);
 
         emit TurnSubmitted(
             battleId,
@@ -258,7 +268,7 @@ contract ClawttackBattle is Initializable {
             currentTurn,
             sequenceHash,
             targetWordIndex,
-            poisonWordIndex,
+            poisonWord,
             currentVopParams,
             payload.narrative
         );
