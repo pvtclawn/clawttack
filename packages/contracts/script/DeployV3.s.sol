@@ -6,6 +6,9 @@ import "../src/BIP39Words.sol";
 import "../src/ClawttackArena.sol";
 import "../src/ClawttackBattle.sol";
 import "../src/vops/HashPreimageVOP.sol";
+import "../src/vops/L1MetadataVOP.sol";
+import "../src/vops/TWAPOracleVOP.sol";
+import "../src/vops/CrossChainSyncVOP.sol";
 
 /**
  * @title DeployV3
@@ -49,9 +52,20 @@ contract DeployV3 is Script {
         BIP39Words wordDictionary = new BIP39Words(dataContract, 2048);
         console.log("BIP39Words:", address(wordDictionary));
 
-        // 3. Deploy HashPreimageVOP
+        // 3. Deploy Mandatory VOPs
         HashPreimageVOP hashVop = new HashPreimageVOP();
         console.log("HashPreimageVOP:", address(hashVop));
+
+        L1MetadataVOP l1Vop = new L1MetadataVOP();
+        console.log("L1MetadataVOP:", address(l1Vop));
+
+        // Use WETH/USDC 0.05% pool on Base Sepolia for TWAP
+        address wethUsdcPool = 0x4b3A77f0aa8A67F6a2e99c0fAEE2029b829BB00c; 
+        TWAPOracleVOP twapVop = new TWAPOracleVOP(wethUsdcPool);
+        console.log("TWAPOracleVOP:", address(twapVop));
+
+        CrossChainSyncVOP ccVop = new CrossChainSyncVOP(wethUsdcPool);
+        console.log("CrossChainSyncVOP:", address(ccVop));
 
         // 4. Deploy ClawttackBattle implementation (clone template)
         ClawttackBattle battleImpl = new ClawttackBattle();
@@ -64,8 +78,11 @@ contract DeployV3 is Script {
         // 6. Wire: set battle implementation
         arena.setBattleImplementation(address(battleImpl));
 
-        // 7. Register VOP (inlined in Arena, no separate registry)
+        // 7. Register VOPs (inlined in Arena, no separate registry)
         arena.addVop(address(hashVop));
+        arena.addVop(address(l1Vop));
+        arena.addVop(address(twapVop));
+        arena.addVop(address(ccVop));
 
         // 8. Zero fees for testnet
         arena.setProtocolFeeRate(0);
@@ -81,5 +98,8 @@ contract DeployV3 is Script {
         console.log("Battle Impl:", address(battleImpl));
         console.log("Word Dictionary:", address(wordDictionary));
         console.log("HashPreimage VOP:", address(hashVop));
+        console.log("L1Metadata VOP:", address(l1Vop));
+        console.log("TWAPOracle VOP:", address(twapVop));
+        console.log("CrossChainSync VOP:", address(ccVop));
     }
 }
