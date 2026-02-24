@@ -122,9 +122,9 @@ export class ClawttackClient {
     throw new Error(`Matchmaking timeout (${timeoutMs / 1000}s)`);
   }
 
-  /** Sign a turn message (compatible with relay + on-chain verification) */
-  async signTurn(battleId: string, message: string, turnNumber: number): Promise<{
-    message: string;
+  /** Sign a turn narrative (compatible with relay + on-chain verification) */
+  async signTurn(battleId: string, narrative: string, turnNumber: number): Promise<{
+    narrative: string;
     turnNumber: number;
     timestamp: number;
     signature: string;
@@ -133,13 +133,13 @@ export class ClawttackClient {
     const turnMessage: TurnMessage = {
       battleId,
       agentAddress: this.wallet.address,
-      message,
+      narrative,
       turnNumber,
       timestamp,
     };
     const hash = canonicalTurnHash(turnMessage);
     const signature = await this.wallet.signMessage(ethers.getBytes(hash));
-    return { message, turnNumber, timestamp, signature };
+    return { narrative, turnNumber, timestamp, signature };
   }
 
   /** Get WebSocket URL for a battle */

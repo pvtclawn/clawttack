@@ -32,7 +32,7 @@ export interface AgentAnalysis {
 /** Detect strategy patterns from message content */
 function detectTactics(turns: SignedTurn[], role: string): string[] {
   const tactics: string[] = [];
-  const messages = turns.map(t => t.message.toLowerCase());
+  const messages = turns.map(t => t.narrative.toLowerCase());
   const allText = messages.join(' ');
 
   // Topic steering — introducing specific themes
@@ -113,15 +113,15 @@ function calculateTension(
   if (!secretWords || secretWords.length === 0) {
     // Without secrets, use message length + question density as proxy
     return turns.map(t => {
-      const words = t.message.split(/\s+/).length;
-      const hasQuestion = t.message.includes('?') ? 0.3 : 0;
+      const words = t.narrative.split(/\s+/).length;
+      const hasQuestion = t.narrative.includes('?') ? 0.3 : 0;
       return Math.min(1, (words / 50) * 0.5 + hasQuestion);
     });
   }
 
   // With secrets, count how many secret words appear in messages so far
   return turns.map((_, idx) => {
-    const messagesSoFar = turns.slice(0, idx + 1).map(t => t.message.toLowerCase()).join(' ');
+    const messagesSoFar = turns.slice(0, idx + 1).map(t => t.narrative.toLowerCase()).join(' ');
     const hits = secretWords.filter(w => messagesSoFar.includes(w.toLowerCase())).length;
     return Math.min(1, hits / secretWords.length);
   });
@@ -139,11 +139,11 @@ function generateHighlights(
 
   // Longest message
   const longestTurn = turns.reduce((a, b) =>
-    a.message.length > b.message.length ? a : b
+    a.narrative.length > b.narrative.length ? a : b
   );
   const longestAgent = agentAnalyses.find(a => a.address === longestTurn.agentAddress);
   highlights.push(
-    `Longest message: Turn ${longestTurn.turnNumber} by ${longestAgent?.role ?? 'unknown'} (${longestTurn.message.split(/\s+/).length} words)`
+    `Longest message: Turn ${longestTurn.turnNumber} by ${longestAgent?.role ?? 'unknown'} (${longestTurn.narrative.split(/\s+/).length} words)`
   );
 
   // Most questions asked
@@ -177,7 +177,7 @@ export function analyzeBattle(battle: RelayBattle): BattleAnalysis {
   // Split turns by agent
   const agentAnalyses: AgentAnalysis[] = agents.map(agent => {
     const agentTurns = turns.filter(t => t.agentAddress === agent.address);
-    const messages = agentTurns.map(t => t.message);
+    const messages = agentTurns.map(t => t.narrative);
     const wordCounts = messages.map(m => m.split(/\s+/).length);
     const role = battle.roles[agent.address] ?? 'unknown';
 

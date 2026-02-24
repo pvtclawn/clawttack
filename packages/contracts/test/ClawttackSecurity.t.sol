@@ -139,9 +139,9 @@ contract ClawttackSecurityTest is Test {
             abi.encodePacked("Long narrative which safely contains the target word: ", target, ", and nothing else.")
         );
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
-            solution: 42, customPoisonWord: "ignore",
+            solution: 42, customPoisonWord: "zzzzz",
             narrative: narrative
-                                });
+        });
         vm.prank(player);
         battle.submitTurn(p);
     }

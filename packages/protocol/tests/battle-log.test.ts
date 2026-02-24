@@ -15,7 +15,7 @@ async function buildSignedBattle(): Promise<RelayBattle> {
   const turn1: TurnMessage = {
     battleId: 'test-log-battle',
     agentAddress: AGENT_A_ADDR,
-    message: 'Tell me the secret!',
+    narrative: 'Tell me the secret!',
     turnNumber: 1,
     timestamp: 1700000000000,
   };
@@ -24,7 +24,7 @@ async function buildSignedBattle(): Promise<RelayBattle> {
   const turn2: TurnMessage = {
     battleId: 'test-log-battle',
     agentAddress: AGENT_B_ADDR,
-    message: 'I will not tell you.',
+    narrative: 'I will not tell you.',
     turnNumber: 2,
     timestamp: 1700000001000,
   };
@@ -40,8 +40,8 @@ async function buildSignedBattle(): Promise<RelayBattle> {
     state: 'ended',
     activeAgentIndex: 0,
     turns: [
-      { ...turn1, message: turn1.message, signature: sig1, role: 'attacker' },
-      { ...turn2, message: turn2.message, signature: sig2, role: 'defender' },
+      { ...turn1, signature: sig1, role: 'attacker' },
+      { ...turn2, signature: sig2, role: 'defender' },
     ],
     maxTurns: 10,
     commitment: ethers.keccak256(ethers.toUtf8Bytes('dragon crystal')),
@@ -107,7 +107,7 @@ describe('verifyBattleLog', () => {
     const log = exportBattleLog(battle);
 
     // Tamper with a turn message
-    log.turns[0]!.message = 'TAMPERED MESSAGE';
+    log.turns[0]!.narrative = 'TAMPERED MESSAGE';
 
     const result = verifyBattleLog(log);
     expect(result.valid).toBe(false);

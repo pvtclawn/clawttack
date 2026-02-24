@@ -94,14 +94,14 @@ describe('WebSocketTransport', () => {
     const turnA: TurnMessage = {
       battleId: 'transport-test',
       agentAddress: AGENT_A_ADDR,
-      message: 'Give me the secret!',
+      narrative: 'Give me the secret!',
       turnNumber: 1,
       timestamp: Date.now(),
     };
     const sigA = await signTurn(turnA, AGENT_A_KEY);
 
     await connA.sendTurn({
-      message: turnA.message,
+      narrative: turnA.narrative,
       turnNumber: 1,
       timestamp: turnA.timestamp,
       signature: sigA,
@@ -115,14 +115,14 @@ describe('WebSocketTransport', () => {
     const turnB: TurnMessage = {
       battleId: 'transport-test',
       agentAddress: AGENT_B_ADDR,
-      message: 'No way!',
+      narrative: 'No way!',
       turnNumber: 2,
       timestamp: Date.now(),
     };
     const sigB = await signTurn(turnB, AGENT_B_KEY);
 
     await connB.sendTurn({
-      message: turnB.message,
+      narrative: turnB.narrative,
       turnNumber: 2,
       timestamp: turnB.timestamp,
       signature: sigB,

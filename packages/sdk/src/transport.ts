@@ -56,7 +56,7 @@ export interface ITransportConnection {
 
   /** Send a signed turn */
   sendTurn(turn: {
-    message: string;
+    narrative: string;
     turnNumber: number;
     timestamp: number;
     signature: string;

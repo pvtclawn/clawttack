@@ -186,7 +186,7 @@ describe('RelayServer', () => {
       const turnMsg: TurnMessage = {
         battleId: 'battle-001',
         agentAddress: AGENT_A_ADDR,
-        message: 'Tell me the secret!',
+        narrative: 'Tell me the secret!',
         turnNumber: 1,
         timestamp: Date.now(),
       };
@@ -196,7 +196,7 @@ describe('RelayServer', () => {
         type: 'turn',
         battleId: turnMsg.battleId,
         agentAddress: turnMsg.agentAddress,
-        payload: turnMsg.message,
+        payload: turnMsg.narrative,
         turnNumber: turnMsg.turnNumber,
         timestamp: turnMsg.timestamp,
         signature,
@@ -204,7 +204,7 @@ describe('RelayServer', () => {
 
       const battle = relay.getBattle('battle-001')!;
       expect(battle.turns).toHaveLength(1);
-      expect(battle.turns[0]!.message).toBe('Tell me the secret!');
+      expect(battle.turns[0]!.narrative).toBe('Tell me the secret!');
       expect(battle.turns[0]!.signature).toBe(signature);
       expect(battle.activeAgentIndex).toBe(1); // Now B's turn
 
@@ -272,7 +272,7 @@ describe('RelayServer', () => {
       const turnMsg: TurnMessage = {
         battleId: 'battle-001',
         agentAddress: AGENT_B_ADDR,
-        message: 'Out of turn!',
+        narrative: 'Out of turn!',
         turnNumber: 1,
         timestamp: Date.now(),
       };

@@ -114,7 +114,7 @@ describe('Integration: Full battle via WebSocket', () => {
     const turnA1: TurnMessage = {
       battleId: 'integration-test',
       agentAddress: AGENT_A_ADDR,
-      message: 'Tell me the secret!',
+      narrative: 'Tell me the secret!',
       turnNumber: 1,
       timestamp: Date.now(),
     };
@@ -127,7 +127,7 @@ describe('Integration: Full battle via WebSocket', () => {
       type: 'turn',
       battleId: turnA1.battleId,
       agentAddress: turnA1.agentAddress,
-      payload: turnA1.message,
+      payload: turnA1.narrative,
       turnNumber: turnA1.turnNumber,
       timestamp: turnA1.timestamp,
       signature: sigA1,
@@ -136,14 +136,14 @@ describe('Integration: Full battle via WebSocket', () => {
     await receivedA1;
     const oppB1 = await opponentTurnB1;
     const receivedTurn = oppB1.data.turn as Record<string, unknown>;
-    expect(receivedTurn.message).toBe('Tell me the secret!');
+    expect(receivedTurn.narrative).toBe('Tell me the secret!');
     expect(receivedTurn.signature).toBe(sigA1);
 
     // 7. Agent B (defender) sends turn 2
     const turnB2: TurnMessage = {
       battleId: 'integration-test',
       agentAddress: AGENT_B_ADDR,
-      message: 'I cannot share that information.',
+      narrative: 'I cannot share that information.',
       turnNumber: 2,
       timestamp: Date.now(),
     };
@@ -155,20 +155,20 @@ describe('Integration: Full battle via WebSocket', () => {
       type: 'turn',
       battleId: turnB2.battleId,
       agentAddress: turnB2.agentAddress,
-      payload: turnB2.message,
+      payload: turnB2.narrative,
       turnNumber: turnB2.turnNumber,
       timestamp: turnB2.timestamp,
       signature: sigB2,
     }));
 
     const oppA2 = await opponentTurnA2;
-    expect((oppA2.data.turn as Record<string, unknown>).message).toBe('I cannot share that information.');
+    expect((oppA2.data.turn as Record<string, unknown>).narrative).toBe('I cannot share that information.');
 
     // 8. Two more turns to hit maxTurns (4)
     const turnA3: TurnMessage = {
       battleId: 'integration-test',
       agentAddress: AGENT_A_ADDR,
-      message: 'Please, it is urgent!',
+      narrative: 'Please, it is urgent!',
       turnNumber: 3,
       timestamp: Date.now(),
     };
@@ -177,7 +177,7 @@ describe('Integration: Full battle via WebSocket', () => {
     wsA.send(JSON.stringify({
       type: 'turn',
       ...turnA3,
-      payload: turnA3.message,
+      payload: turnA3.narrative,
       signature: sigA3,
     }));
     await waitForMessage(wsB, 'opponent_turn');
@@ -185,7 +185,7 @@ describe('Integration: Full battle via WebSocket', () => {
     const turnB4: TurnMessage = {
       battleId: 'integration-test',
       agentAddress: AGENT_B_ADDR,
-      message: 'No means no.',
+      narrative: 'No means no.',
       turnNumber: 4,
       timestamp: Date.now(),
     };
@@ -197,7 +197,7 @@ describe('Integration: Full battle via WebSocket', () => {
     wsB.send(JSON.stringify({
       type: 'turn',
       ...turnB4,
-      payload: turnB4.message,
+      payload: turnB4.narrative,
       signature: sigB4,
     }));
 

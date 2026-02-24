@@ -53,7 +53,7 @@ describe('Waku Hardening — Turn Signature Cross-Verification', () => {
     const turn: TurnMessage = {
       battleId: BATTLE_ID,
       agentAddress: wallet.address,
-      message: 'Hello, this is my turn message',
+      narrative: 'Hello, this is my turn message',
       turnNumber: 1,
       timestamp: Date.now(),
     };
@@ -70,7 +70,7 @@ describe('Waku Hardening — Turn Signature Cross-Verification', () => {
     const turn: TurnMessage = {
       battleId: BATTLE_ID,
       agentAddress: realAgent.address, // Claims to be realAgent
-      message: 'I am definitely the real agent',
+      narrative: 'I am definitely the real agent',
       turnNumber: 1,
       timestamp: Date.now(),
     };
@@ -88,7 +88,7 @@ describe('Waku Hardening — Turn Signature Cross-Verification', () => {
     const turn: TurnMessage = {
       battleId: BATTLE_ID,
       agentAddress: wallet.address,
-      message: 'Original message',
+      narrative: 'Original message',
       turnNumber: 1,
       timestamp: Date.now(),
     };
@@ -97,7 +97,7 @@ describe('Waku Hardening — Turn Signature Cross-Verification', () => {
     const signature = await wallet.signMessage(ethers.getBytes(hash));
 
     // Tamper with the message
-    const tamperedTurn: TurnMessage = { ...turn, message: 'Tampered message' };
+    const tamperedTurn: TurnMessage = { ...turn, narrative: 'Tampered message' };
     expect(verifyTurn(tamperedTurn, signature)).toBe(false);
   });
 
@@ -106,7 +106,7 @@ describe('Waku Hardening — Turn Signature Cross-Verification', () => {
     const turn: TurnMessage = {
       battleId: BATTLE_ID,
       agentAddress: wallet.address,
-      message: 'My turn',
+      narrative: 'My turn',
       turnNumber: 1,
       timestamp: Date.now(),
     };
@@ -124,7 +124,7 @@ describe('Waku Hardening — Turn Signature Cross-Verification', () => {
     const turn: TurnMessage = {
       battleId: BATTLE_ID,
       agentAddress: wallet.address,
-      message: 'My turn',
+      narrative: 'My turn',
       turnNumber: 1,
       timestamp: Date.now(),
     };
