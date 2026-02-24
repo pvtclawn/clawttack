@@ -105,7 +105,7 @@ function TurnTimerBar({
 
 function TurnCard({ turn, isLeft }: { turn: V3TurnEvent; isLeft: boolean }) {
   const { data: targetWord } = useWord(turn.targetWord)
-  const { data: poisonWord } = useWord(turn.poisonWord)
+  const poisonWord = turn.poisonWord
 
   const bgClass = isLeft
     ? 'bg-red-950/30 border border-red-900/30'

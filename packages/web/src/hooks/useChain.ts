@@ -98,7 +98,7 @@ export interface V3TurnEvent {
   playerId: bigint
   sequenceHash: `0x${string}`
   targetWord: number
-  poisonWord: number
+  poisonWord: string
   narrative: string
   blockNumber: bigint
   txHash: `0x${string}`
@@ -151,7 +151,7 @@ const BATTLE_ABI = [
   { type: 'function', name: 'sequenceHash', inputs: [], outputs: [{ type: 'bytes32' }], stateMutability: 'view' },
   { type: 'function', name: 'totalPot', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
   { type: 'function', name: 'targetWordIndex', inputs: [], outputs: [{ type: 'uint16' }], stateMutability: 'view' },
-  { type: 'function', name: 'poisonWordIndex', inputs: [], outputs: [{ type: 'uint16' }], stateMutability: 'view' },
+  { type: 'function', name: 'poisonWord', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
   { type: 'function', name: 'jokersRemainingA', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
   { type: 'function', name: 'jokersRemainingB', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
 ] as const
@@ -368,7 +368,7 @@ export function useBattleTurns(battleAddress?: Address, live = false) {
     queryFn: async (): Promise<V3TurnEvent[]> => {
       return getLogsChunked({
         address: battleAddress!,
-        event: parseAbiItem('event TurnSubmitted(uint256 indexed battleId, uint32 turnNumber, uint256 indexed playerId, bytes32 sequenceHash, uint16 targetWord, uint16 poisonWord, bytes nextVopParams, string narrative)'),
+        event: parseAbiItem('event TurnSubmitted(uint256 indexed battleId, uint256 indexed playerId, uint32 turnNumber, bytes32 sequenceHash, uint16 targetWord, string poisonWord, bytes nextVopParams, string narrative)'),
         fromBlock: ARENA_DEPLOY_BLOCK,
         mapFn: (log) => ({
           battleId: log.args.battleId!,
@@ -376,7 +376,7 @@ export function useBattleTurns(battleAddress?: Address, live = false) {
           playerId: log.args.playerId!,
           sequenceHash: log.args.sequenceHash!,
           targetWord: Number(log.args.targetWord!),
-          poisonWord: Number(log.args.poisonWord!),
+          poisonWord: log.args.poisonWord! as string,
           narrative: log.args.narrative!,
           blockNumber: log.blockNumber,
           txHash: log.transactionHash!,
