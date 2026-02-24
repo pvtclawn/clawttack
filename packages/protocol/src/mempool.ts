@@ -45,17 +45,17 @@ export class MempoolWatcher {
             });
 
             if (decoded.functionName === 'submitTurn') {
-              const [battleId, message] = decoded.args as [Hex, string];
+              const [payload] = decoded.args as [{ solution: bigint; customPoisonWord: string; narrative: string }];
               
               const turn: PendingTurn = {
-                battleId,
+                battleId: tx.to as Hex, // In v3, submitTurn is called on the battle clone
                 agent: tx.from,
-                message,
+                message: payload.narrative,
                 txHash: hash,
               };
 
               // Store in local cache for verification
-              const key = keccak256(encodePacked(['bytes32', 'string'], [battleId, message]));
+              const key = keccak256(encodePacked(['address', 'string'], [turn.battleId as `0x${string}`, payload.narrative]));
               this.pendingTurns.set(key, turn);
               
               // Cleanup after 5 minutes to prevent memory leak
