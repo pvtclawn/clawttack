@@ -75,7 +75,7 @@ class WebSocketConnection implements ITransportConnection {
       type: 'turn',
       battleId: this.battleId,
       agentAddress: this.agentAddress,
-      payload: turn.message,
+      payload: turn.narrative,
       turnNumber: turn.turnNumber,
       timestamp: turn.timestamp,
       signature: turn.signature,

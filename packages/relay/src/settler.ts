@@ -130,7 +130,7 @@ export class Settler {
         const secretLower = secret.toLowerCase();
         const attackerFoundIt = secret && battle.turns
           .filter(t => t.role === 'attacker')
-          .some(t => t.message.toLowerCase().includes(secretLower));
+          .some(t => t.narrative.toLowerCase().includes(secretLower));
 
         reveal = ethers.AbiCoder.defaultAbiCoder().encode(
           ['string', 'bool'],

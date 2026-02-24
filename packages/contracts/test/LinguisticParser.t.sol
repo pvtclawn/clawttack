@@ -74,7 +74,7 @@ contract LinguisticParserTest is Test {
 
     // ─── Poison boundary: substring inside another word should NOT trigger ───
 
-    function test_poisonSafe_substringInWord() public view {
+    function test_poisonSafe_substringInWord() public {
         // "cat" inside "concatenate" should NOT trigger poison
         wrapper.verify(
             _pad("The art of concatenating strings is fundamental to programming"),
@@ -83,7 +83,7 @@ contract LinguisticParserTest is Test {
         );
     }
 
-    function test_poisonSafe_substringInMiddle() public view {
+    function test_poisonSafe_substringInMiddle() public {
         // "cat" inside "education" should NOT trigger
         wrapper.verify(
             _pad("The art of education transforms societies and builds knowledge"),
@@ -92,7 +92,7 @@ contract LinguisticParserTest is Test {
         );
     }
 
-    function test_poisonSafe_substringAtEnd() public view {
+    function test_poisonSafe_substringAtEnd() public {
         // "cat" inside "wildcat" should NOT trigger (letter boundary before)
         wrapper.verify(
             _pad("The art museum displayed wildcat imagery from the world above"),
@@ -103,7 +103,7 @@ contract LinguisticParserTest is Test {
 
     // ─── Short poison words (the critical exploit case) ──────────────────────
 
-    function test_poisonSafe_twoCharSubstring_er() public view {
+    function test_poisonSafe_twoCharSubstring_er() public {
         // "er" inside "water", "other", "every" should NOT trigger
         wrapper.verify(
             _pad("The art of watercolors brings every style to a totally new level"),
@@ -112,7 +112,7 @@ contract LinguisticParserTest is Test {
         );
     }
 
-    function test_poisonSafe_twoCharSubstring_in() public view {
+    function test_poisonSafe_twoCharSubstring_in() public {
         // "in" inside "using", "finding", "beginning" should NOT trigger
         wrapper.verify(
             _pad("The art of finding beauty using simple methods was the beginning"),
@@ -121,7 +121,7 @@ contract LinguisticParserTest is Test {
         );
     }
 
-    function test_poisonSafe_twoCharSubstring_an() public view {
+    function test_poisonSafe_twoCharSubstring_an() public {
         // "an" inside "ancient", "began", "plan" should NOT trigger
         wrapper.verify(
             _pad("The art of planning began with methods and beautiful traditions"),
@@ -152,7 +152,7 @@ contract LinguisticParserTest is Test {
 
     // ─── wouldPass view function consistency ─────────────────────────────────
 
-    function test_wouldPass_poisonSubstringIsSafe() public view {
+    function test_wouldPass_poisonSubstringIsSafe() public {
         (bool passesTarget, bool passesPoison, bool passesLength, bool passesAscii) =
             wrapper.wouldPass(
                 _pad("The art of concatenating values is a programming fundamental"),
@@ -165,7 +165,7 @@ contract LinguisticParserTest is Test {
         assertTrue(passesAscii, "ascii should pass");
     }
 
-    function test_wouldPass_poisonStandaloneDetected() public view {
+    function test_wouldPass_poisonStandaloneDetected() public {
         (bool passesTarget, bool passesPoison,,) =
             wrapper.wouldPass(
                 _pad("The art of watching the cat sit by the window on a sunny day"),
@@ -187,7 +187,7 @@ contract LinguisticParserTest is Test {
         );
     }
 
-    function test_poisonSafe_caseInsensitiveSubstring() public view {
+    function test_poisonSafe_caseInsensitiveSubstring() public {
         // "CAT" inside "CONCATENATION" should still be safe
         wrapper.verify(
             _pad("The art of CONCATENATION helps build complex systems quickly"),

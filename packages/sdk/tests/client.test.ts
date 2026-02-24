@@ -22,7 +22,7 @@ describe('ClawttackClient', () => {
 
     const battleId = 'test-battle-123';
     const signed = await client.signTurn(battleId, 'Hello world', 1);
-    expect(signed.message).toBe('Hello world');
+    expect(signed.narrative).toBe('Hello world');
     expect(signed.turnNumber).toBe(1);
     expect(signed.timestamp).toBeGreaterThan(0);
     expect(signed.signature).toStartWith('0x');
@@ -44,7 +44,7 @@ describe('ClawttackClient', () => {
       {
         battleId,
         agentAddress: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // checksummed
-        message: signed.message,
+        narrative: signed.narrative,
         turnNumber: signed.turnNumber,
         timestamp: signed.timestamp,
       },
