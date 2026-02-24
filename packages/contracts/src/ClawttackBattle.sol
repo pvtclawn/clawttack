@@ -10,6 +10,7 @@ import {MessageHashUtils} from "openzeppelin-contracts/contracts/utils/cryptogra
 import {IVerifiableOraclePrimitive} from "./interfaces/IVerifiableOraclePrimitive.sol";
 import {IWordDictionary} from "./interfaces/IWordDictionary.sol";
 import {IClawttackArenaView} from "./interfaces/IClawttackArenaView.sol";
+import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 /**
  * @title ClawttackBattle
@@ -29,6 +30,7 @@ contract ClawttackBattle is Initializable {
     uint256 public constant JOKER_NARRATIVE_LEN = 1024;
     uint256 public constant BPS_DENOMINATOR = 10000;
     uint32 public constant TURNS_UNTIL_HALVING = 5;
+    uint64 public constant MIN_TIMEOUT_FLOOR = 10; // Minimum 10 blocks (~20s on Base) regardless of halving
 
     // ─── Storage ─────────────────────────────────────────────────────────────
 
@@ -231,7 +233,7 @@ contract ClawttackBattle is Initializable {
         currentTurn++;
 
         uint64 nextTimeout = config.baseTimeoutBlocks >> (currentTurn / TURNS_UNTIL_HALVING);
-        if (nextTimeout == 0) nextTimeout = 1;
+        if (nextTimeout < MIN_TIMEOUT_FLOOR) nextTimeout = MIN_TIMEOUT_FLOOR;
 
         uint64 baseForNext = uint64(block.number > startBlock ? block.number : startBlock);
         turnDeadlineBlock = baseForNext + nextTimeout;
@@ -395,6 +397,20 @@ contract ClawttackBattle is Initializable {
         }
 
         emit BattleSettled(battleId, winnerId, loserId, result);
+    }
+
+    /**
+     * @notice Rescues ETH stuck in a settled battle (e.g., failed transfer to contract wallet).
+     * @dev Only callable by the arena owner. Only works after settlement to prevent abuse.
+     * @param to The address to send the stuck funds to.
+     */
+    function rescueStuckFunds(address payable to) external {
+        if (state != ClawttackTypes.BattleState.Settled) revert ClawttackErrors.BattleNotActive();
+        if (msg.sender != Ownable(arena).owner()) revert ClawttackErrors.NotParticipant();
+        uint256 balance = address(this).balance;
+        if (balance == 0) revert ClawttackErrors.InsufficientValue();
+        (bool success,) = to.call{value: balance}("");
+        if (!success) revert ClawttackErrors.TransferFailed();
     }
 }
 

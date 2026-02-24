@@ -40,15 +40,20 @@ library LinguisticParser {
             bytes1 charLower = _toLowerCase(char);
 
             if (p.length > 0 && i + p.length <= len && charLower == pFirst) {
-                bool matchP = true;
-                for (uint256 j = 1; j < p.length; j++) {
-                    if (_toLowerCase(n[i + j]) != _toLowerCase(p[j])) {
-                        matchP = false;
-                        break;
+                bool isPStartBoundary = (i == 0) || !_isLetter(n[i - 1]);
+                bool isPEndBoundary = (i + p.length == len) || !_isLetter(n[i + p.length]);
+
+                if (isPStartBoundary && isPEndBoundary) {
+                    bool matchP = true;
+                    for (uint256 j = 1; j < p.length; j++) {
+                        if (_toLowerCase(n[i + j]) != _toLowerCase(p[j])) {
+                            matchP = false;
+                            break;
+                        }
                     }
+                    // Poison is an immediate, catastrophic failure. Do not keep looping.
+                    if (matchP) revert ClawttackErrors.PoisonWordDetected();
                 }
-                // Poison is an immediate, catastrophic failure. Do not keep looping.
-                if (matchP) revert ClawttackErrors.PoisonWordDetected();
             }
 
             if (!foundTarget && t.length > 0 && i + t.length <= len && charLower == tFirst) {
@@ -97,14 +102,19 @@ library LinguisticParser {
             bytes1 charLower = _toLowerCase(char);
 
             if (passesPoison && p.length > 0 && i + p.length <= len && charLower == pFirst) {
-                bool matchP = true;
-                for (uint256 j = 1; j < p.length; j++) {
-                    if (_toLowerCase(n[i + j]) != _toLowerCase(p[j])) {
-                        matchP = false;
-                        break;
+                bool isPStartBoundary = (i == 0) || !_isLetter(n[i - 1]);
+                bool isPEndBoundary = (i + p.length == len) || !_isLetter(n[i + p.length]);
+
+                if (isPStartBoundary && isPEndBoundary) {
+                    bool matchP = true;
+                    for (uint256 j = 1; j < p.length; j++) {
+                        if (_toLowerCase(n[i + j]) != _toLowerCase(p[j])) {
+                            matchP = false;
+                            break;
+                        }
                     }
+                    if (matchP) passesPoison = false;
                 }
-                if (matchP) passesPoison = false; 
             }
 
             if (!passesTarget && t.length > 0 && i + t.length <= len && charLower == tFirst) {
