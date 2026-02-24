@@ -66,11 +66,29 @@ async function main() {
   const walletA = createWalletClient({ account: clawn, chain: baseSepolia, transport: http(RPC_URL) });
   const walletB = createWalletClient({ account: clawnjr, chain: baseSepolia, transport: http(RPC_URL) });
 
-  // Register agents
-  console.log('📝 Registering agents...');
-  let idA: bigint, idB: bigint;
-  try { idA = await walletA.writeContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'registerAgent', chain: baseSepolia, account: clawn }).then(async (tx) => { const r = await pub.waitForTransactionReceipt({ hash: tx }); return BigInt(r.logs[0]?.topics[1] ?? '0'); }); } catch { const c = await pub.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'agentsCount' }); idA = (c as bigint) - 1n; }
-  try { idB = await walletB.writeContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'registerAgent', chain: baseSepolia, account: clawnjr }).then(async (tx) => { const r = await pub.waitForTransactionReceipt({ hash: tx }); return BigInt(r.logs[0]?.topics[1] ?? '0'); }); } catch { const c = await pub.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'agentsCount' }); idB = c as bigint; }
+  // Register agents (with dedup — find existing by owner address)
+  console.log('📝 Finding/registering agents...');
+  let idA = 0n, idB = 0n;
+  const AGENTS_ABI = [{ type: 'function', name: 'agents', inputs: [{ name: 'id', type: 'uint256' }], outputs: [{ name: 'owner', type: 'address' }, { name: 'eloRating', type: 'uint32' }, { name: 'totalWins', type: 'uint32' }, { name: 'totalLosses', type: 'uint32' }], stateMutability: 'view' }] as const;
+  const agentCount = await pub.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'agentsCount' }) as bigint;
+  for (let i = 1n; i <= agentCount; i++) {
+    try {
+      const profile = await pub.readContract({ address: ARENA_ADDRESS, abi: AGENTS_ABI, functionName: 'agents', args: [i] }) as [string, number, number, number];
+      if (profile[0].toLowerCase() === clawn.address.toLowerCase()) idA = i;
+      if (profile[0].toLowerCase() === clawnjr.address.toLowerCase()) idB = i;
+      if (idA > 0n && idB > 0n) break;
+    } catch {}
+  }
+  if (idA === 0n) {
+    const tx = await walletA.writeContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'registerAgent', chain: baseSepolia, account: clawn });
+    await pub.waitForTransactionReceipt({ hash: tx });
+    idA = (await pub.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'agentsCount' })) as bigint;
+  }
+  if (idB === 0n) {
+    const tx = await walletB.writeContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'registerAgent', chain: baseSepolia, account: clawnjr });
+    await pub.waitForTransactionReceipt({ hash: tx });
+    idB = (await pub.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'agentsCount' })) as bigint;
+  }
   console.log(`  Clawn: #${idA}, ClawnJr: #${idB}`);
 
   // === VARIATION A: Poison word trap ===
@@ -80,16 +98,19 @@ async function main() {
   // Create battle
   const txA = await walletA.writeContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'createBattle', args: [idA, { stake: 0n, baseTimeoutBlocks: 150, warmupBlocks: 15, targetAgentId: 0n, maxTurns: 12, maxJokers: 2 }], chain: baseSepolia, account: clawn });
   const receiptA = await pub.waitForTransactionReceipt({ hash: txA });
-  const battleCountA = await pub.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'battlesCount' }) as bigint;
+  
+  // Parse BattleCreated event to get battleId (topics[1] is indexed battleId)
+  const battleCreatedLog = receiptA.logs.find(l => l.topics[0] === '0xe43e00c8f34fe66a7db9a53ad863760ecb108f215b0037f6b021c2690ed575a0');
+  const battleIdA = battleCreatedLog ? BigInt(battleCreatedLog.topics[1] ?? '0') : await pub.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'battlesCount' }) as bigint;
   
   // Retry to get address
   let addrA: Address = '0x0000000000000000000000000000000000000000';
   for (let i = 0; i < 5; i++) {
     await new Promise(r => setTimeout(r, 3000));
-    addrA = await pub.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'battles', args: [battleCountA] }) as Address;
+    addrA = await pub.readContract({ address: ARENA_ADDRESS, abi: ARENA_ABI, functionName: 'battles', args: [battleIdA] }) as Address;
     if (addrA !== '0x0000000000000000000000000000000000000000') break;
   }
-  console.log(`  Battle #${battleCountA}: ${addrA}`);
+  console.log(`  Battle #${battleIdA}: ${addrA}`);
 
   // Accept
   const txAccA = await walletB.writeContract({ address: addrA, abi: BATTLE_ABI, functionName: 'acceptBattle', args: [idB], value: 0n, chain: baseSepolia, account: clawnjr });
