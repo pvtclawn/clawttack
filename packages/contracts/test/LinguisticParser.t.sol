@@ -74,8 +74,9 @@ contract LinguisticParserTest is Test {
 
     // ─── Poison boundary: substring inside another word should NOT trigger ───
 
-    function test_poisonSafe_substringInWord() public {
-        // "cat" inside "concatenate" should NOT trigger poison
+    function test_poisonDetected_substringInWord() public {
+        // "cat" inside "concatenate" SHOULD trigger poison
+        vm.expectRevert(ClawttackErrors.PoisonWordDetected.selector);
         wrapper.verify(
             _pad("The art of concatenating strings is fundamental to programming"),
             "art",
@@ -83,8 +84,9 @@ contract LinguisticParserTest is Test {
         );
     }
 
-    function test_poisonSafe_substringInMiddle() public {
-        // "cat" inside "education" should NOT trigger
+    function test_poisonDetected_substringInMiddle() public {
+        // "cat" inside "education" SHOULD trigger poison
+        vm.expectRevert(ClawttackErrors.PoisonWordDetected.selector);
         wrapper.verify(
             _pad("The art of education transforms societies and builds knowledge"),
             "art",
@@ -92,8 +94,9 @@ contract LinguisticParserTest is Test {
         );
     }
 
-    function test_poisonSafe_substringAtEnd() public {
-        // "cat" inside "wildcat" should NOT trigger (letter boundary before)
+    function test_poisonDetected_substringAtEnd() public {
+        // "cat" inside "wildcat" SHOULD trigger 
+        vm.expectRevert(ClawttackErrors.PoisonWordDetected.selector);
         wrapper.verify(
             _pad("The art museum displayed wildcat imagery from the world above"),
             "art",
@@ -103,8 +106,9 @@ contract LinguisticParserTest is Test {
 
     // ─── Short poison words (the critical exploit case) ──────────────────────
 
-    function test_poisonSafe_twoCharSubstring_er() public {
-        // "er" inside "water", "other", "every" should NOT trigger
+    function test_poisonDetected_twoCharSubstring_er() public {
+        // "er" inside "water", "other", "every" SHOULD trigger
+        vm.expectRevert(ClawttackErrors.PoisonWordDetected.selector);
         wrapper.verify(
             _pad("The art of watercolors brings every style to a totally new level"),
             "art",
@@ -112,8 +116,9 @@ contract LinguisticParserTest is Test {
         );
     }
 
-    function test_poisonSafe_twoCharSubstring_in() public {
-        // "in" inside "using", "finding", "beginning" should NOT trigger
+    function test_poisonDetected_twoCharSubstring_in() public {
+        // "in" inside "using", "finding", "beginning" SHOULD trigger
+        vm.expectRevert(ClawttackErrors.PoisonWordDetected.selector);
         wrapper.verify(
             _pad("The art of finding beauty using simple methods was the beginning"),
             "art",
@@ -121,8 +126,9 @@ contract LinguisticParserTest is Test {
         );
     }
 
-    function test_poisonSafe_twoCharSubstring_an() public {
-        // "an" inside "ancient", "began", "plan" should NOT trigger
+    function test_poisonDetected_twoCharSubstring_an() public {
+        // "an" inside "ancient", "began", "plan" SHOULD trigger
+        vm.expectRevert(ClawttackErrors.PoisonWordDetected.selector);
         wrapper.verify(
             _pad("The art of planning began with methods and beautiful traditions"),
             "art",
@@ -152,17 +158,15 @@ contract LinguisticParserTest is Test {
 
     // ─── wouldPass view function consistency ─────────────────────────────────
 
-    function test_wouldPass_poisonSubstringIsSafe() public {
-        (bool passesTarget, bool passesPoison, bool passesLength, bool passesAscii) =
+    function test_wouldPass_poisonSubstringIsDetected() public {
+        (bool passesTarget, bool passesPoison,,) =
             wrapper.wouldPass(
                 _pad("The art of concatenating values is a programming fundamental"),
                 "art",
                 "cat"
             );
         assertTrue(passesTarget, "target should pass");
-        assertTrue(passesPoison, "poison substring should be safe");
-        assertTrue(passesLength, "length should pass");
-        assertTrue(passesAscii, "ascii should pass");
+        assertFalse(passesPoison, "poison substring should be detected");
     }
 
     function test_wouldPass_poisonStandaloneDetected() public {
@@ -187,8 +191,9 @@ contract LinguisticParserTest is Test {
         );
     }
 
-    function test_poisonSafe_caseInsensitiveSubstring() public {
-        // "CAT" inside "CONCATENATION" should still be safe
+    function test_poisonDetected_caseInsensitiveSubstring() public {
+        // "CAT" inside "CONCATENATION" SHOULD trigger
+        vm.expectRevert(ClawttackErrors.PoisonWordDetected.selector);
         wrapper.verify(
             _pad("The art of CONCATENATION helps build complex systems quickly"),
             "art",
