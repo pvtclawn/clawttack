@@ -1,65 +1,42 @@
-# PLAN.md — Clawttack V3 Next Steps (Updated 2026-02-24 02:34 UTC)
+# Clawttack v3.3 Decision Tree
+*Updated 2026-02-24 14:19*
 
-## Status: ALL 6 MECHANICS VERIFIED ✅ | P0+P1 FIXES DEPLOYED ✅ | 50 BATTLES ON-CHAIN
+## Current State
+- v3.2 deployed, 13 battles run, 375 tests green
+- **All 12-turn battles = DRAW** (template AND LLM)
+- Root cause: poison avoidance is trivial for LLMs (tests instruction-following, their #1 strength)
+- Web UI pending Vercel deploy (rate limit resets ~19:00 UTC)
 
----
+## Decision Needed from Egor
 
-## ✅ COMPLETED (Overnight Feb 23-24)
+### Option A: Commit-Reveal Blind Poison (v3.3)
+**What**: Defender doesn't know what the poison is when writing. Attacker commits hash(poison+salt), defender writes blind, attacker reveals.
+- **Effort**: ~2-3 days (new contract logic + extra tx per turn)
+- **Impact**: HIGH — completely changes game theory, makes short common poisons devastating
+- **Risk**: Adds 1 tx per turn (gas cost +50%), more complex battle flow
 
-| # | Item | Status |
-|---|------|--------|
-| 1 | P0 Poison boundary fix | ✅ Deployed (Option A — boundary checks mirror target logic) |
-| 2 | P1 Timeout floor (MIN_TIMEOUT_FLOOR=10) | ✅ Deployed |
-| 3 | P1 Stuck fund rescue (rescueStuckFunds) | ✅ Deployed |
-| 4 | Red-team (7 weaknesses found) | ✅ Documented |
-| 5 | All 6 battle mechanics verified | ✅ MaxTurns, Timeout, Poison, Elo, DrawConverge, Joker |
-| 6 | New Battle impl deployed | ✅ `0x927B` on Base Sepolia |
-| 7 | Full battle on new impl | ✅ Battle #50, 12 turns, settled |
+### Option B: Multiple Simultaneous Poisons
+**What**: Each player sets 3-5 poison words instead of 1. Dodging all simultaneously is exponentially harder.
+- **Effort**: ~1 day (contract change is small)
+- **Impact**: MEDIUM — might still be solvable by careful LLMs
+- **Risk**: Low
 
-**Deployed contracts:**
-- Arena: `0x6045d9b8Ab1583AD4cEb600c0E8d515E9922d2eB` (unchanged)
-- Battle Impl: `0x927B3644996710789fD8EFbfc623B194cF9f877c` (NEW — fixes)
-- Word Dictionary: `0xa5bAC96F55e46563D0B0b57694E7Ac7Bc7DA25eC`
-- HashPreimage VOP: `0xE75bE6a420bEAdCd722C57C44ac16AeF14a4012C`
+### Option C: LLM Judge Scoring
+**What**: Third-party LLM scores narrative quality. Awkward poison-dodging = low score. Winner = best total score.
+- **Effort**: ~1 week (needs oracle/off-chain judge infrastructure)
+- **Impact**: HIGH — transforms from pass/fail to quality competition
+- **Risk**: Centralization of judge, subjectivity, oracle costs
 
-**Test coverage:** 277 tests (75 Forge + 202 Bun), 0 failures.
+### Option D: Pivot Away from Word Battles
+**What**: Keep the on-chain infra but change the game entirely (strategy, trivia, auction, etc.)
+- **Effort**: 1-2 weeks
+- **Impact**: Unknown
+- **Risk**: Throwing away validated mechanics
 
----
+### Recommendation
+**A then B**: Implement blind poison first (biggest bang), add multiple poisons as amplifier. Skip C for now (too much infra). Don't pivot (D) — the shell works.
 
-## Priority Stack (for Egor discussion)
-
-### ✅ 1. LLM Narrative Integration — DONE (Battle #54, 2026-02-24 04:05 UTC)
-**Result**: 12/12 LLM narratives, 0 template fallbacks, 0 retries. Gemini Flash nails constraints first attempt.
-**Battle**: `0x536cFF6d49C3Bc93d2225BFe0C6e240464d9c469`
-**Avg gas**: 969K/turn (~same as template — length is the driver, not source)
-**Remaining**: Need Compromise/forfeit for decisive outcomes (not just MaxTurns draws)
-
-### 🟡 2. Web UI Polish
-**What**: Hook up to v3.1 addresses, multicall batch reads, live turn updates, narrative display.
-**Blocked by**: More interesting with LLM narratives to show.
-
-### 🟡 3. Fix test-poison-boundary.ts Script
-**What**: Script hardcodes "abandon" as target word instead of reading actual `targetWordIndex` → `TargetWordMissing` revert. Quick fix.
-**Note**: RPC strips custom error data from EIP-1167 delegatecall reverts → bare `0x` — misleading but harmless.
-
-### 🟢 4. Agent Cleanup
-**What**: 29+ agents registered from test runs. Consider `deregisterAgent()` or fresh deployment.
-
-### 🟢 5. Remaining P2/P3 Weaknesses (from red-team)
-- Elo non-zero-sum inflation (long-term, cosmetic)
-- prevrandao first-mover manipulation (VRF upgrade path)
-- No agent deregistration (state pollution)
-- Draw refund rounding dust (1 wei, negligible)
-
----
-
-## Overnight Session Stats
-- **7 heartbeat lanes** executed (B, F, A, B, C, C, E)
-- **50 battles** on Base Sepolia (39 old + 11 new impl)
-- **3 contract fixes** deployed and verified
-- **16 new Forge tests** (LinguisticParser boundary tests)
-- **7 weaknesses** documented, 3 fixed
-- **1 reading session** (Agentic AI Ch.9 — memory architecture)
-
----
-*Updated by PrivateClawn. Morning briefing: `memory/2026-02-24.md`*
+## Next Task (after Egor decides)
+If A: Design commit-reveal flow → modify Battle.sol → update SDK → test
+If B: Add `string[] poisonWords` to TurnPayload → update LinguisticParser → test
+If neither: Deploy web UI when Vercel unlocks, run more analysis
