@@ -179,11 +179,16 @@ export function useArenaStats() {
   return useQuery({
     queryKey: ['v3', 'arena', 'stats'],
     queryFn: async () => {
-      const [battlesCount, agentsCount] = await Promise.all([
-        client.readContract({ address: CONTRACTS.arena, abi: ARENA_ABI, functionName: 'battlesCount' }),
-        client.readContract({ address: CONTRACTS.arena, abi: ARENA_ABI, functionName: 'agentsCount' }),
-      ])
-      return { battlesCount: battlesCount as bigint, agentsCount: agentsCount as bigint }
+      const results = await client.multicall({
+        contracts: [
+          { address: CONTRACTS.arena, abi: ARENA_ABI, functionName: 'battlesCount' },
+          { address: CONTRACTS.arena, abi: ARENA_ABI, functionName: 'agentsCount' },
+        ],
+      })
+      return {
+        battlesCount: (results[0].result ?? 0n) as bigint,
+        agentsCount: (results[1].result ?? 0n) as bigint,
+      }
     },
     staleTime: 15_000,
   })
@@ -228,37 +233,39 @@ export function useBattleInfo(battleId?: bigint, live = false) {
         args: [battleId!],
       }) as Address
 
-      // 2. Read all state from the clone
-      const [battleState, challId, accId, challOwner, accOwner, pot, config, fmA] = await Promise.all([
-        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'getBattleState' }) as Promise<[number, number, bigint, `0x${string}`, bigint]>,
-        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'challengerId' }),
-        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'acceptorId' }),
-        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'challengerOwner' }),
-        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'acceptorOwner' }),
-        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'totalPot' }),
-        client.readContract({ address: battleAddress, abi: BATTLE_CONFIG_ABI, functionName: 'config' }),
-        client.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'firstMoverA' }),
-      ])
-      
-      const [state, turn, deadline, seqHash] = battleState;
+      // 2. Read all state from the clone in a single multicall
+      const results = await client.multicall({
+        contracts: [
+          { address: battleAddress, abi: BATTLE_ABI, functionName: 'getBattleState' },
+          { address: battleAddress, abi: BATTLE_ABI, functionName: 'challengerId' },
+          { address: battleAddress, abi: BATTLE_ABI, functionName: 'acceptorId' },
+          { address: battleAddress, abi: BATTLE_ABI, functionName: 'challengerOwner' },
+          { address: battleAddress, abi: BATTLE_ABI, functionName: 'acceptorOwner' },
+          { address: battleAddress, abi: BATTLE_ABI, functionName: 'totalPot' },
+          { address: battleAddress, abi: BATTLE_CONFIG_ABI, functionName: 'config' },
+          { address: battleAddress, abi: BATTLE_ABI, functionName: 'firstMoverA' },
+        ],
+      })
 
-
+      const battleState = results[0].result as [number, number, bigint, `0x${string}`, bigint]
+      const [state, turn, deadline, seqHash] = battleState
+      const config = results[6].result as [bigint, number, number, bigint, number, number]
 
       return {
         battleId: battleId!,
         address: battleAddress,
         state: Number(state),
-        challengerId: challId as bigint,
-        acceptorId: accId as bigint,
-        challengerOwner: challOwner as Address,
-        acceptorOwner: accOwner as Address,
+        challengerId: results[1].result as bigint,
+        acceptorId: results[2].result as bigint,
+        challengerOwner: results[3].result as Address,
+        acceptorOwner: results[4].result as Address,
         currentTurn: Number(turn),
-        maxTurns: (config as [bigint, number, number, bigint, number, number])[4], // maxTurns from BattleConfig
+        maxTurns: config[4],
         turnDeadlineBlock: deadline,
         sequenceHash: seqHash,
-        totalPot: pot as bigint,
-        baseTimeoutBlocks: (config as [bigint, number, number, bigint, number, number])[1],
-        firstMoverA: fmA as boolean,
+        totalPot: results[5].result as bigint,
+        baseTimeoutBlocks: config[1],
+        firstMoverA: results[7].result as boolean,
       }
     },
     staleTime: live ? 0 : 30_000,
@@ -281,53 +288,72 @@ export function useBattleList(live = false) {
       const start = Math.max(1, count - 19)
       const ids = Array.from({ length: count - start + 1 }, (_, i) => BigInt(start + i))
 
-      const battles = await Promise.all(
-        ids.map(async (id) => {
-          try {
-            const addr = await client.readContract({
-              address: CONTRACTS.arena, abi: ARENA_ABI, functionName: 'battles', args: [id],
-            }) as Address
+      // Step 1: Batch-resolve all clone addresses in one multicall
+      const addrResults = await client.multicall({
+        contracts: ids.map(id => ({
+          address: CONTRACTS.arena as Address,
+          abi: ARENA_ABI,
+          functionName: 'battles' as const,
+          args: [id],
+        })),
+      })
 
-            if (addr === '0x0000000000000000000000000000000000000000') return null
+      const validBattles: { id: bigint; addr: Address }[] = []
+      for (let i = 0; i < ids.length; i++) {
+        const addr = addrResults[i].result as Address | undefined
+        if (addr && addr !== '0x0000000000000000000000000000000000000000') {
+          validBattles.push({ id: ids[i], addr })
+        }
+      }
 
-            const [battleState, challId, accId, challOwner, accOwner, pot, fmA] = await Promise.all([
-              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'getBattleState' }) as Promise<[number, number, bigint, `0x${string}`, bigint]>,
-              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'challengerId' }),
-              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'acceptorId' }),
-              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'challengerOwner' }),
-              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'acceptorOwner' }),
-              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'totalPot' }),
-              client.readContract({ address: addr, abi: BATTLE_ABI, functionName: 'firstMoverA' }),
-            ])
-            const [state, turn, deadline, seqHash] = battleState
+      if (validBattles.length === 0) return []
 
-            const config = await client.readContract({
-              address: addr, abi: BATTLE_CONFIG_ABI, functionName: 'config',
-            }) as [bigint, number, number, bigint, number, number]
+      // Step 2: Batch-read all battle state in one multicall
+      const stateContracts = validBattles.flatMap(({ addr }) => [
+        { address: addr, abi: BATTLE_ABI, functionName: 'getBattleState' as const },
+        { address: addr, abi: BATTLE_ABI, functionName: 'challengerId' as const },
+        { address: addr, abi: BATTLE_ABI, functionName: 'acceptorId' as const },
+        { address: addr, abi: BATTLE_ABI, functionName: 'challengerOwner' as const },
+        { address: addr, abi: BATTLE_ABI, functionName: 'acceptorOwner' as const },
+        { address: addr, abi: BATTLE_ABI, functionName: 'totalPot' as const },
+        { address: addr, abi: BATTLE_ABI, functionName: 'firstMoverA' as const },
+        { address: addr, abi: BATTLE_CONFIG_ABI, functionName: 'config' as const },
+      ])
 
-            return {
-              battleId: id,
-              address: addr,
-              state: Number(state),
-              challengerId: challId as bigint,
-              acceptorId: accId as bigint,
-              challengerOwner: challOwner as Address,
-              acceptorOwner: accOwner as Address,
-              currentTurn: Number(turn),
-              maxTurns: config[4],
-              turnDeadlineBlock: deadline,
-              sequenceHash: seqHash,
-              totalPot: pot as bigint,
-              baseTimeoutBlocks: config[1],
-              firstMoverA: fmA as boolean,
-            } as V3BattleInfo
-          } catch {
-            return null
-          }
-        })
-      )
+      const stateResults = await client.multicall({ contracts: stateContracts })
 
-      return battles.filter((b): b is V3BattleInfo => b !== null).reverse()
+      const battles: V3BattleInfo[] = []
+      const FIELDS_PER_BATTLE = 8
+
+      for (let i = 0; i < validBattles.length; i++) {
+        const offset = i * FIELDS_PER_BATTLE
+        try {
+          const battleState = stateResults[offset].result as [number, number, bigint, `0x${string}`, bigint]
+          const config = stateResults[offset + 7].result as [bigint, number, number, bigint, number, number]
+          const [state, turn, deadline, seqHash] = battleState
+
+          battles.push({
+            battleId: validBattles[i].id,
+            address: validBattles[i].addr,
+            state: Number(state),
+            challengerId: stateResults[offset + 1].result as bigint,
+            acceptorId: stateResults[offset + 2].result as bigint,
+            challengerOwner: stateResults[offset + 3].result as Address,
+            acceptorOwner: stateResults[offset + 4].result as Address,
+            currentTurn: Number(turn),
+            maxTurns: config[4],
+            turnDeadlineBlock: deadline,
+            sequenceHash: seqHash,
+            totalPot: stateResults[offset + 5].result as bigint,
+            baseTimeoutBlocks: config[1],
+            firstMoverA: stateResults[offset + 6].result as boolean,
+          })
+        } catch {
+          // Skip battles that fail to decode
+        }
+      }
+
+      return battles.reverse()
     },
     staleTime: live ? 0 : 30_000,
     refetchInterval: live ? 10_000 : false,
