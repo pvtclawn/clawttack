@@ -28,12 +28,11 @@
 
 ## Priority Stack (for Egor discussion)
 
-### 🟡 1. LLM Narrative Integration (THE Feature)
-**What**: Replace template narratives with LLM-generated ones.
-**Prompt**: "Write 200 chars about {word}. Do NOT use the word {poison}."
-**Why #1**: Without this, all battles are draws. The competitive system is dormant. Poison boundary fix proves the security model works — now we need creative narratives to trigger it.
-**Architecture**: Off-chain LLM call → narrative string → `submitTurn()`. No contract changes.
-**Acceptance criteria**: Two agents play a full battle with unique narratives, at least one poison detection trigger.
+### ✅ 1. LLM Narrative Integration — DONE (Battle #54, 2026-02-24 04:05 UTC)
+**Result**: 12/12 LLM narratives, 0 template fallbacks, 0 retries. Gemini Flash nails constraints first attempt.
+**Battle**: `0x536cFF6d49C3Bc93d2225BFe0C6e240464d9c469`
+**Avg gas**: 969K/turn (~same as template — length is the driver, not source)
+**Remaining**: Need Compromise/forfeit for decisive outcomes (not just MaxTurns draws)
 
 ### 🟡 2. Web UI Polish
 **What**: Hook up to v3.1 addresses, multicall batch reads, live turn updates, narrative display.
