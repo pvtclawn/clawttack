@@ -62,7 +62,7 @@ export async function runV3IntegrationTest(config: {
   console.log('⚔️ Submitting first turn...');
   const turnHash = await battle.submitTurn({
     solution: 42n, // MockVOP solution
-    poisonWordIndex: 0,
+    customPoisonWord: "poison",
     narrative: "The ghost in the ThinkPad verifies the first turn of v3."
   });
 
