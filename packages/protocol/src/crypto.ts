@@ -11,7 +11,7 @@ import type { TurnMessage } from './types.ts';
  * Compatible with Solidity: keccak256(abi.encodePacked(battleId, agent, turnNumber, timestamp, messageHash))
  */
 export function canonicalTurnHash(turn: TurnMessage): string {
-  const messageHash = ethers.keccak256(ethers.toUtf8Bytes(turn.message));
+  const narrativeHash = ethers.keccak256(ethers.toUtf8Bytes(turn.narrative));
 
   return ethers.solidityPackedKeccak256(
     ['bytes32', 'address', 'uint16', 'uint64', 'bytes32'],
@@ -20,7 +20,7 @@ export function canonicalTurnHash(turn: TurnMessage): string {
       turn.agentAddress,
       turn.turnNumber,
       turn.timestamp,
-      messageHash,
+      narrativeHash,
     ],
   );
 }

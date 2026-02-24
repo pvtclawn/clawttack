@@ -15,7 +15,7 @@ export interface WakuArenaTurn {
   battleId: string;
   agent: string;
   turnNumber: number;
-  message: string;
+  narrative: string;
   txHash: string;
   timestamp: number;
 }
@@ -63,7 +63,7 @@ export function createWakuBroadcaster(config: WakuBroadcasterConfig) {
       battleId: turn.battleId,
       agent: turn.agent,
       turnNumber: turn.turnNumber,
-      message: turn.message,
+      narrative: turn.narrative,
       txHash: turn.txHash,
       timestamp: Date.now(),
     };

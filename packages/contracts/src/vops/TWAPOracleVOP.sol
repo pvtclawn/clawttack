@@ -5,6 +5,11 @@ import {IVerifiableOraclePrimitive} from "../interfaces/IVerifiableOraclePrimiti
 import {IUniswapV3Pool} from "../interfaces/IExternal.sol";
 
 contract TWAPOracleVOP is IVerifiableOraclePrimitive {
+    address public immutable targetPool;
+
+    constructor(address _pool) {
+        targetPool = _pool;
+    }
     function verify(
         bytes calldata params,
         uint256 solution,
@@ -33,5 +38,10 @@ contract TWAPOracleVOP is IVerifiableOraclePrimitive {
         }
 
         return int256(solution) == int256(averageTick);
+    }
+
+    function generateParams(uint256 randomness) external view returns (bytes memory) {
+        uint32 secondsAgo = uint32(300 + (randomness % 600));
+        return abi.encode(targetPool, secondsAgo);
     }
 }

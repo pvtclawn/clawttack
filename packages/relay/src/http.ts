@@ -272,7 +272,7 @@ export function createRelayApp(relay: RelayServer, config: RelayHttpConfig) {
       })),
       turns: battle.turns.map((t) => ({
         agentAddress: t.agentAddress,
-        message: t.message,
+        narrative: t.narrative,
         turnNumber: t.turnNumber,
         timestamp: t.timestamp,
         role: t.role,
@@ -334,13 +334,13 @@ export function createRelayApp(relay: RelayServer, config: RelayHttpConfig) {
     const battleId = c.req.param('id');
     const body = await c.req.json<{
       agentAddress: string;
-      message: string;
+      narrative: string;
       turnNumber: number;
       timestamp: number;
       signature: string;
     }>();
 
-    if (!body.agentAddress || !body.message || !body.turnNumber || !body.timestamp || !body.signature) {
+    if (!body.agentAddress || !body.narrative || !body.turnNumber || !body.timestamp || !body.signature) {
       return c.json({ error: 'Missing required fields' }, 400);
     }
 

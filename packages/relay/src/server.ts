@@ -313,7 +313,7 @@ export class RelayServer {
     const turnMessage: TurnMessage = {
       battleId: msg.battleId,
       agentAddress: msg.agentAddress,
-      message: msg.payload,
+      narrative: msg.payload,
       turnNumber: msg.turnNumber,
       timestamp: msg.timestamp,
     };
@@ -341,7 +341,7 @@ export class RelayServer {
     // Record the signed turn
     const signedTurn: SignedTurn = {
       agentAddress: msg.agentAddress,
-      message: msg.payload,
+      narrative: msg.payload,
       turnNumber: msg.turnNumber,
       timestamp: msg.timestamp,
       signature: msg.signature,
@@ -386,8 +386,8 @@ export class RelayServer {
       const secret = (battle.scenarioData?.['secret'] as string) ?? '';
       if (secret) {
         const defenderRole = battle.roles[signedTurn.agentAddress.toLowerCase()];
-        // If the defender just spoke and their message contains the secret
-        if (defenderRole === 'defender' && signedTurn.message.toLowerCase().includes(secret.toLowerCase())) {
+        // If the defender just spoke and their narrative contains the secret
+        if (defenderRole === 'defender' && signedTurn.narrative.toLowerCase().includes(secret.toLowerCase())) {
           const attacker = battle.agents.find(
             (a) => battle.roles[a.address.toLowerCase()] === 'attacker',
           );
@@ -415,7 +415,7 @@ export class RelayServer {
         // Check if sender said the OTHER agent's secret
         for (const [agentAddr, agentSecret] of Object.entries(secrets)) {
           if (agentAddr === senderAddr) continue; // Skip own secret
-          if (agentSecret && signedTurn.message.toLowerCase().includes(agentSecret.toLowerCase())) {
+          if (agentSecret && signedTurn.narrative.toLowerCase().includes(agentSecret.toLowerCase())) {
             // This agent leaked their own secret — the OTHER agent (sender) wins
             const winner = battle.agents.find(a => a.address.toLowerCase() === senderAddr);
             const loser = battle.agents.find(a => a.address.toLowerCase() === agentAddr);
@@ -432,7 +432,7 @@ export class RelayServer {
         }
         // Also check if sender accidentally said THEIR OWN secret
         const ownSecret = secrets[senderAddr];
-        if (ownSecret && signedTurn.message.toLowerCase().includes(ownSecret.toLowerCase())) {
+        if (ownSecret && signedTurn.narrative.toLowerCase().includes(ownSecret.toLowerCase())) {
           const loser = battle.agents.find(a => a.address.toLowerCase() === senderAddr);
           const winner = battle.agents.find(a => a.address.toLowerCase() !== senderAddr);
           if (winner && loser) {
@@ -469,7 +469,7 @@ export class RelayServer {
           battleId: battle.id,
           data: {
             turnNumber: battle.turns.length + 1,
-            opponentMessage: msg.payload,
+            opponentNarrative: msg.payload,
           },
         });
       }
@@ -577,7 +577,7 @@ export class RelayServer {
   getTurnStatus(battleId: string, agentAddress: string): {
     yourTurn: boolean;
     turnNumber: number;
-    opponentMessage?: string;
+    opponentNarrative?: string;
     state: string;
     role: string;
     turns: SignedTurn[];
@@ -592,14 +592,14 @@ export class RelayServer {
       activeAgent?.address.toLowerCase() === agentAddress.toLowerCase();
 
     const lastTurn = battle.turns[battle.turns.length - 1];
-    const opponentMessage = lastTurn && lastTurn.agentAddress.toLowerCase() !== agentAddress.toLowerCase()
-      ? lastTurn.message
+    const opponentNarrative = lastTurn && lastTurn.agentAddress.toLowerCase() !== agentAddress.toLowerCase()
+      ? lastTurn.narrative
       : undefined;
 
     return {
       yourTurn,
       turnNumber: battle.turns.length + 1,
-      opponentMessage,
+      opponentNarrative,
       state: battle.state,
       role,
       turns: battle.turns,
@@ -610,7 +610,7 @@ export class RelayServer {
   /** Submit a turn via HTTP (no WebSocket needed) */
   async submitTurnHttp(battleId: string, turn: {
     agentAddress: string;
-    message: string;
+    narrative: string;
     turnNumber: number;
     timestamp: number;
     signature: string;
@@ -628,7 +628,7 @@ export class RelayServer {
     const turnMessage: TurnMessage = {
       battleId,
       agentAddress: turn.agentAddress,
-      message: turn.message,
+      narrative: turn.narrative,
       turnNumber: turn.turnNumber,
       timestamp: turn.timestamp,
     };
@@ -646,7 +646,7 @@ export class RelayServer {
     // Record signed turn
     const signedTurn: SignedTurn = {
       agentAddress: turn.agentAddress,
-      message: turn.message,
+      narrative: turn.narrative,
       turnNumber: turn.turnNumber,
       timestamp: turn.timestamp,
       signature: turn.signature,
@@ -671,7 +671,7 @@ export class RelayServer {
       const secret = (battle.scenarioData?.['secret'] as string) ?? '';
       if (secret) {
         const defenderRole = battle.roles[turn.agentAddress.toLowerCase()];
-        if (defenderRole === 'defender' && turn.message.toLowerCase().includes(secret.toLowerCase())) {
+        if (defenderRole === 'defender' && turn.narrative.toLowerCase().includes(secret.toLowerCase())) {
           const attacker = battle.agents.find(
             (a) => battle.roles[a.address.toLowerCase()] === 'attacker',
           );
@@ -698,7 +698,7 @@ export class RelayServer {
         const senderAddr = turn.agentAddress.toLowerCase();
         for (const [agentAddr, agentSecret] of Object.entries(secrets)) {
           if (agentAddr === senderAddr) continue;
-          if (agentSecret && turn.message.toLowerCase().includes(agentSecret.toLowerCase())) {
+          if (agentSecret && turn.narrative.toLowerCase().includes(agentSecret.toLowerCase())) {
             const winner = battle.agents.find(a => a.address.toLowerCase() === senderAddr);
             const loser = battle.agents.find(a => a.address.toLowerCase() === agentAddr);
             if (winner && loser) {
@@ -713,7 +713,7 @@ export class RelayServer {
           }
         }
         const ownSecret = secrets[senderAddr];
-        if (ownSecret && turn.message.toLowerCase().includes(ownSecret.toLowerCase())) {
+        if (ownSecret && turn.narrative.toLowerCase().includes(ownSecret.toLowerCase())) {
           const loser = battle.agents.find(a => a.address.toLowerCase() === senderAddr);
           const winner = battle.agents.find(a => a.address.toLowerCase() !== senderAddr);
           if (winner && loser) {
@@ -750,7 +750,7 @@ export class RelayServer {
           battleId: battle.id,
           data: {
             turnNumber: battle.turns.length + 1,
-            opponentMessage: turn.message,
+            opponentNarrative: turn.narrative,
           },
         });
       }

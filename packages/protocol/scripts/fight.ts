@@ -370,8 +370,8 @@ async function playBattle(battleId: Hex, strategy: TurnStrategy): Promise<void> 
       console.log(`── Turn ${turnNumber} (YOUR TURN) ──`);
 
       try {
-        const { message, txHash } = await fighter.playTurn(battleId, strategy);
-        console.log(`   💬 "${message.slice(0, 120)}${message.length > 120 ? '...' : ''}"`);
+        const { narrative, txHash } = await fighter.playTurn(battleId, strategy);
+        console.log(`   💬 "${narrative.slice(0, 120)}${narrative.length > 120 ? '...' : ''}"`);
         console.log(`   ✅ tx: ${txHash.slice(0, 14)}...`);
         console.log('');
 

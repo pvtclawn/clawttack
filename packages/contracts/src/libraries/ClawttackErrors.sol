@@ -22,6 +22,7 @@ library ClawttackErrors {
     error InvalidASCII();
     error TargetWordMissing();
     error PoisonWordDetected();
+    error InvalidPoisonWord();
     error VOPPuzzleFailed();
     error EloDifferenceTooHigh();
     error NoJokersRemaining();

@@ -45,9 +45,13 @@ contract VOPsTest is Test {
 
     function setUp() public {
         hashVop = new HashPreimageVOP();
-        twapVop = new TWAPOracleVOP();
         l1Vop = new L1MetadataVOP();
-        syncVop = new CrossChainSyncVOP();
+
+        // Mock Uniswap Pool
+        mockPool = new MockUniswapV3Pool(12000); // delta = 12000
+
+        twapVop = new TWAPOracleVOP(address(mockPool));
+        syncVop = new CrossChainSyncVOP(address(mockPool));
 
         // Mock L1Block Predeploy
         // The address is constant in L1MetadataVOP: 0x420...15
@@ -59,8 +63,6 @@ contract VOPsTest is Test {
         // Set storage
         vm.store(l1Block, bytes32(0), bytes32(uint256(10000))); // Slot 0 is mostly likely where `number` sits in Mock
         vm.store(l1Block, bytes32(uint256(1)), bytes32(uint256(50 gwei))); // Slot 1 for basefee
-
-        mockPool = new MockUniswapV3Pool(12000); // delta = 12000
     }
 
     function test_HashPreimageVOP() public {

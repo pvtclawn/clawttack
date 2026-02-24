@@ -70,8 +70,15 @@ export const ARENA_ABI = [
     type: 'function',
     stateMutability: 'nonpayable',
     inputs: [
-      { name: 'battleId', type: 'bytes32' },
-      { name: 'message', type: 'string' },
+      {
+        name: 'payload',
+        type: 'tuple',
+        components: [
+          { name: 'solution', type: 'uint256' },
+          { name: 'poisonWordIndex', type: 'uint16' },
+          { name: 'narrative', type: 'string' },
+        ],
+      },
     ],
     outputs: [],
   },
@@ -308,12 +315,11 @@ export interface ArenaFighterConfig {
   onTurnBroadcast?: (turn: ArenaTurnBroadcast) => void | Promise<void>;
 }
 
-/** Turn data broadcast after on-chain confirmation */
 export interface ArenaTurnBroadcast {
   battleId: Hex;
   agent: Address;
   turnNumber: number;
-  message: string;
+  narrative: string;
   txHash: Hex;
 }
 
@@ -339,11 +345,10 @@ export interface AcceptChallengeResult {
 
 // --- Strategy Types ---
 
-/** A single turn in the battle transcript */
 export interface TurnRecord {
   turnNumber: number;
   agent: Address;
-  message: string;
+  narrative: string;
   wordFound: boolean;
 }
 
@@ -373,7 +378,7 @@ export interface TurnContext {
  * - Attempt to manipulate the opponent into missing their word
  * - Defend against prompt injection from opponent messages
  */
-export type TurnStrategy = (ctx: TurnContext) => Promise<string>;
+export type TurnStrategy = (ctx: TurnContext) => Promise<{ solution: bigint, poisonWordIndex: number, narrative: string }>;
 
 // --- ArenaFighter Class ---
 
@@ -549,14 +554,14 @@ export class ArenaFighter {
     }
   }
 
-  /** Submit a turn message. Must contain the challenge word for your turn. */
-  async submitTurn(battleId: Hex, message: string): Promise<Hex> {
+  /** Submit a turn. Must contain the challenge word for your turn and correct puzzle solution. */
+  async submitTurn(battleId: Hex, solution: bigint, poisonWordIndex: number, narrative: string): Promise<Hex> {
     try {
       const txHash = await this.withRetry(() => this.walletClient.writeContract({
-        address: this.contractAddress,
+        address: battleId, // In V3, battles are distinct clones
         abi: ARENA_ABI,
         functionName: 'submitTurn',
-        args: [battleId, message],
+        args: [{ solution, poisonWordIndex, narrative }],
         chain: this.walletClient.chain,
         account: this.walletClient.account!,
       }));
@@ -732,7 +737,7 @@ export class ArenaFighter {
             allTurns.push({
               turnNumber: log.args.turnNumber!,
               agent: log.args.agent!,
-              message: log.args.message!,
+              narrative: log.args.message!,
               wordFound: log.args.wordFound!,
             });
           }
@@ -763,7 +768,7 @@ export class ArenaFighter {
       .map((log) => ({
         turnNumber: log.args.turnNumber!,
         agent: log.args.agent!,
-        message: log.args.message!,
+        narrative: log.args.message!,
         wordFound: log.args.wordFound!,
       }))
       .sort((a, b) => a.turnNumber - b.turnNumber);
@@ -785,7 +790,7 @@ export class ArenaFighter {
    * @throws if strategy returns a message without the challenge word
    * @throws ArenaError on contract revert
    */
-  async playTurn(battleId: Hex, strategy: TurnStrategy, opts: { tentativeTxHash?: Hex } = {}): Promise<{ message: string; txHash: Hex }> {
+  async playTurn(battleId: Hex, strategy: TurnStrategy, opts: { tentativeTxHash?: Hex } = {}): Promise<{ narrative: string; txHash: Hex }> {
     const [account] = await this.walletClient.getAddresses();
     if (!account) throw new Error('No account found in walletClient');
 
@@ -795,7 +800,6 @@ export class ArenaFighter {
     if (core.phase === BattlePhase.Active) {
       const currentTurnAddress = await this.whoseTurn(battleId);
       if (currentTurnAddress.toLowerCase() !== account.toLowerCase()) {
-        // Not our turn... check for tentative tx
         if (!opts.tentativeTxHash) {
           throw new ArenaError('NotYourTurn', `Not your turn (current: ${currentTurnAddress})`);
         }
@@ -830,13 +834,13 @@ export class ArenaFighter {
     };
 
     // --- PHASE 1: REASONING (TENTATIVE) ---
-    const message = await strategy(ctx);
+    const { solution, poisonWordIndex, narrative } = await strategy(ctx);
 
-    // Validate: strategy must include the challenge word
-    if (!message.toLowerCase().includes(challengeWord.toLowerCase())) {
+    // Validate: strategy narrative must include the challenge word
+    if (!narrative.toLowerCase().includes(challengeWord.toLowerCase())) {
       throw new Error(
-        `Strategy returned message without challenge word "${challengeWord}". ` +
-        `This would cause a loss. Message: "${message.slice(0, 100)}..."`
+        `Strategy returned narrative without challenge word "${challengeWord}". ` +
+        `This would cause a loss. Narrative: "${narrative.slice(0, 100)}..."`
       );
     }
 
@@ -853,7 +857,7 @@ export class ArenaFighter {
       core = await this.getBattleCore(battleId);
     }
 
-    const txHash = await this.submitTurn(battleId, message);
+    const txHash = await this.submitTurn(battleId, solution, poisonWordIndex, narrative);
 
     // Broadcast turn to real-time channels (Waku, etc.) — fire and forget
     if (this.onTurnBroadcast) {
@@ -863,12 +867,12 @@ export class ArenaFighter {
           battleId,
           agent: broadcastAccount,
           turnNumber,
-          message,
+          narrative,
           txHash,
         })).catch(() => {}); // don't let broadcast errors affect gameplay
       }
     }
 
-    return { message, txHash };
+    return { narrative, txHash };
   }
 }

@@ -1,5 +1,10 @@
 export const CLAWTTACK_BATTLE_ABI = [
   {
+    "type": "constructor",
+    "inputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
     "type": "receive",
     "stateMutability": "payable"
   },
@@ -493,19 +498,14 @@ export const CLAWTTACK_BATTLE_ABI = [
             "internalType": "uint256"
           },
           {
-            "name": "narrative",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "nextVopParams",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
             "name": "poisonWordIndex",
             "type": "uint16",
             "internalType": "uint16"
+          },
+          {
+            "name": "narrative",
+            "type": "string",
+            "internalType": "string"
           }
         ]
       }
