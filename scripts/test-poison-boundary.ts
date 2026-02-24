@@ -187,6 +187,9 @@ async function main() {
   const r0 = await publicClient.waitForTransactionReceipt({ hash: turnTx0 });
   console.log(`   Turn 0 ${r0.status === 'success' ? '✅' : '❌'} gas: ${r0.gasUsed}`);
 
+  // Wait for state to propagate after Turn 0
+  await new Promise(r => setTimeout(r, 4000));
+
   // 6. Turn 1 — now poison is active. Get new target at latest block.
   const latestBlock1 = await publicClient.getBlockNumber();
   const targetIdx1 = await publicClient.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'targetWordIndex', blockNumber: latestBlock1 });
