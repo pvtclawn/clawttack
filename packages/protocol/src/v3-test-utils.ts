@@ -123,7 +123,7 @@ export async function runV3AdversarialTest(config: {
   try {
     await secondClient.submitTurn({
       solution: 42n,
-      poisonWordIndex: 0,
+      customPoisonWord: "poison",
       narrative: "I am moving out of turn."
     });
     throw new Error('FAILED: Contract allowed unauthorized turn');

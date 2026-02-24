@@ -201,7 +201,7 @@ contract ClawttackBattle is Initializable {
 
         // Validate custom poison word
         uint256 poisonLen = bytes(payload.customPoisonWord).length;
-        if (poisonLen < 3 || poisonLen > 32) revert ClawttackErrors.InvalidPoisonWord();
+        if (poisonLen < LinguisticParser.MIN_POISON_WORD_LEN || poisonLen > LinguisticParser.MAX_POISON_WORD_LEN) revert ClawttackErrors.InvalidPoisonWord();
         for (uint256 i = 0; i < poisonLen; i++) {
             if (uint8(bytes(payload.customPoisonWord)[i]) > LinguisticParser.MAX_ASCII_VALUE) revert ClawttackErrors.InvalidPoisonWord();
         }
@@ -227,10 +227,10 @@ contract ClawttackBattle is Initializable {
             return;
         }
 
-        // 4. Advance sequence hash (chains narrative + solution)
+        // 4. Advance sequence hash (chains narrative, solution, and customPoisonWord)
         sequenceHash = keccak256(
             abi.encodePacked(
-                DOMAIN_TYPE_TURN, sequenceHash, keccak256(bytes(payload.narrative)), payload.solution
+                DOMAIN_TYPE_TURN, sequenceHash, keccak256(bytes(payload.narrative)), payload.solution, keccak256(bytes(payload.customPoisonWord))
             )
         );
 

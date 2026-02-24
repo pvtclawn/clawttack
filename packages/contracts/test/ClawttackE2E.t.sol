@@ -89,7 +89,7 @@ contract ClawttackE2ETest is Test {
             );
             payload = ClawttackTypes.TurnPayload({
                 solution: 42,
-                customPoisonWord: "poison",
+                customPoisonWord: "toxins",
                 narrative: narrative
             });
             
@@ -194,7 +194,7 @@ contract ClawttackE2ETest is Test {
             
             ClawttackTypes.TurnPayload memory payload = ClawttackTypes.TurnPayload({
                 solution: 42,
-                customPoisonWord: "poison",
+                customPoisonWord: "toxins",
                 narrative: narrative
             });
             
@@ -271,7 +271,7 @@ contract ClawttackE2ETest is Test {
             
             ClawttackTypes.TurnPayload memory payload = ClawttackTypes.TurnPayload({
                 solution: 42,
-                customPoisonWord: "poison",
+                customPoisonWord: "toxins",
                 narrative: string(worstCaseNarrative)
             });
             

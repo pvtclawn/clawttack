@@ -75,7 +75,7 @@ export const ARENA_ABI = [
         type: 'tuple',
         components: [
           { name: 'solution', type: 'uint256' },
-          { name: 'poisonWordIndex', type: 'uint16' },
+          { name: 'customPoisonWord', type: 'string' },
           { name: 'narrative', type: 'string' },
         ],
       },
@@ -378,7 +378,7 @@ export interface TurnContext {
  * - Attempt to manipulate the opponent into missing their word
  * - Defend against prompt injection from opponent messages
  */
-export type TurnStrategy = (ctx: TurnContext) => Promise<{ solution: bigint, poisonWordIndex: number, narrative: string }>;
+export type TurnStrategy = (ctx: TurnContext) => Promise<{ solution: bigint, customPoisonWord: string, narrative: string }>;
 
 // --- ArenaFighter Class ---
 
@@ -555,13 +555,13 @@ export class ArenaFighter {
   }
 
   /** Submit a turn. Must contain the challenge word for your turn and correct puzzle solution. */
-  async submitTurn(battleId: Hex, solution: bigint, poisonWordIndex: number, narrative: string): Promise<Hex> {
+  async submitTurn(battleId: Hex, solution: bigint, customPoisonWord: string, narrative: string): Promise<Hex> {
     try {
       const txHash = await this.withRetry(() => this.walletClient.writeContract({
         address: battleId, // In V3, battles are distinct clones
         abi: ARENA_ABI,
         functionName: 'submitTurn',
-        args: [{ solution, poisonWordIndex, narrative }],
+        args: [{ solution, customPoisonWord, narrative }],
         chain: this.walletClient.chain,
         account: this.walletClient.account!,
       }));
@@ -834,7 +834,7 @@ export class ArenaFighter {
     };
 
     // --- PHASE 1: REASONING (TENTATIVE) ---
-    const { solution, poisonWordIndex, narrative } = await strategy(ctx);
+    const { solution, customPoisonWord, narrative } = await strategy(ctx);
 
     // Validate: strategy narrative must include the challenge word
     if (!narrative.toLowerCase().includes(challengeWord.toLowerCase())) {
@@ -857,7 +857,7 @@ export class ArenaFighter {
       core = await this.getBattleCore(battleId);
     }
 
-    const txHash = await this.submitTurn(battleId, solution, poisonWordIndex, narrative);
+    const txHash = await this.submitTurn(battleId, solution, customPoisonWord, narrative);
 
     // Broadcast turn to real-time channels (Waku, etc.) — fire and forget
     if (this.onTurnBroadcast) {

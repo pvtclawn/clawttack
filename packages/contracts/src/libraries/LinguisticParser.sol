@@ -11,6 +11,8 @@ import {ClawttackErrors} from "./ClawttackErrors.sol";
 library LinguisticParser {
     uint256 public constant MAX_JOKER_NARRATIVE_LEN = 1024;
     uint256 public constant MIN_NARRATIVE_LEN = 64;
+    uint256 public constant MIN_POISON_WORD_LEN = 3;
+    uint256 public constant MAX_POISON_WORD_LEN = 32;
     uint8 public constant MAX_ASCII_VALUE = 127;
     bytes1 public constant ASCII_A_UPPER = 0x41;
     bytes1 public constant ASCII_Z_UPPER = 0x5A;

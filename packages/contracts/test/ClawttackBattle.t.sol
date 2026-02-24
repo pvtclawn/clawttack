@@ -120,7 +120,7 @@ contract ClawttackBattleTest is Test {
 
         ClawttackTypes.TurnPayload memory payload = ClawttackTypes.TurnPayload({
             solution: 42,
-            customPoisonWord: "poison",
+            customPoisonWord: "ignore",
             narrative: narrative
         });
 

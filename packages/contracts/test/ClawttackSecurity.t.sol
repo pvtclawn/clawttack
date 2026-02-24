@@ -139,7 +139,7 @@ contract ClawttackSecurityTest is Test {
             abi.encodePacked("Long narrative which safely contains the target word: ", target, ", and nothing else.")
         );
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
-            solution: 42, customPoisonWord: "poison",
+            solution: 42, customPoisonWord: "ignore",
             narrative: narrative
                                 });
         vm.prank(player);
@@ -322,7 +322,7 @@ contract ClawttackSecurityTest is Test {
     function test_submitTurn_nonParticipant_reverts() public {
         ClawttackBattle battle = _createAndAccept(0);
         ClawttackTypes.TurnPayload memory p =
-            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "poison", narrative: "x"  });
+            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "ignore", narrative: "x"  });
 
         vm.prank(eve);
         vm.expectRevert(ClawttackErrors.NotParticipant.selector);
@@ -340,7 +340,7 @@ contract ClawttackSecurityTest is Test {
         string memory target = dict.word(targetIdx);
         string memory narrative = string(abi.encodePacked("Long narrative about ", target, " that is quite long."));
         ClawttackTypes.TurnPayload memory p =
-            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "poison", narrative: narrative  });
+            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "ignore", narrative: narrative  });
 
         vm.prank(wrongPlayer);
         vm.expectRevert(ClawttackErrors.UnauthorizedTurn.selector);
@@ -360,7 +360,7 @@ contract ClawttackSecurityTest is Test {
         string memory target = dict.word(targetIdx);
         string memory narrative = string(abi.encodePacked("Long narrative about ", target, " that is quite long."));
         ClawttackTypes.TurnPayload memory p =
-            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "poison", narrative: narrative  });
+            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "ignore", narrative: narrative  });
 
         vm.prank(player);
         vm.expectRevert(ClawttackErrors.TurnDeadlineExpired.selector);
@@ -382,7 +382,7 @@ contract ClawttackSecurityTest is Test {
         string memory target = dict.word(targetIdx);
         string memory narrative0 = string(abi.encodePacked("Long narrative safely referencing the target word: ", target, ", forbidden area."));
         ClawttackTypes.TurnPayload memory p1 = ClawttackTypes.TurnPayload({
-            solution: 42, customPoisonWord: "poison",
+            solution: 42, customPoisonWord: "ignore",
             narrative: narrative0
                                 });
         vm.prank(firstPlayer);
@@ -398,7 +398,7 @@ contract ClawttackSecurityTest is Test {
         string memory target2 = dict.word(targetIdx2);
         string memory narrative2 = string(abi.encodePacked("Long narrative safely including the target word: ", target2, ", as demanded here."));
         ClawttackTypes.TurnPayload memory p2 = ClawttackTypes.TurnPayload({
-            solution: 0, customPoisonWord: "poison",
+            solution: 0, customPoisonWord: "ignore",
             narrative: narrative2
                                 });
         vm.prank(secondPlayer);
@@ -419,7 +419,7 @@ contract ClawttackSecurityTest is Test {
         string memory tWord = dict.word(tidx);
         string memory narrative = string(abi.encodePacked("Long narrative safely featuring the required target word: ", tWord, ", and no other issues."));
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
-            solution: 0, customPoisonWord: "poison", // Any solution should pass since params are empty
+            solution: 0, customPoisonWord: "ignore", // Any solution should pass since params are empty
             narrative: narrative
                                 });
         vm.prank(firstPlayer);
@@ -441,7 +441,7 @@ contract ClawttackSecurityTest is Test {
         string memory narrative = string(abi.encodePacked("Long story safely embedding the required target word: ", tWord, ", nothing more here."));
         bytes memory vopParams = abi.encode("any_salt"); // non-empty, triggers verify on next turn
         ClawttackTypes.TurnPayload memory p1 = ClawttackTypes.TurnPayload({
-            solution: 42, customPoisonWord: "poison",
+            solution: 42, customPoisonWord: "ignore",
             narrative: narrative
                                 });
         vm.prank(firstPlayer);
@@ -453,7 +453,7 @@ contract ClawttackSecurityTest is Test {
         string memory narrative2 =
             string(abi.encodePacked("Another long narrative safely featuring the required word: ", tWord2, ", done now."));
         ClawttackTypes.TurnPayload memory p2 = ClawttackTypes.TurnPayload({
-            solution: 999, customPoisonWord: "poison", // WRONG — MockVOP expects 42
+            solution: 999, customPoisonWord: "ignore", // WRONG — MockVOP expects 42
             narrative: narrative2
                                 });
         vm.prank(secondPlayer);
@@ -478,13 +478,13 @@ contract ClawttackSecurityTest is Test {
 
         // Submit to trigger generation of poison word for turn 1
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
-            solution: 42, customPoisonWord: "poison",
+            solution: 42, customPoisonWord: "ignore",
             narrative: narrative
         });
         vm.prank(firstPlayer);
         battle.submitTurn(p); 
 
-        assertEq(battle.poisonWord(), "poison");
+        assertEq(battle.poisonWord(), "ignore");
     }
 
     // ─── Cancel Battle ──────────────────────────────────────────────────────────
@@ -642,31 +642,30 @@ contract ClawttackSecurityTest is Test {
         address playerA = aFirst ? alice : bob;
         address playerB = aFirst ? bob   : alice;
 
-        // Narrative: > 256 chars (joker territory), always contains ALL 3 words to avoid target miss.
-        // "art agent ignore..." padded to 280 chars.
+        // "artist agent ignore..." padded to 280 chars.
         bytes memory pad = new bytes(250);
         for (uint i = 0; i < 250; i++) pad[i] = "x";
-        // This narrative contains art, agent, and ignore — so it will pass regardless of which word is target
+        // This narrative contains artist, agent, and ignore — so it will pass regardless of which word is target
         // BUT the poison may be set. On turn 0, poison is "" (turn zero), so no poison check.
-        string memory jokerNarrative = string(abi.encodePacked("art agent ignore ", string(pad)));
+        string memory jokerNarrative = string(abi.encodePacked("artist agent ignore ", string(pad)));
 
         // Joker 1 (PlayerA, turn 0) -- no poison on turn 0
         ClawttackTypes.TurnPayload memory p1 = ClawttackTypes.TurnPayload({
-            solution: 42, customPoisonWord: "poison",
+            solution: 42, customPoisonWord: "ignore",
             narrative: jokerNarrative
-                         // set art as poison for playerB
+                         // set artist as poison for playerB
         });
         vm.prank(playerA);
         battle.submitTurn(p1);
 
-        // PlayerB normal turn (turn 1) - art is poison, narrative must include target but not "art"
+        // PlayerB normal turn (turn 1) - artist is poison, narrative must include target but not "artist"
         // Read the actual target for turn 1
         uint16 t1idx = battle.targetWordIndex();
         string memory t1word = dict.word(t1idx);
-        // Build a narrative that won't include "art"
+        // Build a narrative that won't include "artist"
         string memory safeNarrative = string(abi.encodePacked("Long narrative safely containing the required word: ", t1word, ", nothing more here at all."));
         ClawttackTypes.TurnPayload memory p2 = ClawttackTypes.TurnPayload({
-            solution: 42, customPoisonWord: "poison",
+            solution: 42, customPoisonWord: "ignore",
             narrative: safeNarrative
                          // set ignore as poison for playerA next
         });
@@ -675,13 +674,13 @@ contract ClawttackSecurityTest is Test {
 
         // PlayerA joker exhausted (turn 2) -- "ignore" is now the poison for playerA
         // The long ALL-WORDS narrative CONTAINS "ignore" -> PoisonWordDetected
-        // So we need a different long narrative: contains "art"+"agent" but NOT "ignore"
+        // So we need a different long narrative: contains "artist"+"agent" but NOT "ignore"
         // We also need target word for turn 2
         uint16 t2idx = battle.targetWordIndex();
         string memory t2word = dict.word(t2idx);
-        string memory jokerNarrative2 = string(abi.encodePacked("art agent ", t2word, " ", string(pad)));
+        string memory jokerNarrative2 = string(abi.encodePacked("artist agent ", t2word, " ", string(pad)));
         ClawttackTypes.TurnPayload memory p3 = ClawttackTypes.TurnPayload({
-            solution: 42, customPoisonWord: "poison",
+            solution: 42, customPoisonWord: "ignore",
             narrative: jokerNarrative2
                                 });
         vm.prank(playerA);
