@@ -210,9 +210,10 @@ async function main() {
 
   // --- 2. Create a battle ---
   console.log('\n⚔️ Creating battle...');
-  const MAX_TURNS = 12;  // Contract minimum is 12 (v3.1)
+  const STAKE = process.env.BATTLE_STAKE ? BigInt(process.env.BATTLE_STAKE) : 0n;
+  const MAX_TURNS = Number(process.env.BATTLE_MAX_TURNS ?? '12');
   const { battleId, battleAddress, txHash } = await arena.createBattle(clawnId, {
-    stake: 0n,
+    stake: STAKE,
     maxTurns: MAX_TURNS,
     maxJokers: 1,
     baseTimeoutBlocks: 150,  // ~5 min on Base
@@ -221,6 +222,7 @@ async function main() {
   });
   console.log(`  ✅ Battle created: id=${battleId}, address=${battleAddress}`);
   console.log(`  📜 tx: ${txHash}`);
+  if (STAKE > 0n) console.log(`  💰 Stake: ${STAKE} wei (${Number(STAKE) / 1e18} ETH each)`);
 
   // --- 3. ClawnJr accepts ---
   console.log('\n🤝 ClawnJr accepting battle...');
@@ -229,7 +231,7 @@ async function main() {
     walletClient: clawnjrWallet,
     battleAddress,
   });
-  const acceptTx = await battleJr.acceptBattle(clawnjrId, 0n);
+  const acceptTx = await battleJr.acceptBattle(clawnjrId, STAKE);
   console.log(`  ✅ Battle accepted: ${acceptTx}`);
   await publicClient.waitForTransactionReceipt({ hash: acceptTx });
 
