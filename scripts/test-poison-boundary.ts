@@ -45,7 +45,7 @@ const BATTLE_ABI = [
     ] },
   { name: 'submitTurn', type: 'function', stateMutability: 'nonpayable',
     inputs: [{ name: 'payload', type: 'tuple', components: [
-      { name: 'narrative', type: 'string' }, { name: 'solution', type: 'uint256' },
+      { name: 'solution', type: 'uint256' }, { name: 'narrative', type: 'string' },
       { name: 'nextVopParams', type: 'bytes' }, { name: 'poisonWordIndex', type: 'uint16' }
     ]}], outputs: [] },
 ] as const;
@@ -141,10 +141,14 @@ async function main() {
   console.log('   Accepted.');
 
   // Wait a bit for indexing
-  await new Promise(r => setTimeout(r, 2000));
+  await new Promise(r => setTimeout(r, 4000));
 
-  // 3. Get target word for Turn 0
-  const targetIdx = await publicClient.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'targetWordIndex' });
+  // 3. Get target word for Turn 0 — read at latest block to avoid stale data
+  const latestBlock = await publicClient.getBlockNumber();
+  const targetIdx = await publicClient.readContract({ 
+    address: battleAddress, abi: BATTLE_ABI, functionName: 'targetWordIndex',
+    blockNumber: latestBlock,
+  });
   const targetWord = await publicClient.readContract({ address: WORD_DICTIONARY, abi: WORD_ABI, functionName: 'word', args: [targetIdx] });
   const firstMoverA = await publicClient.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'firstMoverA' });
   console.log(`\n   Target word: "${targetWord}" (index ${targetIdx})`);
@@ -178,15 +182,16 @@ async function main() {
     address: battleAddress,
     abi: BATTLE_ABI,
     functionName: 'submitTurn',
-    args: [{ narrative: narrative0, solution: 42n, nextVopParams, poisonWordIndex: poisonIdx }],
+    args: [{ narrative: narrative0, solution: 0n, nextVopParams, poisonWordIndex: poisonIdx }],
   });
   const r0 = await publicClient.waitForTransactionReceipt({ hash: turnTx0 });
   console.log(`   Turn 0 ${r0.status === 'success' ? '✅' : '❌'} gas: ${r0.gasUsed}`);
 
-  // 6. Turn 1 — now poison is active. Get new target.
-  const targetIdx1 = await publicClient.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'targetWordIndex' });
+  // 6. Turn 1 — now poison is active. Get new target at latest block.
+  const latestBlock1 = await publicClient.getBlockNumber();
+  const targetIdx1 = await publicClient.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'targetWordIndex', blockNumber: latestBlock1 });
   const targetWord1 = await publicClient.readContract({ address: WORD_DICTIONARY, abi: WORD_ABI, functionName: 'word', args: [targetIdx1] });
-  const poisonIdx1 = await publicClient.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'poisonWordIndex' });
+  const poisonIdx1 = await publicClient.readContract({ address: battleAddress, abi: BATTLE_ABI, functionName: 'poisonWordIndex', blockNumber: latestBlock1 });
   const poisonWord1 = await publicClient.readContract({ address: WORD_DICTIONARY, abi: WORD_ABI, functionName: 'word', args: [poisonIdx1] });
   console.log(`\n5. Turn 1 — target: "${targetWord1}", poison: "${poisonWord1}"`);
 
@@ -240,7 +245,7 @@ async function main() {
         address: battleAddress,
         abi: BATTLE_ABI,
         functionName: 'submitTurn',
-        args: [{ narrative: narrativeSubstring, solution: 42n, nextVopParams, poisonWordIndex: 0 }],
+        args: [{ narrative: narrativeSubstring, solution: 0n, nextVopParams, poisonWordIndex: 0 }],
       });
       const r1 = await publicClient.waitForTransactionReceipt({ hash: turnTx1 });
       console.log(`   Turn 1 ${r1.status === 'success' ? '✅' : '❌'} gas: ${r1.gasUsed}`);
