@@ -106,10 +106,10 @@ describe('HTTP Turn API', () => {
     });
 
     // Submit turn 1 (Agent A)
-    const message = 'Hello defender!';
+    const narrative = 'Hello defender!';
     const timestamp = Date.now();
     const signature = await signTurn(
-      { battleId, agentAddress: walletA.address, message, turnNumber: 1, timestamp },
+      { battleId, agentAddress: walletA.address, narrative, turnNumber: 1, timestamp },
       walletA.privateKey,
     );
 
@@ -118,7 +118,7 @@ describe('HTTP Turn API', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         agentAddress: walletA.address,
-        message,
+        narrative,
         turnNumber: 1,
         timestamp,
         signature,
@@ -128,9 +128,9 @@ describe('HTTP Turn API', () => {
 
     // Now it should be Agent B's turn
     res = await app.request(`/api/battles/${battleId}/turn?agent=${walletB.address}`);
-    const status = await res.json() as { yourTurn: boolean; opponentMessage: string };
+    const status = await res.json() as { yourTurn: boolean; opponentNarrative: string };
     expect(status.yourTurn).toBe(true);
-    expect(status.opponentMessage).toBe('Hello defender!');
+    expect(status.opponentNarrative).toBe('Hello defender!');
   });
 
   it('should reject turn from wrong agent', async () => {
@@ -149,10 +149,10 @@ describe('HTTP Turn API', () => {
     });
 
     // Agent B tries to go first
-    const message = 'I go first!';
+    const narrative = 'I go first!';
     const timestamp = Date.now();
     const signature = await signTurn(
-      { battleId, agentAddress: walletB.address, message, turnNumber: 1, timestamp },
+      { battleId, agentAddress: walletB.address, narrative, turnNumber: 1, timestamp },
       walletB.privateKey,
     );
 
@@ -161,7 +161,7 @@ describe('HTTP Turn API', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         agentAddress: walletB.address,
-        message,
+        narrative,
         turnNumber: 1,
         timestamp,
         signature,

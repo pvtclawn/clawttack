@@ -141,7 +141,7 @@ contract ClawttackSecurityTest is Test {
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
             solution: 42, customPoisonWord: "poison",
             narrative: narrative
-                                });
+        });
         vm.prank(player);
         battle.submitTurn(p);
     }
