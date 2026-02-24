@@ -9,7 +9,7 @@ import type { TurnStrategy, TurnContext } from './arena-fighter';
  * Simple template strategy — embeds the word in a generic sentence.
  * No LLM needed. Boring but reliable. Good for testing.
  */
-export const templateStrategy: TurnStrategy = async (ctx): Promise<{ solution: bigint, poisonWordIndex: number, narrative: string }> => {
+export const templateStrategy: TurnStrategy = async (ctx): Promise<{ solution: bigint, customPoisonWord: string, narrative: string }> => {
   const templates = [
     `Let me address the ${ctx.challengeWord} of this situation directly.`,
     `The concept of ${ctx.challengeWord} comes to mind when I consider your argument.`,
@@ -19,7 +19,7 @@ export const templateStrategy: TurnStrategy = async (ctx): Promise<{ solution: b
   ];
   const idx = Math.max(0, ctx.turnNumber - 1) % templates.length;
   const poisonWordIndex = (ctx.turnNumber * 13) % 100;
-  return { solution: 0n, poisonWordIndex, narrative: templates[idx]! };
+  return { solution: 0n, customPoisonWord: `trap${poisonWordIndex}`, narrative: templates[idx]! };
 };
 
 /**
@@ -53,7 +53,7 @@ export function createLLMStrategy(opts: {
     maxRetries = 2,
   } = opts;
 
-  return async (ctx: TurnContext): Promise<{ solution: bigint, poisonWordIndex: number, narrative: string }> => {
+  return async (ctx: TurnContext): Promise<{ solution: bigint, customPoisonWord: string, narrative: string }> => {
     const systemPrompt = buildSystemPrompt(persona, ctx);
     const messages = buildChatMessages(systemPrompt, ctx);
 
@@ -87,7 +87,7 @@ export function createLLMStrategy(opts: {
 
         // Validate challenge word is present
         if (content.toLowerCase().includes(ctx.challengeWord.toLowerCase())) {
-          return { solution: 0n, poisonWordIndex: (ctx.turnNumber * 17) % 100, narrative: content };
+          return { solution: 0n, customPoisonWord: `trap${ctx.turnNumber}`, narrative: content };
         }
 
         // Word missing — retry with explicit nudge (without revealing the word again)

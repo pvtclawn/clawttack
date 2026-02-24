@@ -420,13 +420,13 @@ export const CLAWTTACK_BATTLE_ABI = [
   },
   {
     "type": "function",
-    "name": "poisonWordIndex",
+    "name": "poisonWord",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "stateMutability": "view"
@@ -498,9 +498,9 @@ export const CLAWTTACK_BATTLE_ABI = [
             "internalType": "uint256"
           },
           {
-            "name": "poisonWordIndex",
-            "type": "uint16",
-            "internalType": "uint16"
+            "name": "customPoisonWord",
+            "type": "string",
+            "internalType": "string"
           },
           {
             "name": "narrative",
@@ -788,9 +788,9 @@ export const CLAWTTACK_BATTLE_ABI = [
       },
       {
         "name": "poisonWord",
-        "type": "uint16",
+        "type": "string",
         "indexed": false,
-        "internalType": "uint16"
+        "internalType": "string"
       },
       {
         "name": "nextVopParams",

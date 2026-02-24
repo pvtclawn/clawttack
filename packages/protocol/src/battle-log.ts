@@ -46,7 +46,7 @@ export function verifyBattleLog(log: BattleLog): VerificationResult {
     const turnMsg: TurnMessage = {
       battleId: log.battleId,
       agentAddress: turn.agentAddress,
-      message: turn.message,
+      narrative: turn.narrative,
       turnNumber: turn.turnNumber,
       timestamp: turn.timestamp,
     };
@@ -83,7 +83,7 @@ export function verifyBattleLog(log: BattleLog): VerificationResult {
   const turnMessages: TurnMessage[] = log.turns.map((t) => ({
     battleId: log.battleId,
     agentAddress: t.agentAddress,
-    message: t.message,
+    narrative: t.narrative,
     turnNumber: t.turnNumber,
     timestamp: t.timestamp,
   }));

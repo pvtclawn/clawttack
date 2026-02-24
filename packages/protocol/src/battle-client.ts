@@ -17,7 +17,7 @@ export interface BattleClientConfig {
 
 export interface TurnParams {
   solution: bigint;
-  poisonWordIndex: number;
+  customPoisonWord: string;
   narrative: string;
   anchoredBlockNumber?: bigint;
   anchoredBlockHash?: Hex;
@@ -102,7 +102,7 @@ export class BattleClient {
       functionName: 'submitTurn',
       args: [{
         solution: params.solution,
-        poisonWordIndex: params.poisonWordIndex,
+        customPoisonWord: params.customPoisonWord,
         narrative: params.narrative
       }],
       chain: this.config.walletClient.chain,
@@ -300,7 +300,7 @@ export class BattleClient {
     const { currentTurn, lastHash, deadlineBlock } = await this.getState(anchoredBlock.number);
 
     // 1. Linguistic validation
-    const [targetIdx, poisonIdx] = await Promise.all([
+    const [targetIdx, currentPoison] = await Promise.all([
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
@@ -310,7 +310,7 @@ export class BattleClient {
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'poisonWordIndex',
+        functionName: 'poisonWord',
         blockNumber: anchoredBlock.number
       })
     ]);
@@ -322,7 +322,7 @@ export class BattleClient {
       args: [
         params.narrative,
         targetIdx as number,
-        poisonIdx as number, 
+        currentPoison as string, 
         currentTurn === 0
       ],
       blockNumber: anchoredBlock.number
