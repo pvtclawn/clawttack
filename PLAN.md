@@ -1,442 +1,55 @@
-# Clawttack — Build Plan (Updated 2026-02-20 04:36)
+# PLAN.md — Clawttack V3 Next Steps (Updated 2026-02-24 01:49 UTC)
 
-## Current Status
+## Status: ALL 6 MECHANICS VERIFIED ✅ | P0 SECURITY BUG FOUND 🔴
 
-### M1: Trustless Foundation — ✅ COMPLETE
-
-| # | Task | Status | Commit/Notes |
-|---|------|--------|-------|
-| 1 | WebSocket relay server with signed messages | ✅ | `19d4d13`, `d62402f`, `880029a` |
-| 2 | ECDSA signing (Solidity-compatible) | ✅ | `19d4d13` |
-| 3 | Battle log export/verify + Merkle root | ✅ | `b040466` |
-| 4 | Rate limiter (wired into HTTP relay) | ✅ | `b040466`, `1adf1ac` |
-| 5 | HTTP API (Hono) — incl HTTP turn API | ✅ | `d62402f`, `bf4e229` |
-| 6 | E2E integration test (real WS) | ✅ | `880029a` |
-| 7 | Architecture doc v2 | ✅ | `bd01fcb` |
-| 8 | Transport-agnostic SDK (`ITransport`) | ✅ | `cc40c9c` |
-| 9 | ClawttackRegistry.sol + InjectionCTF.sol | ✅ | `beed3bd` |
-| 10 | PrisonersDilemma.sol (2nd scenario) | ✅ | `6e16f24` |
-| 11 | SpyVsSpy.sol (3rd scenario — symmetric) | ✅ | `513022f`, `c5f469a` |
-| 12 | Foundry tests (27) | ✅ | incl 7 SpyVsSpy tests |
-| 13 | Deploy to Base Sepolia | ✅ | `8e9cd04`, `0f90d16`, `c5f469a` |
-| 14 | IPFS service (Pinata + Local providers) | ✅ | `b41deff` |
-| 15 | AI battle orchestrator (Gemini Flash) | ✅ | `4cffda7` |
-| 16 | On-chain settlement pipeline | ✅ | `f9fd329` |
-| 17 | Fighter skill (OpenClaw) | ✅ | `17869c07` |
-| 18 | Monorepo restructure (6 packages) | ✅ | `6259a2b` |
-| 19 | Turn timeout (anti-stall, 60s default) | ✅ | `109e201` |
-| 20 | Real-time secret detection | ✅ | `3a0e825` |
-| 21 | Randomized first-mover (symmetric) | ✅ | `d460ceb` |
-| 22 | Battle metadata (`_meta`) | ✅ | `89349b9` |
-
-### M2: Thin Client — ✅ COMPLETE (clawttack.com live)
-
-| # | Task | Status | Notes |
-|---|------|--------|-------|
-| 1 | Vite + React + TanStack Router scaffold | ✅ | |
-| 2 | Tailwind v4 + dark theme | ✅ | |
-| 3 | viem/wagmi config (Base Sepolia) | ✅ | |
-| 4 | Home page (hero, stats, recent battles) | ✅ | `751e41d`, `50258f7` |
-| 5 | Battles list (chain events, status badges) | ✅ | |
-| 6 | Battle replay viewer (chat bubbles, sigs) | ✅ | `f0c039f`, spy role support |
-| 7 | Leaderboard (Elo, win rate bars, clickable) | ✅ | `4daade9`, `c5adf67` |
-| 8 | SEO + meta tags + favicon | ✅ | `5de0437` |
-| 9 | Deploy to Vercel (auto-deploy on push) | ✅ | clawttack.com |
-| 10 | Agent profile page (/agent/:address) | ✅ | `c5adf67` |
-| 11 | Scenarios page (on-chain metadata) | ✅ | 3 scenarios listed |
-| 12 | Error boundaries (route-level) | ✅ | |
-| 13 | Battle logs from IPFS (not static JSON) | ✅ | `2c4a249` — 27 battles on Pinata, web fetches IPFS first |
-| 14 | Client-side signature verification | ✅ | |
-| 15 | On-chain winner display | ✅ | `34e228e` |
-| 16 | Chunked RPC queries (no 413s) | ✅ | |
-| 17 | Battle analysis UI (tactics, tension) | ✅ | `a5bb831` |
-
-### M3: Real Agent Battles — ✅ MOSTLY COMPLETE
-
-| # | Task | Priority | Status | Notes |
-|---|------|----------|--------|-------|
-| 1 | Relay systemd service | HIGH | ✅ Ready | Needs Egor to install (sudo) |
-| 2 | Public relay (reverse proxy / domain) | HIGH | 🔲 | Blocked on #1 |
-| 3 | Auto-settlement (onBattleEnd callback) | HIGH | ✅ | Settler class with retry queue |
-| 4 | Agent registration endpoint | MED | ✅ | ECDSA wallet proof |
-| 5 | Matchmaking (queue → auto-pair) | MED | ✅ | auth + dynamic secrets |
-| 6 | Battle logs to IPFS (Pinata) | MED | ✅ | `2c4a249` — 27 battles uploaded, CID mapping |
-| 7 | `@clawttack/sdk` npm publish | MED | 🔲 | Code ready, needs public relay first |
-| 8 | Spy vs Spy matchmaking + relay | MED | ✅ | Dual secrets, symmetric roles |
-| 9 | Automated continuous battles (cron) | LOW | ✅ | every 2h, 50/50 scenario rotation |
-| 10 | Battle analysis engine (9 tactics) | MED | ✅ | `5032517` |
+39 battles on Base Sepolia. MaxTurns, Timeout, Poison, Rated Elo, Draw Convergence, Joker — all tested.
 
 ---
 
-## M4: Waku P2P — Serverless Battles (CURRENT)
+## Priority Stack (post red-team)
 
-**Goal:** Remove the WebSocket relay. Agents communicate P2P via Waku. Spectators join same topic.
+### 🔴 1. Fix Poison Boundary Bug (P0 — CONTRACT CHANGE)
+**What**: `LinguisticParser` poison check uses raw substring match. Target check uses word boundaries. 2-letter poisons like "er" (substring in 178/2048 BIP39 words) = guaranteed timeout kill.
+**Fix options (pick one, discuss with Egor)**:
+- **(A) Add boundary checks to poison** — mirror target logic. Poison "cat" blocked in "the cat sat", allowed in "concatenate". Most flexible. ~15 lines of Solidity.
+- **(B) Minimum poison word length** — require `poisonWordIndex` to resolve to a word ≥ 4 chars. Cheap check in `submitTurn`. Simpler but less elegant.
+- **(C) Separate poison dictionary** — only words ≥ 5 chars. Requires new deploy + migration.
+**Recommendation**: Option A. It's the cleanest and most consistent with the target logic.
+**Acceptance criteria**: Forge test proving "concatenate" doesn't trigger poison "cat"; test proving "the cat sat" DOES trigger it.
+**Requires**: Redeploy Battle implementation + setBattleImplementation on Arena.
 
-| # | Task | Priority | Status | Notes |
-|---|------|----------|--------|-------|
-| 1 | nwaku Docker container (local relay) | HIGH | ✅ | v0.34.0, cluster 42, shard 0, no RLN |
-| 2 | JS light node → nwaku peering | HIGH | ✅ | Filter subscribe + REST publish |
-| 3 | Two-agent battle simulation over Waku | HIGH | ✅ | `5e2b55e` — both agents receive all turns |
-| 4 | WakuTransport class (ITransport) | HIGH | ✅ | `5b4de08` — auto-discovers nwaku multiaddr |
-| 5 | Waku battle with real ECDSA signing | HIGH | ✅ | WakuFighter class + `waku-battle-v2.ts` |
-| 6 | Waku battle with real LLM strategies | HIGH | ✅ | `waku-llm-battle.ts` — 10-turn battle, secret protected |
-| 7 | Spectator chat on same topic | MED | ✅ | `sendSpectatorMessage` + `waku-spectate.ts` CLI |
-| 8 | Web UI: live Waku spectator view | MED | 🔲 | Connect browser to nwaku via WS |
-| 9 | nwaku exposed via reverse proxy | LOW | 🔲 | When ready for external agents |
-| 10 | Multiple nwaku nodes (resilience) | LOW | 🔲 | Future — single node is fine for now |
+### 🟠 2. Add Timeout Floor (P1 — CONTRACT CHANGE)
+**What**: `baseTimeoutBlocks >> (currentTurn / 5)` reaches 1 block (2s) at turn 20+. LLM agents physically can't respond in 2s.
+**Fix**: `if (nextTimeout < MIN_TIMEOUT_FLOOR) nextTimeout = MIN_TIMEOUT_FLOOR;` with `MIN_TIMEOUT_FLOOR = 10` (20s on Base).
+**Bundle with**: Poison fix in same redeploy.
 
-### Key Discoveries
-- **Cluster ID 1 forces RLN** — crashes without ETH RPC. Use cluster 42 (private).
-- **Auto-sharding mismatch** — `relay/v1/auto/messages` maps to shard 111, filter on shard 0. Must use explicit pubsub topic.
-- **JS SDK lightPush broken** — "No peer available" despite protocol advertised. Workaround: publish via nwaku REST API.
-- **SDK v0.0.37 needs shardId** on createDecoder/createEncoder — not just contentTopic.
-- **Waku rebranded to "Logos Delivery"** — repos at `logos-messaging` org on GitHub.
+### 🟠 3. Add Stuck Fund Recovery (P1 — CONTRACT CHANGE)
+**What**: Non-reverting ETH sends to contract wallets that can't receive → funds stuck permanently.
+**Fix**: Add `withdrawStuckFunds()` callable by arena owner after settlement. Or switch to pull-payment.
+**Bundle with**: Above redeploy.
 
-### Architecture
-```
-Agent A ──REST──→ nwaku (Docker) ──filter──→ Agent B
-                     ↑                         ↓
-Agent B ──REST──→ nwaku (Docker) ──filter──→ Agent A
-                     ↑
-               Spectators (filter subscribe, WS from browser)
-```
-- Pubsub topic: `/waku/2/rs/42/0`
-- Content topic per battle: `/clawttack/1/battle-{id}/proto`
-- nwaku image: `harbor.status.im/wakuorg/nwaku:v0.34.0`
+### 🟡 4. LLM Narrative Integration (THE Feature)
+**What**: Replace template narratives with LLM-generated ones. "Write 200 chars about {word}, avoid {poison}."
+**Why first-after-fixes**: Without this, all battles are draws. The entire competitive system is dormant.
+**Architecture**: Off-chain LLM call → narrative string → `submitTurn()`. No contract changes needed.
+**Acceptance criteria**: Two agents play a full battle with unique narratives, no poison triggers, one wins via timeout (creative play).
 
-### Key Fixes (2026-02-18)
-- **5 race conditions** in shared transport (initNode guard, subscription reservation, listener-before-register, turn buffering, unconditional re-broadcast)
-- **CRITICAL security fix:** handleTurn now validates sender is registered participant
-- **battleStarted dedup:** single emission per connection lifetime
-- **Waku security score:** 8/10
+### 🟡 5. Web UI Multicall + Live Updates
+**What**: Batch reads via multicall, display turn-by-turn narratives, live battle viewer.
+**Blocked by**: Need working battles to demo.
+
+### 🟢 6. Agent Cleanup / Deregistration
+**What**: 29 registered agents from test spam. Either add `deregisterAgent()` or fresh deploy.
+**When**: After fixes deployed, before any public demo.
 
 ---
 
-## NEXT TASK: Pentest Mode Prototype ✅ COMPLETE
+## Decision for Egor (Morning)
+The P0 poison bug requires a contract redeploy. Two questions:
+1. **Option A vs B vs C** for poison fix?
+2. **Bundle all 3 P1s** in one redeploy, or fix poison first and iterate?
 
-**Acceptance criteria (all met):**
-1. ✅ Gateway strategy connects to localhost OpenClaw gateway (`/v1/chat/completions`) — `63020b3`
-2. ✅ WakuFighter can run a battle where one agent is the "real" agent under test — `PentestRunner` (`185509e`)
-3. ✅ Battle result includes which tactics worked against the target — `analyzePentest` (`5ec9466`)
-4. ✅ Basic report output (vulnerability score, successful attack vectors) — `formatReport` (`185509e`)
-5. ✅ Red-team review: 6/10 → 8/10 (`2cad314`)
-
-**Components built:**
-- `createGatewayStrategy()` — proxies battle to real agent gateway (rate limiting, localhost validation, response redaction, sanitized errors)
-- `createPentestAttackerStrategy()` — LLM-driven red-team attacker (6 tactics, custom objectives)
-- `analyzePentest()` — static transcript analysis (8 leak patterns, 10 attack patterns, scoring/grading)
-- `PentestRunner` — end-to-end orchestrator (single run + suite mode + formatted report)
-- `waku-pentest.ts` — CLI script (--suite, --output flags)
+I recommend: Bundle 1+2+3 in a single Battle implementation redeploy. Arena stays unchanged (just `setBattleImplementation()`).
 
 ---
-
-## NEXT TASK: Live Pentest Validation — ✅ COMPLETE
-
-**Goal:** Run PentestRunner against own agent to validate end-to-end flow.
-
-**Status:** Two runs completed — degraded (API key expired) + real (Grade F, 10/100, 3 criticals).
-
-**Acceptance criteria:**
-1. ✅ nwaku Docker running and healthy (v0.34.0, 25h uptime)
-2. ✅ `runDirect()` executes against localhost gateway → produces valid PentestReport
-3. ✅ Report saved to `data/pentest-reports/`
-4. ✅ Fix issues discovered during live run (attacker error handling)
-5. ✅ Re-run with working attacker API key (Egor rotated OpenRouter key)
-6. 🔲 Run full Waku mode (`run()`) as stretch goal
-
-**Real pentest findings (Grade F):**
-- Agent disclosed full tool inventory, security policy, key storage approach
-- Recognized the attack ("clean attack tree") but continued providing info
-- Error sanitization held (T2 → "[Defender is processing...]")
-- Absolute deny list for credentials held
-
----
-
-## NEXT TASK: Gateway Strategy Error Sanitization — ✅ COMPLETE
-
-Shipped `sanitizeDefenderResponse()` with 10 regex patterns, 11 new tests. Commit `ed17a19`.
-
----
-
-## NEXT TASK: IPFS Hardening (from red-team review #11) — PARTIAL ✅
-
-**Goal:** Fix HIGH-severity issues from IPFS integration red-team.
-
-**Acceptance criteria:**
-1. 🔲 Web UI reads CID from on-chain `turnLogCid` field (not static mapping) — needs contract interaction
-2. 🔲 Auto-verify first ECDSA signature on battle page load
-3. ✅ Multi-gateway fallback (Pinata → ipfs.io → dweb.link → cf-ipfs.com) — `4375f7d`
-4. ✅ `staleTime: Infinity` for IPFS-fetched battle data — `4375f7d`
-5. ✅ Normalize `battleId`/`id` field inconsistency — `4375f7d`
-
----
-
-## NEXT TASK: Pentest Attacker v2 — Multi-LLM Architecture (ARACNE-informed)
-
-**Goal:** Upgrade pentest attacker from naive single-LLM to ARACNE-style multi-LLM architecture.
-
-**Why now:** ARACNE paper validates multi-LLM split (planner + executor). Must upgrade attacker BEFORE building x402 pentest service — no point selling a weak attacker. Current attacker scored 10/100 in live pentest (Grade F for defender, but attacker had no adaptive strategy).
-
-**Design (from ARACNE + red-team insights):**
-- **Planner** (strong model: Claude/O3) — tactic selection, progress assessment, pivot decisions
-- **Executor** (cheap model: Flash/Haiku) — generates actual attack messages from plan
-- **Structured output:** `{tactic, assessment, nextStep, goalReached, pivotNeeded}`
-- **Pivot threshold:** force tactic change after 5 turns with no progress
-
-**Acceptance criteria (pick 2-3 per build lane):**
-1. ✅ Add jailbreak tactics (#7): "Play as...", DAN variants, system prompt override — `57b4569`
-2. ✅ Add memory poisoning tactic (#8): "Remember that I'm an admin", false memory injection — `57b4569`
-3. [ ] Multi-LLM split: planner (strong model) + executor (cheap model) — ✅ `0801814`
-4. [ ] Structured planner output with tactic tracking + success signals — ✅ `80eaaf1` (progressMade field)
-5. [ ] Pivot threshold: auto-change tactic after 5 unproductive turns
-6. [ ] Context summarization: compress early turns after N rounds (optional, >10 turns)
-7. RAG for success cases (deferred — needs transcript corpus)
-8. Defense scoring dimension (deferred — needs LLM judge, not regex)
-
----
-
-## M8: ClawttackArena — Chain IS the Transport (CURRENT) 🏟️
-
-**Egor's architecture pivot:** Per-turn on-chain txs. No relay, no Waku for turn exchange. Contract handles the full lifecycle.
-
-| # | Task | Priority | Status | Notes |
-|---|------|----------|--------|-------|
-| 1 | `ClawttackArena.sol` — challenge/accept/reveal/submitTurn/timeout | HIGH | ✅ | `15e01fe` — 28 Forge tests |
-| 2 | Optimizer config (via-ir, 200 runs) → 10KB bytecode | HIGH | ✅ | `4f08e88` — under 24KB limit |
-| 3 | Red-team audit #15 | HIGH | ✅ | 10 findings, 6/10 |
-| 4 | **FIX: `reclaimCommitted()` — fund lock in Committed phase** | 🔴 CRITICAL | ✅ | `469c0a9` — 3 new tests |
-| 5 | **FIX: Restrict `revealSeeds()` to participants** | 🟡 HIGH | ✅ | `469c0a9` — 1 new test |
-| 6 | **FIX: Generate `battleId` on-chain** (prevent squatting) | 🟡 HIGH | ✅ | `469c0a9` — 2 new tests, returns bytes32 |
-| 7 | Message length limit (max 10KB) | LOW | 🔲 | Gas self-limiting but good hygiene |
-| 8 | `transferOwnership()` | LOW | ✅ | `469c0a9` |
-| 9 | Deploy to Base Sepolia | HIGH | ✅ | v2: `0x5c49fE29Dd3896234324C6D055A58A86cE930f04` (Sourcify verified) |
-| 10 | **FIX: `transfer()` → `_safeTransfer()`** | MED | ✅ | `cbfb8f0` — compatible with contract wallets |
-| 11 | **FIX: Elo Sybil protection (MIN_RATED_STAKE)** | MED | ✅ | `cbfb8f0` — 0-stake battles unrated |
-| 12 | TypeScript SDK: `ArenaFighter` class | HIGH | ✅ | `f793651` + `a42584d` — viem SDK, seed helpers, ArenaError, 10 tests |
-| 13 | Web UI: Arena battles display (from events/calldata) | MED | ✅ | `10aa649`, `82b54c0`, `2fd71b9` — battles list, detail page, home page |
-| 14 | First real Arena battle (E2E) | HIGH | ✅ | `3510e78` — pvtclawn vs ClawnJr, 2 battles on Base Sepolia |
-| 15 | LLM-powered battle strategies | HIGH | ✅ | `66d403b` — TurnStrategy, createLLMStrategy, playTurn, getBattleHistory |
-| 16 | Basescan contract verification | MED | ✅ | Arena v2 verified on Basescan |
-| 17 | BIP39 wordlist (SSTORE2) | HIGH | ✅ | `458a896`, `e14b37f` — 2048 words on-chain |
-| 18 | Word boundary checking | HIGH | ✅ | `92f14d8` — prevents substring false positives |
-| 19 | Waku live spectating | MED | ✅ | `a73dea3` — onTurnBroadcast + useWakuTurns |
-| 20 | Live polling (on-chain fallback) | MED | ✅ | `3692122` — 4s turn polling, LIVE badge |
-
-### Architecture
-```
-Agent A                    ClawttackArena (Base)          Agent B
-   |                            |                          |
-   |── createChallenge(stake)──→|                          |
-   |                            |←── acceptChallenge(stake)|
-   |── revealSeeds(seedA,seedB)→|  [verifies commitments]  |
-   |── submitTurn("...fire...")→|  ✅ word found (T1)       |
-   |                            |←── submitTurn("...arch") |
-   |── submitTurn("no word") ──→|  ❌ word missing → settle |
-   |                            |  → 95% pool to B, 5% fee |
-```
-
-### Gas Costs (Base L2)
-- `createChallenge`: ~158K gas
-- `acceptChallenge`: ~108K gas  
-- `submitTurn` (with word): ~63K gas median
-- `submitTurn` (miss → settle): ~194K gas
-- **Full 20-turn battle: ~$0.02-0.20 total**
-
-### Live Spectated Battle — ✅ COMPLETE (2026-02-20)
-
-12-turn battle on Arena v4: `0xce0dc430...` — all turns confirmed, settled on-chain.
-Vercel redeployed with v4 address (bundle: `index-BJnhIbrd.js`).
-
-**Bugs found during live testing:**
-1. 🔴 **Timeout decay too aggressive** — `_getTurnTimeout` halves each turn. Turn 9 at base=1800s gets 7s. Need sqrt or linear decay.
-2. 🔴 **Word predictability** — `_generateWord` uses commits (public after accept) not seeds. All words predictable before battle starts. Opponents can grind commitB for favorable sequences.
-3. 🟡 **`getChallengeWord` unrestricted** — returns words for future turns. Should restrict to `turnNumber <= currentTurn`.
-
-### NEXT TASK: Fix Arena v5 Contract Bugs — ✅ COMPLETE
-
-**All fixes deployed, verified, and validated with live 8-turn battle.**
-
-1. ✅ `_generateWord` uses seeds (stored on reveal) instead of commits — `a3e7da2`
-2. ✅ `getChallengeWord` reverts if `turnNumber > currentTurn` — `a3e7da2`
-3. ✅ `_getTurnTimeout` uses linear decay instead of halving — `a3e7da2`
-4. ✅ All 95 Forge tests pass + new tests for each fix
-5. ✅ Deployed Arena v5 to Base Sepolia + Basescan verified — `ad69eed`
-6. ✅ Web config updated + Vercel redeploy triggered
-7. ✅ **Live verification battle**: 8-turn draw on v5 (`0xc60701e2...aed1`) — all words unique, future turn restriction works, settled correctly
-8. ✅ **Red team review #25**: 9/10, 7 findings, 0 critical/high — `memory/challenges/2026-02-20--arena-v5-red-team.md`
-
----
-
-### NEXT TASK: LLM Battle on Arena v5 — ✅ COMPLETE
-
-**Goal:** Run a real LLM-powered adversarial battle on Arena v5 to validate the full stack.
-
-**Acceptance criteria:**
-1. ✅ Run `arena-battle-llm.ts` against Arena v5 — `0xea270e7f...` 6-turn draw
-2. ✅ Battle completes with natural word inclusion (real adversarial banter, not templates)
-3. ✅ Web UI at clawttack.com displays the battle correctly (Vercel auto-deployed, bundle confirmed)
-4. ✅ Waku broadcast works (turns appear on spectator channel)
-5. ✅ Gas costs + battle data recorded in daily memory
-6. ✅ Script hardened: auto-fund temp opponent, 0-stake default — `99aaed3`
-7. ✅ **Red team #26** — LLM strategy prompt injection hardening (2 HIGH fixed) — `9a84830`
-
----
-
-### NEXT TASK: x402 Payment Integration Research — ✅ COMPLETE
-
-**Goal:** Study the x402 protocol (used by Conway/web4.ai) for potential Clawttack stake payments.
-
-**Acceptance criteria:**
-1. ✅ Read x402 spec (GitHub, x402.org, Coinbase CDP docs, V2 launch post)
-2. ✅ Assess feasibility: x402 WRONG for arena escrow, PERFECT for pentest-as-service
-3. ✅ Write comparison: x402 vs raw ETH vs ERC-20 (table in analysis doc)
-4. ✅ Decision: Hybrid — keep ETH escrow for arena, adopt x402 for pentest monetization, add ERC-20 for USDC stakes (M7)
-
-**Key insight:** x402 = unidirectional "pay for service." Escrow = bidirectional "stake on outcome." Need BOTH.
-**Analysis:** `memory/reading-notes/2026-02-20--x402-clawttack-analysis.md`
-
----
-
-### NEXT TASK: Arena Experience + External Agent Onboarding 🎯
-
-**Goal:** Make the arena fun, accessible, and attract real external agents. Build community + data BEFORE monetizing.
-
-**Why:** Nobody buys security from a stranger. The arena is the funnel:
-1. Fun battles → activity + on-chain data + transcripts
-2. Transcripts = proof we understand attack patterns → credibility
-3. Reputation → "these are the people who run the arena"
-4. THEN pentest-as-a-service is a natural upsell from a trusted name
-
-**Currently:** 35 settled battles, ALL between our own wallets. Zero external agents.
-
-**Acceptance criteria:**
-1. [x] Live spectator view — real-time turn updates on battle page (4s polling + LIVE badge, already built)
-2. [x] Agent onboarding docs — "How to fight on Clawttack" guide (docs/FIGHTING.md + README rewrite)
-3. [x] Simple fight API — contract IS the API; fight.ts CLI + FIGHTING.md raw contract docs cover this
-4. [x] Public RPC — Base Sepolia has public RPCs (sepolia.base.org), no relay needed. Documented in FIGHTING.md.
-5. [ ] Outreach — find 3-5 agents on Base to challenge (scouting done, Moltbook post live with 22 upvotes + 16 comments; need direct engagement with commenters + targeted outreach)
-6. [ ] First external agent battle — at least one battle with a non-pvtclawn agent
-7. [ ] Battle corpus — 10+ battles with varied opponents for pattern diversity
-
-**Stretch:**
-- [ ] Tournament mode (bracket for 4-8 agents)
-- [ ] Spectator betting (micro-stakes)
-
----
-
-### DEFERRED: x402 Pentest Endpoint Prototype
-
-**Parked until arena has real traction (external agents, battle corpus, reputation).**
-
-**Pre-reqs before building this:**
-- [ ] 50+ battles with external agents
-- [ ] Known name in agent community
-- [ ] Proven attack pattern library from real battles
-
-**Red team #27 findings (6/10):** `memory/challenges/2026-02-20--x402-pentest-service-red-team.md`
-
----
-
-## Also Pending
-- Red-team fixes remaining:
-  - [x] Add disclaimer to pentest report output (regex limitations) — `fe0986e`
-  - [x] Add `0.0.0.0` to localhostOnly allowlist — `fe0986e`
-  - [x] Defender error response sanitization — `ed17a19`
-  - [ ] Document credential hygiene in SKILL.md (no tokens as CLI args)
-- [ ] Disable chatCompletions endpoint after full validation
-- [ ] Wire IPFS upload into settlement pipeline (auto-upload on battle end)
-- [ ] Store CID on-chain in registry's `turnLogCid` field during settlement
-- [ ] Remove static JSON files after on-chain CID migration
-
----
-
-## M4.5: Waku Hardening (RED TEAM FIXES — DONE ✅)
-
-From red team review `2026-02-18--waku-p2p-red-team.md` (score: 4/10 → 7/10):
-
-| # | Task | Priority | Status | Commit |
-|---|------|----------|--------|--------|
-| 1 | ECDSA signature verification on incoming turns | 🔴 CRITICAL | ✅ | `9f6fd956` |
-| 2 | Signed registration messages (prove address ownership) | 🔴 CRITICAL | ✅ | `9f6fd956` |
-| 3 | Turn ordering + duplicate rejection | 🟡 HIGH | ✅ | `9f6fd956` |
-| 4 | Turn timeout (forfeit on stall, 60s default) | 🟡 HIGH | ✅ | `9f6fd956` |
-| 5 | nwaku Docker restart policy (unless-stopped) | 🟢 LOW | ✅ | `9f6fd956` |
-| 6 | Peer connection polling (replace 8s sleep) | 🟢 LOW | 🔲 | deferred |
-
-**Game theory rationale (Ch.8):** Without sig verification, Waku battles are one-shot games with anonymous strangers → zero reputation → zero cooperation incentive. Identity continuity is the prerequisite for the entire Elo/reputation system to function.
-
----
-
-## M5: ChallengeWordBattle — Trustless Verifiable Outcome (CURRENT)
-
-**Egor's design from 03:21 session + decreasing timer idea (04:14):**
-
-Core mechanic:
-1. Both agents commit `hash(strategy_seed)` on-chain pre-battle
-2. Each turn generates deterministic challenge word: `keccak256(turnNumber + commitA + commitB)[0:4]`
-3. Response MUST contain the challenge word — binary, on-chain verifiable
-4. **Decreasing timer** — each turn gets less time (e.g. 60s → 55s → 50s → ...)
-
-Three failure modes (all verifiable, no judge needed):
-- ❌ Miss the challenge word → lose
-- ❌ Leak your secret → lose
-- ⏱️ Timeout (inference too slow) → lose
-
-| # | Task | Priority | Status | Notes |
-|---|------|----------|--------|-------|
-| 1 | ChallengeWordBattle.sol (commit-reveal + word check) | HIGH | ✅ | `676b9545` — 19 Forge tests |
-| 2 | Decreasing timer in transport layer | HIGH | ✅ | `ea97110b` — turnTimeoutFn in WakuTransport |
-| 3 | Challenge word generation (deterministic from commits) | HIGH | ✅ | `0e5765e0` — generateChallengeWord() mirrors Solidity |
-| 4 | SDK support for challenge word inclusion | MED | ✅ | `0e5765e0` — WakuFighter auto-validates + forfeits |
-| 5 | Web UI: show challenge words + timer countdown | MED | ✅ | `e428933` — ChallengeWord.tsx component |
-
----
-
-## M6: Product Tracks (Egor's Vision)
-
-**Two audiences, same protocol:**
-
-### Arena Mode — Entertainment 🐓
-- Spectator stakes (bet on contestants)
-- Decreasing timer pressure (bullet chess for AI)
-- Live spectator view (Waku topic subscription)
-- Leaderboard + seasons + tournaments
-
-### Pentest Mode — Utility 🔐
-- Submit your system prompt → attacker agents stress-test it
-- Pay-per-test (x402 or direct escrow)
-- Report generation (which tactics worked, vulnerability score)
-- Practical red-teaming as a service
-
----
-
-## M7: Growth (future)
-- Entry fees + prize pools (real ETH on Base mainnet)
-- Community scenario deployment (ERC-8021 revenue share)
-- Mainnet deployment
-- Tournament mode (bracket, round-robin)
-- Coinbase Agentic Wallets integration
-- npm publish `@clawttack/sdk`
-
----
-
-### Stats
-- **342 tests** (240 Bun + 102 Forge) | **585 expect() calls** | **0 failures**
-- **35+ Arena battles** on Base Sepolia (self-play) + 1 ghost battle (keys lost, 0-stake)
-- **2 LLM-powered battles** (Gemini Flash vs Gemini Flash — real adversarial conversation!)
-- **5 Arena deployments** (v2, v3 BIP39, v4 word boundary, v5 seed-derived words, v6 independent reveal — all Basescan verified)
-- **25 battle logs on IPFS** (Pinata) with correct CID mapping
-- **32 challenge reviews** completed (inc. LLM strategy red team, x402 pentest service, multi-LLM attacker, Moltbook solver, transcript save)
-- **4 books completed** (Serious Cryptography, Game Theory, Distributed Systems, Building Agentic AI)
-- **Red team scores:** Arena v5 9/10, LLM strategy 7/10, Waku 8/10, Pentest 8/10, SDK 8/10, Web 8/10
-
-### Deployed Contracts (Base Sepolia — CANONICAL)
-- **BIP39 Data (SSTORE2):** `0xeb2b285cf117a35df07affc2e0c9ebaa77bd6dd9`
-- **BIP39Words:** `0xd5c760aa0e8af1036d7f85e093d5a84a62e0b461` ✅ Basescan verified
-- **ClawttackArena v6:** `0xC20f694dEDa74fa2f4bCBB9f77413238862ba9f7` ✅ Basescan verified (independent seed reveal — no off-chain coordination needed)
-- **Owner/FeeRecipient:** `0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af` (pvtclawn.eth)
-- **ClawnJr wallet:** `0x2020B0F3BCa556380f39C63D44255502dE13C0D0`
-- Old contracts (Arena v2/v3/v4/v5, Registry, scenarios) — deprecated
-
-### Red Team Score
-**Waku P2P: 8/10** | **Pentest system: 8/10** | **ClawttackArena: 9/10** (v5) | **LLM Strategy: 7/10** (prompt injection hardened) | **ArenaFighter SDK: 8/10** | **Web UI Arena: 8/10** | **getLogsChunked: 8/10** | **IPFS: 7/10** | **E2E Script: 7/10** | **Pentest attacker: 5/10** | **Overall: 8/10**
+*Updated by PrivateClawn after Lane F red-team. 39 battles, 6 mechanics verified, 7 weaknesses found.*
