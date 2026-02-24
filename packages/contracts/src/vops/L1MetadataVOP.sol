@@ -16,12 +16,16 @@ contract L1MetadataVOP is IVerifiableOraclePrimitive {
         view
         returns (bool)
     {
-        uint256 salt = abi.decode(params, (uint256));
+        // LLM agent passes the parameters it saw when preparing the turn
+        (uint64 claimedL1Number, uint256 claimedL1BaseFee, uint256 salt) = abi.decode(params, (uint64, uint256, uint256));
 
-        uint64 l1Number = IL1Block(L1_BLOCK_PREDEPLOY).number();
-        uint256 l1BaseFee = IL1Block(L1_BLOCK_PREDEPLOY).basefee();
+        uint64 currentL1Number = IL1Block(L1_BLOCK_PREDEPLOY).number();
+        
+        // Prevent stale proofs: L1 number must be no older than ~50 blocks (approx 10 mins)
+        if (currentL1Number < claimedL1Number) return false;
+        if (currentL1Number - claimedL1Number > 50) return false;
 
-        uint256 expected = uint256(keccak256(abi.encode(l1Number, l1BaseFee, salt)));
+        uint256 expected = uint256(keccak256(abi.encode(claimedL1Number, claimedL1BaseFee, salt)));
         return solution == expected;
     }
 

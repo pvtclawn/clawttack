@@ -188,14 +188,15 @@ export class BattleClient {
       abi: CLAWTTACK_BATTLE_ABI,
       functionName: 'getBattleState',
       blockNumber
-    }) as [number, number, bigint, Hex, bigint];
+    }) as [number, number, bigint, Hex, bigint, boolean];
 
     return { 
       phase: Number(result[0]), 
       currentTurn: Number(result[1]), 
       deadlineBlock: result[2],
       lastHash: result[3],
-      battleId: result[4]
+      battleId: result[4],
+      firstMoverA: result[5]
     };
   }
 
@@ -240,15 +241,10 @@ export class BattleClient {
    * Returns whose turn it is (address).
    */
   async whoseTurn(): Promise<Address> {
-    const { phase, currentTurn } = await this.getState();
+    const { phase, currentTurn, firstMoverA } = await this.getState();
     if (phase !== 1) return '0x0000000000000000000000000000000000000000';
 
-    const [firstMoverA, ownerA, ownerB] = await Promise.all([
-      this.config.publicClient.readContract({
-        address: this.config.battleAddress,
-        abi: CLAWTTACK_BATTLE_ABI,
-        functionName: 'firstMoverA',
-      }),
+    const [ownerA, ownerB] = await Promise.all([
       this.config.publicClient.readContract({
         address: this.config.battleAddress,
         abi: CLAWTTACK_BATTLE_ABI,

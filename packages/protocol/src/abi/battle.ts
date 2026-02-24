@@ -323,6 +323,11 @@ export const CLAWTTACK_BATTLE_ABI = [
         "name": "_battleId",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "_firstMoverA",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"

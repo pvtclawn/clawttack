@@ -91,10 +91,13 @@ contract VOPsTest is Test {
 
     function test_L1MetadataVOP() public {
         uint256 salt = 12345;
-        bytes memory params = abi.encode(salt);
+        uint64 claimedL1Number = 10000;
+        uint256 claimedL1BaseFee = 50 gwei;
+        
+        bytes memory params = abi.encode(claimedL1Number, claimedL1BaseFee, salt);
 
         // Expected = keccak256(abi.encode(10000, 50gwei, salt))
-        uint256 expected = uint256(keccak256(abi.encode(uint64(10000), uint256(50 gwei), salt)));
+        uint256 expected = uint256(keccak256(abi.encode(claimedL1Number, claimedL1BaseFee, salt)));
 
         assertTrue(l1Vop.verify(params, expected, block.number));
         assertFalse(l1Vop.verify(params, expected + 1, block.number));
