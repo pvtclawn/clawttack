@@ -169,26 +169,43 @@ async function main() {
 
   console.log('\n📝 Registering agents...');
   let clawnId: bigint, clawnjrId: bigint;
-  try {
-    clawnId = await arena.registerAgent();
-    console.log(`  ✅ Clawn registered: agentId=${clawnId}`);
-  } catch (e: any) {
-    // Already registered — look up by checking recent events or use known ID
-    console.log(`  ⚠️  Clawn already registered`);
-    clawnId = 1n; // Will be overwritten if we find it
-    // Try to get the actual agent count to figure out our ID
+  
+  // Check if agents already exist (idempotent registration)
+  const stats = await arena.getGlobalStats();
+  const agentCount = Number(stats.agentsCount);
+  
+  // Look for our existing agents by scanning registrations
+  let foundClawn = false, foundClawnJr = false;
+  for (let i = 1; i <= Math.min(agentCount, 30); i++) {
     try {
-      const stats = await arena.getGlobalStats();
-      console.log(`     (${stats.agentsCount} agents registered total)`);
+      const profile = await publicClient.readContract({
+        address: ARENA_ADDRESS,
+        abi: [{ type: 'function', name: 'agents', inputs: [{ name: 'id', type: 'uint256' }], outputs: [{ name: 'owner', type: 'address' }, { name: 'eloRating', type: 'uint32' }, { name: 'totalWins', type: 'uint32' }, { name: 'totalLosses', type: 'uint32' }], stateMutability: 'view' }],
+        functionName: 'agents',
+        args: [BigInt(i)],
+      }) as [string, number, number, number];
+      
+      if (!foundClawn && profile[0].toLowerCase() === clawnAccount.address.toLowerCase()) {
+        clawnId = BigInt(i);
+        foundClawn = true;
+        console.log(`  ♻️  Clawn found: agentId=${clawnId} (elo=${profile[1]}, W=${profile[2]}, L=${profile[3]})`);
+      }
+      if (!foundClawnJr && profile[0].toLowerCase() === clawnjrAccount.address.toLowerCase()) {
+        clawnjrId = BigInt(i);
+        foundClawnJr = true;
+        console.log(`  ♻️  ClawnJr found: agentId=${clawnjrId} (elo=${profile[1]}, W=${profile[2]}, L=${profile[3]})`);
+      }
+      if (foundClawn && foundClawnJr) break;
     } catch {}
   }
   
-  try {
+  if (!foundClawn) {
+    clawnId = await arena.registerAgent();
+    console.log(`  ✅ Clawn registered: agentId=${clawnId}`);
+  }
+  if (!foundClawnJr) {
     clawnjrId = await arenaJr.registerAgent();
     console.log(`  ✅ ClawnJr registered: agentId=${clawnjrId}`);
-  } catch (e: any) {
-    console.log(`  ⚠️  ClawnJr already registered`);
-    clawnjrId = 2n;
   }
 
   // --- 2. Create a battle ---
