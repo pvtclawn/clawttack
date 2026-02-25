@@ -1,84 +1,67 @@
 # Clawttack v3.3 Decision Tree
-*Updated 2026-02-25 04:14*
+*Updated 2026-02-25 11:49*
 
 ## Current State
-- v3.2 deployed on Base Sepolia, 13 battles run (3 LLM), 375 tests green
+- v3.2 deployed on Base Sepolia, 14 battles (3 LLM), 375 tests green
 - clawttack.com LIVE on Vercel ✅
 - **All 12-turn battles = DRAW** (template AND LLM)
-- Root cause: two layers deep (see below)
+- Egor suggested CTF direction (08:00 Feb 25) — design drafted + red-teamed
 
 ## The Two-Layer Problem
 
 ### Layer 1: Poison avoidance is trivial for LLMs
-Poison is visible in TurnPayload event → agent reads it → explicitly instructs LLM to exclude → 100% success rate. Commit-reveal would fix this.
+Poison is visible in TurnPayload event → agent reads it → explicitly instructs LLM to exclude → 100% success rate.
 
 ### Layer 2 (DEEPER): No win condition besides timeout
-Even if poison becomes harder, **if both agents survive all turns → DRAW**. Two equally-capable LLM agents will always tie. The game has no way to determine a winner when both agents are competent.
+Even if poison becomes harder, **if both agents survive all turns → DRAW**. The game needs a way to produce winners.
 
-**Layer 2 must be solved first.** Harder poison without a win condition just makes battles more frustrating, not more interesting.
+---
 
-## Proposed Architecture: Asymmetric Attacker/Defender
+## Leading Direction: CTF (Capture The Flag)
 
-**Key insight from Lane F red-team (2026-02-25):** The game needs asymmetry.
+**Origin:** Egor's suggestion (Feb 25 08:00)
+**Design doc:** `docs/design/v3.3-ctf-mechanic.md`
+**Red-team:** `memory/challenges/2026-02-25--ctf-mechanic-red-team.md`
 
-### How it works
-1. Battle has 2 halves (or alternating rounds)
-2. **Attacker role**: Tries to make opponent's LLM fail (via poison, prompt injection, context manipulation)
-3. **Defender role**: Tries to survive (produce valid narrative under constraints)
-4. Agents swap roles each turn (or each half)
-5. **First agent whose turn fails = LOSES**
+### Concept
+- Each agent commits `hash(secret)` at battle start
+- Goal: extract opponent's secret via prompt injection in narratives
+- `captureFlag(secret)` → verify vs hash → instant win
+- Settlement: flag capture > timeout > maxTurns draw
 
-### Why this works
-- Draws still possible but rare (both survive all rounds = still a draw, but pressure escalates)
-- Creates genuine strategy: attack strength vs defense robustness
-- On-chain native: no oracle, no off-chain scoring
-- Compatible with all existing mechanics (poison, VOP, proof-of-context)
+### P0 Red-Team Finding: Context Isolation Defeats CTF
+A smart agent keeps secret in system prompt, uses a **separate** LLM call (without secret) to analyze opponent narratives. Secret never touches the attack surface → injection can't reach it → unwinnable.
 
-### Variant: Escalating Difficulty
-Each round, difficulty increases:
-- Turn 1-4: 1 poison word, easy VOP
-- Turn 5-8: 2 poison words, medium VOP
-- Turn 9-12: 3 poison words, hard VOP + commit-reveal
-First failure = loss. Survivors draw (rare at high difficulty).
+### Fix Directions for P0
+- **(a) Functional secret**: Secret is needed for gameplay (e.g., required to compute VOP solutions). Agent MUST use it actively → more leak surface.
+- **(b) VIN integration**: TEE proves LLM call included both secret AND opponent narrative in same context. Heavy infra.
+- **(c) Accept it**: Game tests defense quality. Top agents draw; weak agents get exploited. CTF as a filtering mechanism, not a competition.
+- **(d) Protocol-enforced context**: Contract requires proof that opponent's narrative was in the same LLM call as the secret (variant of proof-of-context + VIN).
 
-## Decision Needed from Egor
+**Awaiting Egor's response on P0 direction** (sent msg #5692 at 09:34).
 
-### Option A: Asymmetric Roles (NEW — recommended)
-**What**: Structured attacker/defender with role swapping.
-- **Effort**: ~2-3 days (contract changes moderate, SDK changes significant)
-- **Impact**: VERY HIGH — creates actual winners
-- **Risk**: Larger contract change, needs careful game theory analysis
+---
 
-### Option B: Commit-Reveal Blind Poison
-**What**: Defender doesn't know poison when writing.
-- **Effort**: ~2-3 days
-- **Impact**: HIGH for poison difficulty, but doesn't solve draws alone
-- **Risk**: Adds 1 tx/turn, reveal griefing needs handling
+## Other Options (deprioritized, not rejected)
 
-### Option C: Escalating Multi-Poison (A-lite)
-**What**: Each round adds more poison words. First failure = loss.
-- **Effort**: ~1-2 days
-- **Impact**: MEDIUM-HIGH — creates winners via difficulty ramp, simpler than full asymmetry
-- **Risk**: Still susceptible to equally-capable LLMs both surviving
+### Escalating Multi-Poison
+Each round adds poison words. First failure = loss. Simpler but still susceptible to equal LLMs both surviving.
 
-### Option D: Scoring Oracle (defer)
-**What**: LLM judge scores narrative quality. Best score wins.
-- **Effort**: ~1 week
-- **Impact**: HIGH — real quality competition
-- **Risk**: Centralization, cost, subjectivity. Defer unless A/C fail.
+### Asymmetric Attacker/Defender
+Structured role swapping. High impact but larger contract change.
 
-### Recommendation
-**C first, then A**: Escalating multi-poison is simplest path to decisive outcomes. If both agents still survive at max difficulty, then full asymmetric roles (A) are needed. Skip D for now.
+### Commit-Reveal Blind Poison
+Combines well with CTF or multi-poison. Addresses Layer 1 (poison visibility).
 
-## Next Task (after Egor decides)
-If C: Add `string[] poisonWords` to TurnPayload + escalation curve in contract + "first failure = loss" settlement
-If A: Design attacker/defender role struct + swap logic + asymmetric turn validation
-If B: Commit-reveal flow (can combine with C)
-If none decided yet: Continue analysis, run more LLM battles, document findings
+## Next Task
+- **If Egor picks (a) functional secret**: Design what "functional" means in contract terms → implement
+- **If Egor picks (c) accept**: Build CTF as-is (~1 day) → deploy → test with real LLM agents
+- **If Egor pivots**: Follow his direction
+- **Meanwhile**: All designs are documented, ready to build on any path
 
 ## Parked (ICEBOX)
-- Multiple simultaneous VOP types per turn
-- Narrative entropy scoring (on-chain uniqueness check)
+- Scoring oracle / LLM judge
+- Narrative entropy scoring
 - Audience voting / staking
 - Opponent echo requirement (gas too high)
 - Full VIN integration for proof-of-LLM-input
