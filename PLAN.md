@@ -1,42 +1,84 @@
 # Clawttack v3.3 Decision Tree
-*Updated 2026-02-24 14:19*
+*Updated 2026-02-25 04:14*
 
 ## Current State
-- v3.2 deployed, 13 battles run, 375 tests green
+- v3.2 deployed on Base Sepolia, 13 battles run (3 LLM), 375 tests green
+- clawttack.com LIVE on Vercel ✅
 - **All 12-turn battles = DRAW** (template AND LLM)
-- Root cause: poison avoidance is trivial for LLMs (tests instruction-following, their #1 strength)
-- Web UI pending Vercel deploy (rate limit resets ~19:00 UTC)
+- Root cause: two layers deep (see below)
+
+## The Two-Layer Problem
+
+### Layer 1: Poison avoidance is trivial for LLMs
+Poison is visible in TurnPayload event → agent reads it → explicitly instructs LLM to exclude → 100% success rate. Commit-reveal would fix this.
+
+### Layer 2 (DEEPER): No win condition besides timeout
+Even if poison becomes harder, **if both agents survive all turns → DRAW**. Two equally-capable LLM agents will always tie. The game has no way to determine a winner when both agents are competent.
+
+**Layer 2 must be solved first.** Harder poison without a win condition just makes battles more frustrating, not more interesting.
+
+## Proposed Architecture: Asymmetric Attacker/Defender
+
+**Key insight from Lane F red-team (2026-02-25):** The game needs asymmetry.
+
+### How it works
+1. Battle has 2 halves (or alternating rounds)
+2. **Attacker role**: Tries to make opponent's LLM fail (via poison, prompt injection, context manipulation)
+3. **Defender role**: Tries to survive (produce valid narrative under constraints)
+4. Agents swap roles each turn (or each half)
+5. **First agent whose turn fails = LOSES**
+
+### Why this works
+- Draws still possible but rare (both survive all rounds = still a draw, but pressure escalates)
+- Creates genuine strategy: attack strength vs defense robustness
+- On-chain native: no oracle, no off-chain scoring
+- Compatible with all existing mechanics (poison, VOP, proof-of-context)
+
+### Variant: Escalating Difficulty
+Each round, difficulty increases:
+- Turn 1-4: 1 poison word, easy VOP
+- Turn 5-8: 2 poison words, medium VOP
+- Turn 9-12: 3 poison words, hard VOP + commit-reveal
+First failure = loss. Survivors draw (rare at high difficulty).
 
 ## Decision Needed from Egor
 
-### Option A: Commit-Reveal Blind Poison (v3.3)
-**What**: Defender doesn't know what the poison is when writing. Attacker commits hash(poison+salt), defender writes blind, attacker reveals.
-- **Effort**: ~2-3 days (new contract logic + extra tx per turn)
-- **Impact**: HIGH — completely changes game theory, makes short common poisons devastating
-- **Risk**: Adds 1 tx per turn (gas cost +50%), more complex battle flow
+### Option A: Asymmetric Roles (NEW — recommended)
+**What**: Structured attacker/defender with role swapping.
+- **Effort**: ~2-3 days (contract changes moderate, SDK changes significant)
+- **Impact**: VERY HIGH — creates actual winners
+- **Risk**: Larger contract change, needs careful game theory analysis
 
-### Option B: Multiple Simultaneous Poisons
-**What**: Each player sets 3-5 poison words instead of 1. Dodging all simultaneously is exponentially harder.
-- **Effort**: ~1 day (contract change is small)
-- **Impact**: MEDIUM — might still be solvable by careful LLMs
-- **Risk**: Low
+### Option B: Commit-Reveal Blind Poison
+**What**: Defender doesn't know poison when writing.
+- **Effort**: ~2-3 days
+- **Impact**: HIGH for poison difficulty, but doesn't solve draws alone
+- **Risk**: Adds 1 tx/turn, reveal griefing needs handling
 
-### Option C: LLM Judge Scoring
-**What**: Third-party LLM scores narrative quality. Awkward poison-dodging = low score. Winner = best total score.
-- **Effort**: ~1 week (needs oracle/off-chain judge infrastructure)
-- **Impact**: HIGH — transforms from pass/fail to quality competition
-- **Risk**: Centralization of judge, subjectivity, oracle costs
+### Option C: Escalating Multi-Poison (A-lite)
+**What**: Each round adds more poison words. First failure = loss.
+- **Effort**: ~1-2 days
+- **Impact**: MEDIUM-HIGH — creates winners via difficulty ramp, simpler than full asymmetry
+- **Risk**: Still susceptible to equally-capable LLMs both surviving
 
-### Option D: Pivot Away from Word Battles
-**What**: Keep the on-chain infra but change the game entirely (strategy, trivia, auction, etc.)
-- **Effort**: 1-2 weeks
-- **Impact**: Unknown
-- **Risk**: Throwing away validated mechanics
+### Option D: Scoring Oracle (defer)
+**What**: LLM judge scores narrative quality. Best score wins.
+- **Effort**: ~1 week
+- **Impact**: HIGH — real quality competition
+- **Risk**: Centralization, cost, subjectivity. Defer unless A/C fail.
 
 ### Recommendation
-**A then B**: Implement blind poison first (biggest bang), add multiple poisons as amplifier. Skip C for now (too much infra). Don't pivot (D) — the shell works.
+**C first, then A**: Escalating multi-poison is simplest path to decisive outcomes. If both agents still survive at max difficulty, then full asymmetric roles (A) are needed. Skip D for now.
 
 ## Next Task (after Egor decides)
-If A: Design commit-reveal flow → modify Battle.sol → update SDK → test
-If B: Add `string[] poisonWords` to TurnPayload → update LinguisticParser → test
-If neither: Deploy web UI when Vercel unlocks, run more analysis
+If C: Add `string[] poisonWords` to TurnPayload + escalation curve in contract + "first failure = loss" settlement
+If A: Design attacker/defender role struct + swap logic + asymmetric turn validation
+If B: Commit-reveal flow (can combine with C)
+If none decided yet: Continue analysis, run more LLM battles, document findings
+
+## Parked (ICEBOX)
+- Multiple simultaneous VOP types per turn
+- Narrative entropy scoring (on-chain uniqueness check)
+- Audience voting / staking
+- Opponent echo requirement (gas too high)
+- Full VIN integration for proof-of-LLM-input
