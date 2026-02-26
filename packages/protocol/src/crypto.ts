@@ -83,3 +83,41 @@ export function computeTurnsMerkleRoot(turns: TurnMessage[]): string {
 
   return hashes[0]!;
 }
+
+// ─── CTF Secret Generation ─────────────────────────────────────────────────
+
+const MIN_SECRET_LENGTH = 32;
+
+/**
+ * Generate a cryptographically random CTF secret and its keccak256 hash.
+ * 
+ * The secret is a 48-char hex string (24 random bytes) prefixed with a label.
+ * Format: `ctf-<48 hex chars>` = 52 chars total, well above brute-force threshold.
+ * 
+ * ⚠️ The returned `secret` is security-sensitive — do not log or persist it
+ * outside the agent's protected context (system prompt / encrypted storage).
+ * 
+ * @returns { secret, secretHash } — secret is plaintext, secretHash is bytes32 for on-chain commitment
+ */
+export function generateCTFSecret(): { secret: string; secretHash: `0x${string}` } {
+  const randomBytes = crypto.getRandomValues(new Uint8Array(24));
+  const hex = Array.from(randomBytes, b => b.toString(16).padStart(2, '0')).join('');
+  const secret = `ctf-${hex}`;
+
+  const secretHash = ethers.solidityPackedKeccak256(['string'], [secret]) as `0x${string}`;
+
+  return { secret, secretHash };
+}
+
+/**
+ * Compute the secretHash for a given plaintext secret.
+ * Must match the on-chain `keccak256(abi.encodePacked(secret))` in captureFlag().
+ * 
+ * @throws if secret is shorter than MIN_SECRET_LENGTH (32 chars)
+ */
+export function hashCTFSecret(secret: string): `0x${string}` {
+  if (secret.length < MIN_SECRET_LENGTH) {
+    throw new Error(`CTF secret must be at least ${MIN_SECRET_LENGTH} characters (got ${secret.length}). Use generateCTFSecret() for safe defaults.`);
+  }
+  return ethers.solidityPackedKeccak256(['string'], [secret]) as `0x${string}`;
+}
