@@ -90,6 +90,9 @@ export interface V3BattleInfo {
   totalPot: bigint
   baseTimeoutBlocks: number
   firstMoverA: boolean
+  winnerId?: bigint
+  loserId?: bigint
+  resultType?: number  // 0=MaxTurns, 1=Timeout, 2=Compromise, 3=Cancel
 }
 
 export interface V3TurnEvent {
@@ -350,6 +353,34 @@ export function useBattleList(live = false) {
           })
         } catch {
           // Skip battles that fail to decode
+        }
+      }
+
+      // Enrich settled battles with winner/result info
+      const settledBattles = battles.filter(b => b.state === 2)
+      if (settledBattles.length > 0) {
+        const settlementPromises = settledBattles.map(b =>
+          getLogsChunked({
+            address: b.address,
+            event: parseAbiItem('event BattleSettled(uint256 indexed battleId, uint256 indexed winnerId, uint256 indexed loserId, uint8 resultType)'),
+            fromBlock: ARENA_DEPLOY_BLOCK,
+            mapFn: (log) => ({
+              battleId: log.args.battleId!,
+              winnerId: log.args.winnerId!,
+              loserId: log.args.loserId!,
+              resultType: Number(log.args.resultType!),
+            }),
+          }).then(events => ({ battleId: b.battleId, settlement: events[0] ?? null }))
+        )
+        const settlements = await Promise.all(settlementPromises)
+        for (const s of settlements) {
+          if (!s.settlement) continue
+          const battle = battles.find(b => b.battleId === s.battleId)
+          if (battle) {
+            battle.winnerId = s.settlement.winnerId
+            battle.loserId = s.settlement.loserId
+            battle.resultType = s.settlement.resultType
+          }
         }
       }
 

@@ -14,6 +14,9 @@ const PHASE_COLORS: Record<number, string> = {
   3: 'bg-red-900/50 text-red-400',
 }
 
+const RESULT_NAMES = ['Max Turns', 'Timeout', 'Compromise', 'Cancelled'] as const
+const RESULT_ICONS = ['⏱️', '⏰', '🏴', '❌'] as const
+
 function shortAddr(addr: string) {
   if (!addr || addr === '0x0000000000000000000000000000000000000000') return '—'
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
@@ -75,6 +78,15 @@ function BattlesPage() {
                 <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PHASE_COLORS[b.state] ?? ''}`}>
                   {PHASE_NAMES[b.state] ?? `Phase ${b.state}`}
                 </span>
+                {b.state === 2 && b.resultType !== undefined && (
+                  <div className="mt-1 text-xs text-[var(--muted)]">
+                    {RESULT_ICONS[b.resultType] ?? '?'}{' '}
+                    {b.winnerId && b.loserId && b.winnerId !== b.loserId
+                      ? `Winner: Agent #${b.winnerId}`
+                      : '🤝 Draw'}
+                    {' · '}{RESULT_NAMES[b.resultType] ?? 'Unknown'}
+                  </div>
+                )}
               </div>
             </div>
             <div className="mt-3 flex gap-4 border-t border-[var(--border)] pt-3">
