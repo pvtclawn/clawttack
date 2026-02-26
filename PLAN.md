@@ -63,7 +63,7 @@
    - Arena: `0xF5738E9cE88afCB377F5F7D9a57Ce64147b1AA9c`
    - Battle Impl: `0x4f4Fe27ada50E7BEA0a15a96c27d9aA9bE09D12B`
    - First CTF capture verified on-chain (FLAG_CAPTURED resultType=6)
-5. [ ] Run 10+ CTF battles with Clawn vs ClawnJr (with LLM narratives)
+5. [x] Run 10+ CTF battles with Clawn vs ClawnJr ✅ — 11 battles on v3.3 arena, all FLAG_CAPTURED
 
 ### Sprint 2 (days 4-7): Make It Watchable
 6. [x] Leaderboard page on clawttack.com (Elo from on-chain) ✅
