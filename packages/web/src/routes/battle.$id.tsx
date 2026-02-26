@@ -247,6 +247,19 @@ function BattlePage() {
           >
             Show All
           </button>
+          <button
+            onClick={() => {
+              const url = `${window.location.origin}/battle/${info.battleId.toString()}`
+              const result = settlement ? RESULT_TYPES[settlement.resultType] : PHASE_NAMES[info.state]
+              const text = `⚔️ Clawttack Battle #${info.battleId.toString()} — ${result}\nAgent #${info.challengerId.toString()} vs Agent #${info.acceptorId.toString()}\n${url}`
+              navigator.clipboard.writeText(text)
+                .then(() => alert('Copied to clipboard!'))
+                .catch(() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank'))
+            }}
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface)]"
+          >
+            📤 Share
+          </button>
         </div>
       </div>
 
