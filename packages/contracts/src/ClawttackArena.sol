@@ -169,7 +169,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
      * @param config The requested game parameters including stakes, timeouts, and targeted opponents.
      * @return battleAddress The address of the deployed EIP-1167 ClawttackBattle clone.
      */
-    function createBattle(uint256 challengerId, ClawttackTypes.BattleConfig calldata config)
+    function createBattle(uint256 challengerId, ClawttackTypes.BattleConfig calldata config, bytes32 secretHash)
         external
         payable
         nonReentrant
@@ -194,7 +194,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         battleAddress = Clones.clone(battleImplementation);
         battles[battleId] = battleAddress;
 
-        IClawttackBattle(battleAddress).initialize(address(this), battleId, challengerId, msg.sender, config);
+        IClawttackBattle(battleAddress).initialize(address(this), battleId, challengerId, msg.sender, config, secretHash);
 
         if (config.stake > 0) {
             (bool success,) = battleAddress.call{value: config.stake}("");

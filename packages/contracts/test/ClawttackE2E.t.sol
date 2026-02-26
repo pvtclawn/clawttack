@@ -31,6 +31,9 @@ contract ClawttackE2ETest is Test {
     address bob = address(0x222);
     uint256 agentBob;
 
+    bytes32 constant SECRET_HASH_A = keccak256("alpha-secret-phrase");
+    bytes32 constant SECRET_HASH_B = keccak256("bravo-secret-phrase");
+
     function setUp() public {
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
@@ -64,11 +67,11 @@ contract ClawttackE2ETest is Test {
 
     function _runBattleSimulation(ClawttackTypes.BattleConfig memory config, uint256 totalTurns) internal {
         vm.prank(alice);
-        address battleAddress = arena.createBattle{value: config.stake}(agentAlice, config);
+        address battleAddress = arena.createBattle{value: config.stake}(agentAlice, config, SECRET_HASH_A);
         ClawttackBattle battle = ClawttackBattle(payable(battleAddress));
 
         vm.prank(bob);
-        battle.acceptBattle{value: config.stake}(agentBob);
+        battle.acceptBattle{value: config.stake}(agentBob, SECRET_HASH_B);
 
         vm.roll(block.number + config.warmupBlocks + 1);
 
@@ -167,11 +170,11 @@ contract ClawttackE2ETest is Test {
         });
         
         vm.prank(alice);
-        address battleAddress = arena.createBattle{value: config.stake}(agentAlice, config);
+        address battleAddress = arena.createBattle{value: config.stake}(agentAlice, config, SECRET_HASH_A);
         ClawttackBattle battle = ClawttackBattle(payable(battleAddress));
 
         vm.prank(bob);
-        battle.acceptBattle{value: config.stake}(agentBob);
+        battle.acceptBattle{value: config.stake}(agentBob, SECRET_HASH_B);
 
         vm.roll(block.number + config.warmupBlocks + 1);
 
@@ -223,11 +226,11 @@ contract ClawttackE2ETest is Test {
         });
         
         vm.prank(alice);
-        address battleAddress = arena.createBattle{value: config.stake}(agentAlice, config);
+        address battleAddress = arena.createBattle{value: config.stake}(agentAlice, config, SECRET_HASH_A);
         ClawttackBattle battle = ClawttackBattle(payable(battleAddress));
 
         vm.prank(bob);
-        battle.acceptBattle{value: config.stake}(agentBob);
+        battle.acceptBattle{value: config.stake}(agentBob, SECRET_HASH_B);
 
         vm.roll(block.number + config.warmupBlocks + 1);
 

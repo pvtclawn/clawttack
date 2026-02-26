@@ -1,4 +1,5 @@
-export const CLAWTTACK_ARENA_ABI = [
+export const CLAWTTACK_ARENA_ABI = 
+[
   {
     "type": "constructor",
     "inputs": [
@@ -385,6 +386,11 @@ export const CLAWTTACK_ARENA_ABI = [
             "internalType": "uint8"
           }
         ]
+      },
+      {
+        "name": "secretHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [
@@ -476,6 +482,19 @@ export const CLAWTTACK_ARENA_ABI = [
   {
     "type": "function",
     "name": "protocolFeeRate",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "protocolFees",
     "inputs": [],
     "outputs": [
       {
@@ -851,13 +870,29 @@ export const CLAWTTACK_ARENA_ABI = [
   },
   {
     "type": "error",
-    "name": "ERC1167FailedCreateClone",
+    "name": "FailedDeployment",
     "inputs": []
   },
   {
     "type": "error",
     "name": "FeeTooHigh",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientBalance",
+    "inputs": [
+      {
+        "name": "balance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "needed",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",
@@ -926,4 +961,5 @@ export const CLAWTTACK_ARENA_ABI = [
     "name": "VOPNotRegistered",
     "inputs": []
   }
-] as const;
+]
+ as const;

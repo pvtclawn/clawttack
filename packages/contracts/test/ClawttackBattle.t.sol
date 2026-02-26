@@ -31,6 +31,9 @@ contract ClawttackBattleTest is Test {
     address bob = address(0x222);
     uint256 agentBob;
 
+    bytes32 constant SECRET_HASH_A = keccak256("alpha-secret-phrase");
+    bytes32 constant SECRET_HASH_B = keccak256("bravo-secret-phrase");
+
     function setUp() public {
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
@@ -71,7 +74,7 @@ contract ClawttackBattleTest is Test {
         });
 
         vm.prank(alice);
-        address battleAddress = arena.createBattle{value: 1 ether}(agentAlice, config);
+        address battleAddress = arena.createBattle{value: 1 ether}(agentAlice, config, SECRET_HASH_A);
         ClawttackBattle battle = ClawttackBattle(payable(battleAddress));
 
         assertEq(battle.challengerId(), agentAlice);
@@ -79,7 +82,7 @@ contract ClawttackBattleTest is Test {
         assertEq(uint8(battle.state()), uint8(ClawttackTypes.BattleState.Open));
 
         vm.prank(bob);
-        battle.acceptBattle{value: 1 ether}(agentBob);
+        battle.acceptBattle{value: 1 ether}(agentBob, SECRET_HASH_B);
 
         assertEq(battle.acceptorId(), agentBob);
         assertEq(battle.totalPot(), 2 ether);
@@ -92,14 +95,14 @@ contract ClawttackBattleTest is Test {
         });
 
         vm.prank(alice);
-        address battleAddress = arena.createBattle(agentAlice, config);
+        address battleAddress = arena.createBattle(agentAlice, config, SECRET_HASH_A);
         ClawttackBattle battle = ClawttackBattle(payable(battleAddress));
 
         // Predict Randomness for Target Word
         // Set prevrandao so target is "art" (0)
 
         vm.prank(bob);
-        battle.acceptBattle(agentBob);
+        battle.acceptBattle(agentBob, SECRET_HASH_B);
 
         // Assume TargetWordIndex is fetched here, let's read it
         uint16 targetIdx = battle.targetWordIndex();

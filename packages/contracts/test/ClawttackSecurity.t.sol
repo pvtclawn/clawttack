@@ -71,6 +71,10 @@ contract ClawttackSecurityTest is Test {
     uint256 agentBob;
     uint256 agentEve;
 
+    // CTF test secrets
+    bytes32 constant SECRET_HASH_A = keccak256("alpha-secret-phrase");
+    bytes32 constant SECRET_HASH_B = keccak256("bravo-secret-phrase");
+
     function setUp() public {
         alice = vm.addr(alicePK);
         bob   = vm.addr(bobPK);
@@ -124,10 +128,10 @@ contract ClawttackSecurityTest is Test {
     {
         ClawttackTypes.BattleConfig memory config = _defaultConfig(stake);
         vm.prank(alice);
-        address addr = arena.createBattle{value: stake}(agentAlice, config);
+        address addr = arena.createBattle{value: stake}(agentAlice, config, SECRET_HASH_A);
         battle = ClawttackBattle(payable(addr));
         vm.prank(bob);
-        battle.acceptBattle{value: stake}(agentBob);
+        battle.acceptBattle{value: stake}(agentBob, SECRET_HASH_B);
         vm.roll(block.number + config.warmupBlocks + 1);
     }
 
@@ -231,7 +235,7 @@ contract ClawttackSecurityTest is Test {
         ClawttackTypes.BattleConfig memory config = _defaultConfig(0);
         vm.prank(bob); // Bob does NOT own agentAlice
         vm.expectRevert(ClawttackErrors.NotAgentOwner.selector);
-        arena.createBattle(agentAlice, config);
+        arena.createBattle(agentAlice, config, SECRET_HASH_A);
     }
 
     /// @notice Verifies that battle config bounds are strictly validated
@@ -244,25 +248,25 @@ contract ClawttackSecurityTest is Test {
         cfg.baseTimeoutBlocks = arena.MIN_TIMEOUT_BLOCKS() - 1;
         vm.prank(user);
         vm.expectRevert(ClawttackErrors.ConfigOutOfBounds.selector);
-        arena.createBattle(agentId, cfg);
+        arena.createBattle(agentId, cfg, SECRET_HASH_A);
 
         cfg = _defaultConfig(0);
         cfg.baseTimeoutBlocks = arena.MAX_TIMEOUT_BLOCKS() + 1;
         vm.prank(user);
         vm.expectRevert(ClawttackErrors.ConfigOutOfBounds.selector);
-        arena.createBattle(agentId, cfg);
+        arena.createBattle(agentId, cfg, SECRET_HASH_A);
 
         cfg = _defaultConfig(0);
         cfg.maxTurns = arena.MIN_TURNS() - 1;
         vm.prank(user);
         vm.expectRevert(ClawttackErrors.ConfigOutOfBounds.selector);
-        arena.createBattle(agentId, cfg);
+        arena.createBattle(agentId, cfg, SECRET_HASH_A);
 
         cfg = _defaultConfig(0);
         cfg.maxJokers = arena.MAX_JOKERS() + 1;
         vm.prank(user);
         vm.expectRevert(ClawttackErrors.ConfigOutOfBounds.selector);
-        arena.createBattle(agentId, cfg);
+        arena.createBattle(agentId, cfg, SECRET_HASH_A);
     }
 
     // ─── Accept Battle Security ─────────────────────────────────────────────────
@@ -271,25 +275,25 @@ contract ClawttackSecurityTest is Test {
     function test_acceptBattle_agentHijack_reverts() public {
         ClawttackTypes.BattleConfig memory config = _defaultConfig(1 ether);
         vm.prank(alice);
-        address addr = arena.createBattle{value: 1 ether}(agentAlice, config);
+        address addr = arena.createBattle{value: 1 ether}(agentAlice, config, SECRET_HASH_A);
         ClawttackBattle battle = ClawttackBattle(payable(addr));
 
         // Eve tries to accept using Bob's agent ID (agentBob) — she doesn't own it
         vm.prank(eve);
         vm.expectRevert(ClawttackErrors.NotParticipant.selector);
-        battle.acceptBattle{value: 1 ether}(agentBob);
+        battle.acceptBattle{value: 1 ether}(agentBob, SECRET_HASH_B);
     }
 
     /// @notice Verifies a player cannot battle themselves
     function test_acceptBattle_selfBattle_reverts() public {
         ClawttackTypes.BattleConfig memory config = _defaultConfig(0);
         vm.prank(alice);
-        address addr = arena.createBattle(agentAlice, config);
+        address addr = arena.createBattle(agentAlice, config, SECRET_HASH_A);
         ClawttackBattle battle = ClawttackBattle(payable(addr));
 
         vm.prank(alice);
         vm.expectRevert(ClawttackErrors.CannotBattleSelf.selector);
-        battle.acceptBattle(agentAlice);
+        battle.acceptBattle(agentAlice, SECRET_HASH_A);
     }
 
     /// @notice Verifies that acceptBattle enforces targetAgentId when set
@@ -298,13 +302,13 @@ contract ClawttackSecurityTest is Test {
         config.targetAgentId = agentBob; // locked to Bob
 
         vm.prank(alice);
-        address addr = arena.createBattle(agentAlice, config);
+        address addr = arena.createBattle(agentAlice, config, SECRET_HASH_A);
         ClawttackBattle battle = ClawttackBattle(payable(addr));
 
         // Eve tries to accept a Bob-locked battle
         vm.prank(eve);
         vm.expectRevert(ClawttackErrors.WrongTargetAgent.selector);
-        battle.acceptBattle(agentEve);
+        battle.acceptBattle(agentEve, keccak256("eve-secret"));
     }
 
     /// @notice Verifies that an already-active battle cannot be accepted again
@@ -313,7 +317,7 @@ contract ClawttackSecurityTest is Test {
 
         vm.prank(eve);
         vm.expectRevert(ClawttackErrors.BattleNotOpen.selector);
-        battle.acceptBattle(agentEve);
+        battle.acceptBattle(agentEve, keccak256("eve-secret"));
     }
 
     // ─── Turn Submission Access Control ────────────────────────────────────────
@@ -493,7 +497,7 @@ contract ClawttackSecurityTest is Test {
     function test_cancelBattle_byNonChallenger_reverts() public {
         ClawttackTypes.BattleConfig memory config = _defaultConfig(1 ether);
         vm.prank(alice);
-        address addr = arena.createBattle{value: 1 ether}(agentAlice, config);
+        address addr = arena.createBattle{value: 1 ether}(agentAlice, config, SECRET_HASH_A);
         ClawttackBattle battle = ClawttackBattle(payable(addr));
 
         vm.prank(bob);
@@ -505,7 +509,7 @@ contract ClawttackSecurityTest is Test {
     function test_cancelBattle_refundsChallenger() public {
         ClawttackTypes.BattleConfig memory config = _defaultConfig(1 ether);
         vm.prank(alice);
-        address addr = arena.createBattle{value: 1 ether}(agentAlice, config);
+        address addr = arena.createBattle{value: 1 ether}(agentAlice, config, SECRET_HASH_A);
         ClawttackBattle battle = ClawttackBattle(payable(addr));
 
         uint256 balBefore = alice.balance;
@@ -632,10 +636,10 @@ contract ClawttackSecurityTest is Test {
             maxJokers: 1
         });
         vm.prank(alice);
-        address addr = arena.createBattle(agentAlice, cfg);
+        address addr = arena.createBattle(agentAlice, cfg, SECRET_HASH_A);
         ClawttackBattle battle = ClawttackBattle(payable(addr));
         vm.prank(bob);
-        battle.acceptBattle(agentBob);
+        battle.acceptBattle(agentBob, SECRET_HASH_B);
         vm.roll(block.number + cfg.warmupBlocks + 1);
 
         bool aFirst = battle.firstMoverA();
@@ -706,11 +710,11 @@ contract ClawttackSecurityTest is Test {
         });
 
         vm.prank(alice);
-        address addr = arena.createBattle{value: 1 ether}(agentAlice, config);
+        address addr = arena.createBattle{value: 1 ether}(agentAlice, config, SECRET_HASH_A);
         ClawttackBattle battle = ClawttackBattle(payable(addr));
 
         vm.prank(bob);
-        battle.acceptBattle{value: 1 ether}(agentBob);
+        battle.acceptBattle{value: 1 ether}(agentBob, SECRET_HASH_B);
 
         vm.roll(block.number + config.warmupBlocks + 1);
         bool aFirst = battle.firstMoverA();
@@ -803,5 +807,103 @@ contract ClawttackSecurityTest is Test {
         uint256 ownerBefore = address(this).balance;
         arena.withdrawFees(payable(address(this)));
         assertGt(address(this).balance, ownerBefore);
+    }
+
+    // ─── CTF: captureFlag ───────────────────────────────────────────────────────
+
+    /// @notice Verifies that providing the correct secret captures the flag
+    function test_captureFlag_correctSecret_settles() public {
+        ClawttackBattle battle = _createAndAccept(1 ether);
+
+        // Alice captures Bob's flag by providing Bob's secret
+        vm.prank(alice);
+        battle.captureFlag("bravo-secret-phrase");
+
+        assertEq(uint8(battle.state()), uint8(ClawttackTypes.BattleState.Settled));
+    }
+
+    /// @notice Verifies that Bob can capture Alice's flag
+    function test_captureFlag_bobCapturesAlice() public {
+        ClawttackBattle battle = _createAndAccept(1 ether);
+
+        vm.prank(bob);
+        battle.captureFlag("alpha-secret-phrase");
+
+        assertEq(uint8(battle.state()), uint8(ClawttackTypes.BattleState.Settled));
+    }
+
+    /// @notice Verifies that wrong secret reverts
+    function test_captureFlag_wrongSecret_reverts() public {
+        ClawttackBattle battle = _createAndAccept(1 ether);
+
+        vm.prank(alice);
+        vm.expectRevert(ClawttackErrors.InvalidFlag.selector);
+        battle.captureFlag("wrong-guess");
+    }
+
+    /// @notice Verifies that non-participant cannot capture flag
+    function test_captureFlag_nonParticipant_reverts() public {
+        ClawttackBattle battle = _createAndAccept(1 ether);
+
+        vm.prank(eve);
+        vm.expectRevert(ClawttackErrors.NotParticipant.selector);
+        battle.captureFlag("bravo-secret-phrase");
+    }
+
+    /// @notice Verifies that captureFlag fails on non-active battle
+    function test_captureFlag_notActive_reverts() public {
+        ClawttackTypes.BattleConfig memory config = _defaultConfig(0);
+        vm.prank(alice);
+        address addr = arena.createBattle(agentAlice, config, SECRET_HASH_A);
+        ClawttackBattle battle = ClawttackBattle(payable(addr));
+
+        // Battle is Open, not Active
+        vm.prank(alice);
+        vm.expectRevert(ClawttackErrors.BattleNotActive.selector);
+        battle.captureFlag("bravo-secret-phrase");
+    }
+
+    /// @notice Verifies winner gets pot on flag capture
+    function test_captureFlag_winnerGetsPot() public {
+        uint256 stake = 1 ether;
+        ClawttackBattle battle = _createAndAccept(stake);
+
+        uint256 aliceBalBefore = alice.balance;
+        vm.prank(alice);
+        battle.captureFlag("bravo-secret-phrase");
+
+        // Alice should receive pot minus protocol fee
+        assertGt(alice.balance, aliceBalBefore);
+    }
+
+    /// @notice Verifies that captureFlag emits FlagCaptured event
+    function test_captureFlag_emitsFlagCaptured() public {
+        ClawttackBattle battle = _createAndAccept(1 ether);
+
+        vm.expectEmit(true, true, true, true);
+        emit ClawttackBattle.FlagCaptured(battle.battleId(), agentAlice, agentBob);
+        vm.prank(alice);
+        battle.captureFlag("bravo-secret-phrase");
+
+        // Verify result type is FLAG_CAPTURED
+        assertEq(uint8(battle.state()), uint8(ClawttackTypes.BattleState.Settled));
+    }
+
+    /// @notice Verifies battle with no secret committed (bytes32(0)) reverts on captureFlag
+    function test_captureFlag_noSecretCommitted_reverts() public {
+        // Create battle with zero secret hash
+        ClawttackTypes.BattleConfig memory config = _defaultConfig(0);
+        vm.prank(alice);
+        address addr = arena.createBattle(agentAlice, config, bytes32(0));
+        ClawttackBattle battle = ClawttackBattle(payable(addr));
+
+        vm.prank(bob);
+        battle.acceptBattle(agentBob, bytes32(0));
+        vm.roll(block.number + config.warmupBlocks + 1);
+
+        // Both sides have zero secret — should revert
+        vm.prank(alice);
+        vm.expectRevert(ClawttackErrors.NoSecretCommitted.selector);
+        battle.captureFlag("anything");
     }
 }

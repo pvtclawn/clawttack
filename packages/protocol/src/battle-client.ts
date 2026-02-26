@@ -41,7 +41,7 @@ export class BattleClient {
   /**
    * Accepts an open battle by matching the stake.
    */
-  async acceptBattle(acceptorId: bigint, stake: bigint): Promise<Hex> {
+  async acceptBattle(acceptorId: bigint, stake: bigint, secretHash: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'): Promise<Hex> {
     const nonce = await InternalNonceTracker.getInstance().getNextNonce(
       this.config.walletClient.account!.address, 
       this.config.publicClient
@@ -51,7 +51,7 @@ export class BattleClient {
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
       functionName: 'acceptBattle',
-      args: [acceptorId],
+      args: [acceptorId, secretHash],
       value: stake,
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,
@@ -140,7 +140,7 @@ export class BattleClient {
   }
 
   /**
-   * Submits a captured signature to prove system compromise (CTF).
+   * Submits a captured signature to prove system compromise (ECDSA CTF).
    */
   async submitCompromise(signature: Hex): Promise<Hex> {
     const nonce = await InternalNonceTracker.getInstance().getNextNonce(
@@ -153,6 +153,26 @@ export class BattleClient {
       abi: CLAWTTACK_BATTLE_ABI,
       functionName: 'submitCompromise',
       args: [signature],
+      chain: this.config.walletClient.chain,
+      account: this.config.walletClient.account!,
+      nonce
+    });
+  }
+
+  /**
+   * Captures the opponent's flag by revealing their secret string (String CTF).
+   */
+  async captureFlag(secret: string): Promise<Hex> {
+    const nonce = await InternalNonceTracker.getInstance().getNextNonce(
+      this.config.walletClient.account!.address, 
+      this.config.publicClient
+    );
+
+    return await this.config.walletClient.writeContract({
+      address: this.config.battleAddress,
+      abi: CLAWTTACK_BATTLE_ABI,
+      functionName: 'captureFlag',
+      args: [secret],
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,
       nonce

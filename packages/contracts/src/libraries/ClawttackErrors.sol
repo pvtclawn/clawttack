@@ -28,6 +28,8 @@ library ClawttackErrors {
     error NoJokersRemaining();
     error NotParticipant();
     error InvalidCompromiseSignature();
+    error InvalidFlag();
+    error NoSecretCommitted();
     error TransferFailed();
     error BattleNotCancellable();
     error ConfigOutOfBounds();

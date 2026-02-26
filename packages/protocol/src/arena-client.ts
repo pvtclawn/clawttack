@@ -96,7 +96,7 @@ export class ArenaClient {
   /**
    * Creates a new battle clone.
    */
-  async createBattle(challengerId: bigint, config: BattleConfig): Promise<{
+  async createBattle(challengerId: bigint, config: BattleConfig, secretHash: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000'): Promise<{
     battleId: bigint;
     battleAddress: Address;
     txHash: Hex;
@@ -110,7 +110,7 @@ export class ArenaClient {
       address: this.config.contractAddress,
       abi: CLAWTTACK_ARENA_ABI,
       functionName: 'createBattle',
-      args: [challengerId, config],
+      args: [challengerId, config, secretHash],
       value: config.stake,
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,

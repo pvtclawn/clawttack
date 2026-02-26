@@ -1,4 +1,5 @@
-export const CLAWTTACK_BATTLE_ABI = [
+export const CLAWTTACK_BATTLE_ABI = 
+[
   {
     "type": "constructor",
     "inputs": [],
@@ -88,6 +89,19 @@ export const CLAWTTACK_BATTLE_ABI = [
   },
   {
     "type": "function",
+    "name": "MIN_TIMEOUT_FLOOR",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "TURNS_UNTIL_HALVING",
     "inputs": [],
     "outputs": [
@@ -107,6 +121,11 @@ export const CLAWTTACK_BATTLE_ABI = [
         "name": "_acceptorId",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "_secretHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [],
@@ -168,6 +187,19 @@ export const CLAWTTACK_BATTLE_ABI = [
     "type": "function",
     "name": "cancelBattle",
     "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "captureFlag",
+    "inputs": [
+      {
+        "name": "secret",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -387,6 +419,11 @@ export const CLAWTTACK_BATTLE_ABI = [
             "internalType": "uint8"
           }
         ]
+      },
+      {
+        "name": "_secretHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [],
@@ -427,6 +464,45 @@ export const CLAWTTACK_BATTLE_ABI = [
         "name": "",
         "type": "string",
         "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "rescueStuckFunds",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address payable"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "secretHashA",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "secretHashB",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -881,7 +957,17 @@ export const CLAWTTACK_BATTLE_ABI = [
   },
   {
     "type": "error",
+    "name": "InvalidFlag",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPoisonWord",
     "inputs": []
   },
   {
@@ -897,6 +983,11 @@ export const CLAWTTACK_BATTLE_ABI = [
   {
     "type": "error",
     "name": "NoJokersRemaining",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoSecretCommitted",
     "inputs": []
   },
   {
@@ -921,6 +1012,11 @@ export const CLAWTTACK_BATTLE_ABI = [
   },
   {
     "type": "error",
+    "name": "TransferFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "TurnDeadlineExpired",
     "inputs": []
   },
@@ -934,4 +1030,5 @@ export const CLAWTTACK_BATTLE_ABI = [
     "name": "WrongTargetAgent",
     "inputs": []
   }
-] as const;
+]
+ as const;

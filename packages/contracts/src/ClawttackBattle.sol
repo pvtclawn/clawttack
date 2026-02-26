@@ -61,6 +61,9 @@ contract ClawttackBattle is Initializable {
     string public poisonWord;
     bytes public currentVopParams;
 
+    bytes32 public secretHashA;
+    bytes32 public secretHashB;
+
     // ─── Events ──────────────────────────────────────────────────────────────
 
     event BattleAccepted(uint256 indexed battleId, uint256 indexed acceptorId, bool challengerGoesFirst);
@@ -102,7 +105,8 @@ contract ClawttackBattle is Initializable {
         uint256 _battleId,
         uint256 _challengerId,
         address _challengerOwner,
-        ClawttackTypes.BattleConfig calldata _config
+        ClawttackTypes.BattleConfig calldata _config,
+        bytes32 _secretHash
     ) external initializer {
         arena = _arena;
         battleId = _battleId;
@@ -113,6 +117,7 @@ contract ClawttackBattle is Initializable {
         state = ClawttackTypes.BattleState.Open;
         jokersRemainingA = _config.maxJokers;
         totalPot = _config.stake;
+        secretHashA = _secretHash;
     }
 
     receive() external payable {}
@@ -122,7 +127,7 @@ contract ClawttackBattle is Initializable {
      * @dev Rolls the `prevrandao` to deterministically allocate the First Mover advantage.
      * @param _acceptorId The ID of the responding agent.
      */
-    function acceptBattle(uint256 _acceptorId) external payable {
+    function acceptBattle(uint256 _acceptorId, bytes32 _secretHash) external payable {
         if (state != ClawttackTypes.BattleState.Open) revert ClawttackErrors.BattleNotOpen();
         if (msg.value != config.stake) revert ClawttackErrors.InsufficientValue();
         if (_acceptorId == challengerId) revert ClawttackErrors.CannotBattleSelf();
@@ -146,6 +151,7 @@ contract ClawttackBattle is Initializable {
         acceptorOwner = msg.sender;
         jokersRemainingB = config.maxJokers;
         totalPot += msg.value;
+        secretHashB = _secretHash;
 
         state = ClawttackTypes.BattleState.Active;
 
@@ -320,6 +326,31 @@ contract ClawttackBattle is Initializable {
 
         emit FlagCaptured(battleId, attackerId, victimId);
         _settleBattle(attackerId, victimId, ClawttackTypes.ResultType.COMPROMISE);
+    }
+
+    /**
+     * @notice Captures the opponent's flag by revealing their secret string.
+     * @dev The string-secret CTF win condition. Hash of secret must match opponent's committed secretHash.
+     * @param secret The plaintext secret extracted from the opponent via narrative injection.
+     */
+    function captureFlag(string calldata secret) external {
+        if (state != ClawttackTypes.BattleState.Active) revert ClawttackErrors.BattleNotActive();
+
+        bool isPlayerA = msg.sender == challengerOwner;
+        bool isPlayerB = msg.sender == acceptorOwner;
+        if (!isPlayerA && !isPlayerB) revert ClawttackErrors.NotParticipant();
+
+        bytes32 targetHash = isPlayerA ? secretHashB : secretHashA;
+        if (targetHash == bytes32(0)) revert ClawttackErrors.NoSecretCommitted();
+
+        bytes32 attemptHash = keccak256(abi.encodePacked(secret));
+        if (attemptHash != targetHash) revert ClawttackErrors.InvalidFlag();
+
+        uint256 attackerId = isPlayerA ? challengerId : acceptorId;
+        uint256 victimId = isPlayerA ? acceptorId : challengerId;
+
+        emit FlagCaptured(battleId, attackerId, victimId);
+        _settleBattle(attackerId, victimId, ClawttackTypes.ResultType.FLAG_CAPTURED);
     }
 
     /**

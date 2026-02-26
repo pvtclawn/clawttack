@@ -19,7 +19,8 @@ library ClawttackTypes {
         INVALID_SOLUTION,
         POISON_VIOLATION,
         TIMEOUT,
-        MAX_TURNS
+        MAX_TURNS,
+        FLAG_CAPTURED
     }
 
     struct AgentProfile {
