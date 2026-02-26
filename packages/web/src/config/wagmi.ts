@@ -8,11 +8,11 @@ export const config = createConfig({
   },
 })
 
-// V3.2 Contract addresses (Base Sepolia — deployed 2026-02-24)
+// V3.3 Contract addresses (Base Sepolia — deployed 2026-02-26)
 export const CONTRACTS = {
-  arena: '0xAF9188A59a8BfF0C20Ca525Fe3DD9BaBcf3b4b7b' as const,
-  battleImpl: '0xBB6ee11AbBB5A2C0C71ceC6A0B64aB85A8f7bf35' as const,
-  vopRegistry: '0xAF9188A59a8BfF0C20Ca525Fe3DD9BaBcf3b4b7b' as const,
+  arena: '0xF5738E9cE88afCB377F5F7D9a57Ce64147b1AA9c' as const,
+  battleImpl: '0x4f4Fe27ada50E7BEA0a15a96c27d9aA9bE09D12B' as const,
+  vopRegistry: '0xF5738E9cE88afCB377F5F7D9a57Ce64147b1AA9c' as const,
   wordDictionary: '0x70dfeE9a3c5b4d530F048cb5AF8573C1F451A0A2' as const,
   hashPreimageVop: '0x365b620d8C3938317608180350994722E6638bAd' as const,
   l1MetadataVop: '0xDBB1442E119363DAc8EB08E8dF893eb7E7cb75FE' as const,
@@ -20,5 +20,5 @@ export const CONTRACTS = {
   crossChainSyncVop: '0xE0Cf493580F2c6B93258EC0Df022A6eb8a543D6E' as const,
 } as const
 
-// Block number of the V3.2 Arena deployment (for event scanning)
-export const ARENA_DEPLOY_BLOCK = 38_083_503n
+// Block number of the V3.3 Arena deployment (for event scanning)
+export const ARENA_DEPLOY_BLOCK = 38_176_500n

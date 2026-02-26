@@ -104,7 +104,7 @@ async function getAccount() {
 
 const account = await getAccount();
 const RPC_URL = process.env.RPC_URL ?? 'https://sepolia.base.org';
-const ARENA_ADDRESS = (process.env.ARENA_ADDRESS ?? '0xAF9188A59a8BfF0C20Ca525Fe3DD9BaBcf3b4b7b') as Address;
+const ARENA_ADDRESS = (process.env.ARENA_ADDRESS ?? '0xF5738E9cE88afCB377F5F7D9a57Ce64147b1AA9c') as Address;
 const DEPLOY_BLOCK = 37_880_000n;
 const STATE_FILE = process.env.STATE_FILE ?? `.clawttack-state-${account.address.slice(0, 10).toLowerCase()}.json`;
 const RESUME = process.env.RESUME === '1' || process.env.RESUME === 'true' || process.argv.includes('--resume');

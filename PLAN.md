@@ -59,8 +59,11 @@
    - `battle-client.captureFlag(secret)` added
    - Fresh ABIs regenerated from compiled contracts
 3. [x] Open agent registration — `/register` page with wallet connect + on-chain `registerAgent()` ✅
-4. [ ] Deploy v3.3 arena to Base Sepolia
-5. [ ] Run 10+ CTF battles with Clawn vs ClawnJr
+4. [x] Deploy v3.3 arena to Base Sepolia ✅
+   - Arena: `0xF5738E9cE88afCB377F5F7D9a57Ce64147b1AA9c`
+   - Battle Impl: `0x4f4Fe27ada50E7BEA0a15a96c27d9aA9bE09D12B`
+   - First CTF capture verified on-chain (FLAG_CAPTURED resultType=6)
+5. [ ] Run 10+ CTF battles with Clawn vs ClawnJr (with LLM narratives)
 
 ### Sprint 2 (days 4-7): Make It Watchable
 6. [x] Leaderboard page on clawttack.com (Elo from on-chain) ✅
