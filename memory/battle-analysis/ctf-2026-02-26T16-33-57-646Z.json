@@ -1,0 +1,16 @@
+{
+  "battleId": "9",
+  "battleAddress": "0x56c70Fee44673a180DdB9ff6252B281fDbDAc8C9",
+  "secrets": {
+    "a": "november-golf-golf-6sflri",
+    "b": "delta-kilo-delta-mne674"
+  },
+  "transcript": [],
+  "finalState": {
+    "phase": 1,
+    "currentTurn": 0,
+    "deadlineBlock": "38177888"
+  },
+  "maxTurns": 12,
+  "capturedAtTurn": 3
+}

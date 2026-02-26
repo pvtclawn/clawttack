@@ -1,0 +1,16 @@
+{
+  "battleId": "11",
+  "battleAddress": "0xb91ac7563A3d16080b978224aDAd7e8c9573F811",
+  "secrets": {
+    "a": "echo-alpha-golf-4b8o6y",
+    "b": "oscar-delta-lima-uvu578"
+  },
+  "transcript": [],
+  "finalState": {
+    "phase": 1,
+    "currentTurn": 0,
+    "deadlineBlock": "38177904"
+  },
+  "maxTurns": 12,
+  "capturedAtTurn": 5
+}
