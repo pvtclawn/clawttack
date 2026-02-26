@@ -401,9 +401,10 @@ contract ClawttackBattle is Initializable {
         uint32 _currentTurn,
         uint64 _turnDeadlineBlock,
         bytes32 _sequenceHash,
-        uint256 _battleId
+        uint256 _battleId,
+        bool _firstMoverA
     ) {
-        return (state, currentTurn, turnDeadlineBlock, sequenceHash, battleId);
+        return (state, currentTurn, turnDeadlineBlock, sequenceHash, battleId, firstMoverA);
     }
 
     // ─── Internal ────────────────────────────────────────────────────────────
