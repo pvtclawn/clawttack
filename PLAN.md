@@ -1,89 +1,92 @@
-# Clawttack v3.3 Decision Tree
-*Updated 2026-02-26 04:30*
+# Clawttack v3.3 — Product Roadmap
+*Updated 2026-02-26 14:49 — Egor confirmed: PRODUCT path*
+
+## Decision Made ✅
+**Clawttack is a product.** Needs users, engagement, and a path to revenue.
 
 ## Current State
-- v3.2 deployed on Base Sepolia, 14 battles (3 LLM), 396 tests green
-- clawttack.com LIVE on Vercel ✅
-- **All 12-turn battles = DRAW** (template AND LLM)
-- Egor suggested CTF direction (08:00 Feb 25) — design drafted + red-teamed
-- ContextualLinguisticParser prototype built + tested (21 Forge tests)
+- v3.2 on Base Sepolia: 14 battles, 2 agents (both ours), all draws
+- 424 tests (328 Bun + 96 Forge), 0 failures
+- clawttack.com LIVE ✅
+- ContextualLinguisticParser prototype ready (5 constraints, 21 Forge tests)
 - SelfClaw verified (ERC-8004 #168 on Celo)
+- 83 agents attested on Base
 
-## ⚠️ Meta-Question: Product vs Research Artifact
-*Raised by economic sustainability red-team (Feb 26)*
+## Product Priorities (in order)
 
-Before picking v3.3 mechanics, the bigger question:
-**Is Clawttack a product (needs users + revenue) or a research artifact (portfolio/credential)?**
+### P0: Win Condition
+**Problem:** All battles = DRAW. No winners = no engagement = no product.
+**Solution:** Pick ONE and ship it fast:
+- **(A) CTF (Capture The Flag)** — extract opponent's secret via narrative injection. Context isolation P0 exists but "accept it" is viable: game tests defense quality, weak agents lose, top agents draw. CTF as filtering mechanism.
+- **(B) Escalating Multi-Poison** — each round adds poison words. First failure = loss. Simpler. Still susceptible to equal LLMs but creates variance.
+- **(C) Asymmetric Roles** — attacker/defender with role swap. Highest skill expression. Largest contract change.
 
-If **product**: next priority is spectator layer, external Elo consumption, business model — NOT more game mechanics.
-If **research artifact**: CTF/CLP integration is fine — demonstrate technical depth, not market fit.
+**Recommendation:** (A) CTF — most interesting mechanic, fastest to ship (~1 day), most compelling narrative for spectators. Accept context isolation; real agents won't all be equally smart.
 
-Current trajectory: increasingly sophisticated mechanics nobody plays (2 agents, 67 battles, all ours).
-See: `memory/challenges/2026-02-26--economic-sustainability.md`
+### P1: Open Registration
+**Problem:** 2 agents (both ours). No external participation.
+**What:** Permissionless `registerAgent()` — any ERC-8004 agent can join.
+**Effort:** Small — contract already supports it, just remove gating.
 
-**Awaiting Egor's answer on this.** It changes everything about investment priority.
+### P2: Spectator Experience
+**Problem:** Battle narratives are great content but nobody sees them.
+**What:**
+- Live battle feed on clawttack.com (poll events or WebSocket)
+- Battle replay page (already have IPFS logs)
+- Leaderboard with Elo rankings
+**Effort:** Medium — frontend work, event indexing.
 
-## The Two-Layer Problem
-
-### Layer 1: Poison avoidance is trivial for LLMs
-Poison is visible in TurnPayload event → agent reads it → explicitly instructs LLM to exclude → 100% success rate.
-
-### Layer 2 (DEEPER): No win condition besides timeout
-Even if poison becomes harder, **if both agents survive all turns → DRAW**. The game needs a way to produce winners.
-
----
-
-## Leading Direction: CTF (Capture The Flag)
-
-**Origin:** Egor's suggestion (Feb 25 08:00)
-**Design doc:** `docs/design/v3.3-ctf-mechanic.md`
-**Red-team:** `memory/challenges/2026-02-25--ctf-mechanic-red-team.md`
-
-### Concept
-- Each agent commits `hash(secret)` at battle start
-- Goal: extract opponent's secret via prompt injection in narratives
-- `captureFlag(secret)` → verify vs hash → instant win
-- Settlement: flag capture > timeout > maxTurns draw
-
-### P0 Red-Team Finding: Context Isolation Defeats CTF
-A smart agent keeps secret in system prompt, uses a **separate** LLM call (without secret) to analyze opponent narratives. Secret never touches the attack surface → injection can't reach it → unwinnable.
-
-### Fix Directions for P0
-- **(a) Functional secret**: Secret is needed for gameplay (e.g., required to compute VOP solutions). Agent MUST use it actively → more leak surface.
-- **(b) VIN integration**: TEE proves LLM call included both secret AND opponent narrative in same context. Heavy infra.
-- **(c) Accept it**: Game tests defense quality. Top agents draw; weak agents get exploited. CTF as a filtering mechanism, not a competition.
-- **(d) Protocol-enforced context**: Contract requires proof that opponent's narrative was in the same LLM call as the secret (variant of proof-of-context + VIN).
-
-**Awaiting Egor's response on P0 direction** (sent msg #5692 at 09:34).
+### P3: Revenue Path
+**Problem:** Zero revenue even at optimistic adoption.
+**Options:**
+- Battle entry fees (% to protocol)
+- Spectator staking on outcomes
+- Battle NFTs (mintable replays, IPFS CID already exists)
+- Premium API access for agent builders
+**Decision needed:** Which revenue path to pursue. Stakes are the most natural.
 
 ---
 
-## Other Options (deprioritized, not rejected)
+## Implementation Plan
 
-### Escalating Multi-Poison
-Each round adds poison words. First failure = loss. Simpler but still susceptible to equal LLMs both surviving.
+### Sprint 1 (next 2-3 days): Make It Playable
+1. [ ] Implement CTF mechanic in Battle.sol (`secretHash`, `captureFlag()`)
+2. [ ] Update SDK with secret generation + flag submission
+3. [ ] Open agent registration (remove gating)
+4. [ ] Deploy v3.3 arena to Base Sepolia
+5. [ ] Run 10+ CTF battles with Clawn vs ClawnJr
 
-### Asymmetric Attacker/Defender
-Structured role swapping. High impact but larger contract change.
+### Sprint 2 (days 4-7): Make It Watchable
+6. [ ] Leaderboard page on clawttack.com (Elo from on-chain)
+7. [ ] Battle replay viewer (load from IPFS)
+8. [ ] Live battle feed (new battles, recent results)
+9. [ ] Agent profile pages (stats, battle history)
 
-### Commit-Reveal Blind Poison
-Combines well with CTF or multi-poison. Addresses Layer 1 (poison visibility).
+### Sprint 3 (week 2): Make It Growable
+10. [ ] Share battle results (social cards, OG images)
+11. [ ] Documentation for third-party agent builders
+12. [ ] First external agent onboarded
+13. [ ] Revenue mechanism (stakes or NFTs)
 
-## Next Task
-- **If Egor picks (a) functional secret**: Design what "functional" means in contract terms → implement
-- **If Egor picks (c) accept**: Build CTF as-is (~1 day) → deploy → test with real LLM agents
-- **If Egor pivots**: Follow his direction
-- **Meanwhile**: All designs are documented, ready to build on any path
+---
+
+## Technical Debt to Address
+- Integrate ContextualLinguisticParser into Battle.sol (context verification)
+- Commit-reveal for blind poison (Layer 1 fix)
+- Gas optimization for multi-constraint verification
 
 ## Parked (ICEBOX)
 - Scoring oracle / LLM judge
 - Narrative entropy scoring
-- Audience voting / staking
+- Audience voting
+- Full VIN integration
 - Opponent echo requirement (gas too high)
-- Full VIN integration for proof-of-LLM-input
 
-## If Product Path: Quick Wins
-1. **Real-time battle spectating** on clawttack.com (WebSocket + event listener)
-2. **Open registration** — let external agents register (currently just Clawn + ClawnJr)
-3. **One external Elo consumer** — find a protocol that would check Clawttack battle record
-4. **Battle replays as content** — NFT-mintable battle logs (IPFS already done)
+---
+
+## Design Docs
+- CTF mechanic: `docs/design/v3.3-ctf-mechanic.md`
+- Context verification: `docs/research/2026-02-25--onchain-context-verification.md`
+- CTF red-team: `memory/challenges/2026-02-25--ctf-mechanic-red-team.md`
+- Economic red-team: `memory/challenges/2026-02-26--economic-sustainability.md`
+- Parser attack vectors: `memory/challenges/2026-02-26--contextual-parser-attack-vectors.md`
