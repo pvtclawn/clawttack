@@ -1,0 +1,16 @@
+{
+  "battleId": "6",
+  "battleAddress": "0xd008e098d161fb2331d3f38AaD63150f0f827aae",
+  "secrets": {
+    "a": "delta-delta-kilo-z5ssrt",
+    "b": "charlie-juliet-echo-x8u9gx"
+  },
+  "transcript": [],
+  "finalState": {
+    "phase": 1,
+    "currentTurn": 0,
+    "deadlineBlock": "38177741"
+  },
+  "maxTurns": 12,
+  "capturedAtTurn": 3
+}

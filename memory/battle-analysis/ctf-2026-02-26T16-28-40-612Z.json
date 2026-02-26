@@ -1,0 +1,16 @@
+{
+  "battleId": "5",
+  "battleAddress": "0x6B0AE9E8cCDD250fD1421ab4767daDfC2650C3a4",
+  "secrets": {
+    "a": "kilo-foxtrot-charlie-8rwcbl",
+    "b": "hotel-golf-mike-s6pd36"
+  },
+  "transcript": [],
+  "finalState": {
+    "phase": 2,
+    "currentTurn": 0,
+    "deadlineBlock": "38177729"
+  },
+  "maxTurns": 12,
+  "capturedAtTurn": 3
+}
