@@ -15,8 +15,8 @@ const PHASE_COLORS: Record<number, string> = {
   3: 'bg-red-900/50 text-red-400',
 }
 
-const RESULT_NAMES = ['Max Turns', 'Timeout', 'Compromise', 'Cancelled'] as const
-const RESULT_ICONS = ['⏱️', '⏰', '🏴', '❌'] as const
+const RESULT_NAMES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Max Turns', 'Flag Captured'] as const
+const RESULT_ICONS = ['❓', '🏴', '❌', '☠️', '⏰', '⏱️', '🚩'] as const
 
 type FilterState = 'all' | 'open' | 'active' | 'settled'
 

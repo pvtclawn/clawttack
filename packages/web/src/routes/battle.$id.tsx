@@ -16,7 +16,7 @@ export const Route = createFileRoute('/battle/$id')({
 })
 
 const PHASE_NAMES = ['Open', 'Active', 'Settled', 'Cancelled'] as const
-const RESULT_TYPES = ['Max Turns', 'Timeout', 'Compromise', 'Cancelled'] as const
+const RESULT_TYPES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Max Turns', 'Flag Captured'] as const
 
 function shortAddr(addr: string) {
   if (!addr || addr === '0x0000000000000000000000000000000000000000') return '—'
