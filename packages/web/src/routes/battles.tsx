@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useBattleList, useArenaStats, type V3BattleInfo } from '../hooks/useChain'
 import { formatEther } from 'viem'
+import { useState, useMemo } from 'react'
 
 export const Route = createFileRoute('/battles')({
   component: BattlesPage,
@@ -17,6 +18,8 @@ const PHASE_COLORS: Record<number, string> = {
 const RESULT_NAMES = ['Max Turns', 'Timeout', 'Compromise', 'Cancelled'] as const
 const RESULT_ICONS = ['⏱️', '⏰', '🏴', '❌'] as const
 
+type FilterState = 'all' | 'open' | 'active' | 'settled'
+
 function shortAddr(addr: string) {
   if (!addr || addr === '0x0000000000000000000000000000000000000000') return '—'
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
@@ -24,14 +27,34 @@ function shortAddr(addr: string) {
 
 function BattlesPage() {
   const { data: stats, isLoading: loadingStats } = useArenaStats()
-  const { data: battles, isLoading: loadingBattles } = useBattleList(true)
+  const { data: battles, isLoading: loadingBattles, dataUpdatedAt } = useBattleList(true)
+  const [filter, setFilter] = useState<FilterState>('all')
 
   const isLoading = loadingStats || loadingBattles
+
+  const filteredBattles = useMemo(() => {
+    if (!battles) return []
+    if (filter === 'all') return battles
+    const stateMap: Record<FilterState, number> = { all: -1, open: 0, active: 1, settled: 2 }
+    return battles.filter(b => b.state === stateMap[filter])
+  }, [battles, filter])
+
+  const counts = useMemo(() => {
+    if (!battles) return { open: 0, active: 0, settled: 0 }
+    return {
+      open: battles.filter(b => b.state === 0).length,
+      active: battles.filter(b => b.state === 1).length,
+      settled: battles.filter(b => b.state === 2).length,
+    }
+  }, [battles])
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">⚔️ Battles</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">⚔️ Battles</h1>
+          <LiveIndicator updatedAt={dataUpdatedAt} />
+        </div>
         <span className="text-sm text-[var(--muted)]">
           {isLoading ? 'Loading...' : (
             <>
@@ -41,6 +64,14 @@ function BattlesPage() {
         </span>
       </div>
 
+      {/* Filters */}
+      <div className="flex gap-2">
+        <FilterButton label="All" count={battles?.length ?? 0} active={filter === 'all'} onClick={() => setFilter('all')} />
+        <FilterButton label="Open" count={counts.open} active={filter === 'open'} onClick={() => setFilter('open')} />
+        <FilterButton label="Active" count={counts.active} active={filter === 'active'} onClick={() => setFilter('active')} />
+        <FilterButton label="Settled" count={counts.settled} active={filter === 'settled'} onClick={() => setFilter('settled')} />
+      </div>
+
       {isLoading && (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-[var(--muted)]">
           ⏳ Reading from Base Sepolia...
@@ -48,7 +79,7 @@ function BattlesPage() {
       )}
 
       <div className="space-y-3">
-        {(battles ?? []).map((b: V3BattleInfo) => (
+        {filteredBattles.map((b: V3BattleInfo) => (
           <div
             key={b.battleId.toString()}
             className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:bg-[var(--surface-hover)] transition-colors"
@@ -110,11 +141,47 @@ function BattlesPage() {
         ))}
       </div>
 
-      {!isLoading && (battles ?? []).length === 0 && (
+      {!isLoading && filteredBattles.length === 0 && (
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-[var(--muted)]">
-          No battles found yet. The arena awaits its first fighters.
+          {filter === 'all'
+            ? 'No battles found yet. The arena awaits its first fighters.'
+            : `No ${filter} battles right now.`}
         </div>
       )}
     </div>
+  )
+}
+
+function LiveIndicator({ updatedAt }: { updatedAt: number }) {
+  if (!updatedAt) return null
+  const secondsAgo = Math.round((Date.now() - updatedAt) / 1000)
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-[var(--muted)]" title={`Last updated ${secondsAgo}s ago`}>
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+      </span>
+      Live
+    </span>
+  )
+}
+
+function FilterButton({ label, count, active, onClick }: {
+  label: string
+  count: number
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+        active
+          ? 'bg-[var(--accent)] text-black'
+          : 'border border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]'
+      }`}
+    >
+      {label} {count > 0 && <span className="ml-1 opacity-70">{count}</span>}
+    </button>
   )
 }
