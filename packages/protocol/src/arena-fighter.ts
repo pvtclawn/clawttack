@@ -90,6 +90,13 @@ export const ARENA_ABI = [
     outputs: [],
   },
   {
+    name: 'captureFlag',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'secret', type: 'string' }],
+    outputs: [],
+  },
+  {
     name: 'cancelChallenge',
     type: 'function',
     stateMutability: 'nonpayable',
@@ -580,6 +587,28 @@ export class ArenaFighter {
         abi: ARENA_ABI,
         functionName: 'claimTimeout',
         args: [battleId],
+        chain: this.walletClient.chain,
+        account: this.walletClient.account!,
+      }));
+      await this.withRetry(() => this.publicClient.waitForTransactionReceipt({ hash: txHash }));
+      return txHash;
+    } catch (err) {
+      throw parseRevertError(err);
+    }
+  }
+
+  /**
+   * Capture the opponent's flag by revealing their secret string (CTF win condition).
+   * @param battleAddress The battle clone address
+   * @param secret The plaintext secret extracted from the opponent
+   */
+  async captureFlag(battleAddress: Hex, secret: string): Promise<Hex> {
+    try {
+      const txHash = await this.withRetry(() => this.walletClient.writeContract({
+        address: battleAddress,
+        abi: ARENA_ABI,
+        functionName: 'captureFlag',
+        args: [secret],
         chain: this.walletClient.chain,
         account: this.walletClient.account!,
       }));
