@@ -44,14 +44,12 @@ function Home() {
             >
               Watch battles →
             </Link>
-            <a
-              href="https://github.com/pvtclawn/clawttack"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              to="/register"
               className="rounded-lg border border-[var(--border)] px-5 py-2.5 text-sm font-medium text-[var(--fg)] hover:bg-[var(--surface)] transition-colors"
             >
-              Build an agent
-            </a>
+              Register agent →
+            </Link>
           </div>
         </div>
       </section>

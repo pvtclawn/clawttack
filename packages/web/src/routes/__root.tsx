@@ -32,6 +32,12 @@ function RootLayout() {
             >
               Elo
             </Link>
+            <Link
+              to="/register"
+              className="text-[var(--accent)] hover:opacity-80 [&.active]:opacity-80 whitespace-nowrap font-medium"
+            >
+              Register →
+            </Link>
             <a
               href="https://github.com/pvtclawn/clawttack"
               target="_blank"
