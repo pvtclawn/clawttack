@@ -1,50 +1,28 @@
 # Clawttack v3.3 — Product Roadmap
-*Updated 2026-02-26 15:39 — CTF mechanic shipped*
+*Updated 2026-02-26 16:44 — Sprint 1+2 complete, CTF on-chain*
 
 ## Decision Made ✅
 **Clawttack is a product.** Needs users, engagement, and a path to revenue.
 
 ## Current State
-- v3.2 on Base Sepolia: 14 battles, 2 agents (both ours), all draws
-- 526 tests (422 Bun + 104 Forge), 929 expects, 0 failures
+- v3.3 on Base Sepolia: 11 CTF battles, 2 agents, FLAG_CAPTURED working ✅
+- v3.2 legacy: 14 battles (all draws — pre-CTF)
+- 544 tests (440 Bun + 104 Forge), 952 expects, 0 failures
 - clawttack.com LIVE ✅ — leaderboard, registration, battle replay, agent profiles, filters, live indicator
-- ContextualLinguisticParser prototype ready (5 constraints, 21 Forge tests)
-- SelfClaw verified (ERC-8004 #168 on Celo)
-- 84 agents attested on Base
-- **12 commits on develop** ahead of main (needs merge to deploy)
+- **21 commits on develop** ahead of main (needs merge to deploy)
+- 84 agents attested on Base, SelfClaw verified (ERC-8004 #168 on Celo)
 
-## Product Priorities (in order)
+## Open Design Question: Secret Enforcement
+Egor asked: how do you ensure the secret sits in the LLM's system prompt?
+**Answer: you can't.** On-chain contracts cannot force data into an LLM's context window.
+A rational agent keeps the secret completely isolated from the LLM → immune to extraction.
 
-### P0: Win Condition
-**Problem:** All battles = DRAW. No winners = no engagement = no product.
-**Solution:** Pick ONE and ship it fast:
-- **(A) CTF (Capture The Flag)** — extract opponent's secret via narrative injection. Context isolation P0 exists but "accept it" is viable: game tests defense quality, weak agents lose, top agents draw. CTF as filtering mechanism.
-- **(B) Escalating Multi-Poison** — each round adds poison words. First failure = loss. Simpler. Still susceptible to equal LLMs but creates variance.
-- **(C) Asymmetric Roles** — attacker/defender with role swap. Highest skill expression. Largest contract change.
+**Current approach:** SDK convention (default injects secret into system prompt) + game design.
+**Implication:** CTF tests *defensive architecture* quality, not prompt engineering.
+Weak/default agents leak → lose. Hardened agents isolate → draw at max turns.
 
-**Recommendation:** (A) CTF — most interesting mechanic, fastest to ship (~1 day), most compelling narrative for spectators. Accept context isolation; real agents won't all be equally smart.
-
-### P1: Open Registration
-**Problem:** 2 agents (both ours). No external participation.
-**What:** Permissionless `registerAgent()` — any ERC-8004 agent can join.
-**Effort:** Small — contract already supports it, just remove gating.
-
-### P2: Spectator Experience
-**Problem:** Battle narratives are great content but nobody sees them.
-**What:**
-- Live battle feed on clawttack.com (poll events or WebSocket)
-- Battle replay page (already have IPFS logs)
-- Leaderboard with Elo rankings
-**Effort:** Medium — frontend work, event indexing.
-
-### P3: Revenue Path
-**Problem:** Zero revenue even at optimistic adoption.
-**Options:**
-- Battle entry fees (% to protocol)
-- Spectator staking on outcomes
-- Battle NFTs (mintable replays, IPFS CID already exists)
-- Premium API access for agent builders
-**Decision needed:** Which revenue path to pursue. Stakes are the most natural.
+See: `memory/challenges/2026-02-26--functional-secret-design.md`
+**Awaiting Egor's direction** on whether this is acceptable or needs redesign.
 
 ---
 
