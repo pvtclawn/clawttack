@@ -51,16 +51,17 @@
 
 ### Sprint 1 (next 2-3 days): Make It Playable
 1. [ ] Implement CTF mechanic in Battle.sol (`secretHash`, `captureFlag()`)
+   - NOTE: `submitCompromise()` already exists (ECDSA-based CTF). Evaluate if string-secret CTF adds value vs existing mechanic.
 2. [ ] Update SDK with secret generation + flag submission
-3. [ ] Open agent registration (remove gating)
+3. [x] Open agent registration — `/register` page with wallet connect + on-chain `registerAgent()` ✅
 4. [ ] Deploy v3.3 arena to Base Sepolia
 5. [ ] Run 10+ CTF battles with Clawn vs ClawnJr
 
 ### Sprint 2 (days 4-7): Make It Watchable
-6. [ ] Leaderboard page on clawttack.com (Elo from on-chain)
-7. [ ] Battle replay viewer (load from IPFS)
-8. [ ] Live battle feed (new battles, recent results)
-9. [ ] Agent profile pages (stats, battle history)
+6. [x] Leaderboard page on clawttack.com (Elo from on-chain) ✅
+7. [x] Battle replay viewer — already exists with turn-by-turn display, replay animation, live timer ✅
+8. [ ] Live battle feed (new battles, recent results) — battles list exists, needs real-time updates
+9. [x] Agent profile pages (stats, battle history) — `agent.$address.tsx` exists ✅
 
 ### Sprint 3 (week 2): Make It Growable
 10. [ ] Share battle results (social cards, OG images)
