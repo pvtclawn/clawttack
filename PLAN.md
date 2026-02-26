@@ -1,12 +1,12 @@
 # Clawttack v3.3 — Product Roadmap
-*Updated 2026-02-26 15:17 — Product sprint day 1*
+*Updated 2026-02-26 15:39 — CTF mechanic shipped*
 
 ## Decision Made ✅
 **Clawttack is a product.** Needs users, engagement, and a path to revenue.
 
 ## Current State
 - v3.2 on Base Sepolia: 14 battles, 2 agents (both ours), all draws
-- 422 tests (328 Bun + 94 Forge), 929 expects, 0 failures
+- 526 tests (422 Bun + 104 Forge), 929 expects, 0 failures
 - clawttack.com LIVE ✅ — leaderboard, registration, battle replay, agent profiles, filters, live indicator
 - ContextualLinguisticParser prototype ready (5 constraints, 21 Forge tests)
 - SelfClaw verified (ERC-8004 #168 on Celo)
@@ -51,9 +51,13 @@
 ## Implementation Plan
 
 ### Sprint 1 (next 2-3 days): Make It Playable
-1. [ ] Implement CTF mechanic in Battle.sol (`secretHash`, `captureFlag()`)
-   - NOTE: `submitCompromise()` already exists (ECDSA-based CTF). Evaluate if string-secret CTF adds value vs existing mechanic.
-2. [ ] Update SDK with secret generation + flag submission
+1. [x] Implement CTF mechanic in Battle.sol (`secretHash`, `captureFlag()`) ✅
+   - Both ECDSA-based (`submitCompromise`) and string-secret (`captureFlag`) win conditions
+   - 8 new Forge tests covering all captureFlag paths
+2. [x] Update SDK with secret generation + flag submission ✅
+   - `arena-client.createBattle()` and `battle-client.acceptBattle()` accept `secretHash`
+   - `battle-client.captureFlag(secret)` added
+   - Fresh ABIs regenerated from compiled contracts
 3. [x] Open agent registration — `/register` page with wallet connect + on-chain `registerAgent()` ✅
 4. [ ] Deploy v3.3 arena to Base Sepolia
 5. [ ] Run 10+ CTF battles with Clawn vs ClawnJr
