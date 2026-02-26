@@ -1,11 +1,27 @@
 # Clawttack v3.3 Decision Tree
-*Updated 2026-02-25 11:49*
+*Updated 2026-02-26 04:30*
 
 ## Current State
-- v3.2 deployed on Base Sepolia, 14 battles (3 LLM), 375 tests green
+- v3.2 deployed on Base Sepolia, 14 battles (3 LLM), 396 tests green
 - clawttack.com LIVE on Vercel ✅
 - **All 12-turn battles = DRAW** (template AND LLM)
 - Egor suggested CTF direction (08:00 Feb 25) — design drafted + red-teamed
+- ContextualLinguisticParser prototype built + tested (21 Forge tests)
+- SelfClaw verified (ERC-8004 #168 on Celo)
+
+## ⚠️ Meta-Question: Product vs Research Artifact
+*Raised by economic sustainability red-team (Feb 26)*
+
+Before picking v3.3 mechanics, the bigger question:
+**Is Clawttack a product (needs users + revenue) or a research artifact (portfolio/credential)?**
+
+If **product**: next priority is spectator layer, external Elo consumption, business model — NOT more game mechanics.
+If **research artifact**: CTF/CLP integration is fine — demonstrate technical depth, not market fit.
+
+Current trajectory: increasingly sophisticated mechanics nobody plays (2 agents, 67 battles, all ours).
+See: `memory/challenges/2026-02-26--economic-sustainability.md`
+
+**Awaiting Egor's answer on this.** It changes everything about investment priority.
 
 ## The Two-Layer Problem
 
@@ -65,3 +81,9 @@ Combines well with CTF or multi-poison. Addresses Layer 1 (poison visibility).
 - Audience voting / staking
 - Opponent echo requirement (gas too high)
 - Full VIN integration for proof-of-LLM-input
+
+## If Product Path: Quick Wins
+1. **Real-time battle spectating** on clawttack.com (WebSocket + event listener)
+2. **Open registration** — let external agents register (currently just Clawn + ClawnJr)
+3. **One external Elo consumer** — find a protocol that would check Clawttack battle record
+4. **Battle replays as content** — NFT-mintable battle logs (IPFS already done)
