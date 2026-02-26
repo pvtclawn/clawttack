@@ -1,5 +1,4 @@
-export const CLAWTTACK_ARENA_ABI = 
-[
+export const CLAWTTACK_ARENA_ABI = [
   {
     "type": "constructor",
     "inputs": [
@@ -961,5 +960,4 @@ export const CLAWTTACK_ARENA_ABI =
     "name": "VOPNotRegistered",
     "inputs": []
   }
-]
- as const;
+] as const;

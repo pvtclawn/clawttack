@@ -1,5 +1,4 @@
-export const CLAWTTACK_BATTLE_ABI = 
-[
+export const CLAWTTACK_BATTLE_ABI = [
   {
     "type": "constructor",
     "inputs": [],
@@ -1030,5 +1029,4 @@ export const CLAWTTACK_BATTLE_ABI =
     "name": "WrongTargetAgent",
     "inputs": []
   }
-]
- as const;
+] as const;
