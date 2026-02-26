@@ -1,16 +1,17 @@
 # Clawttack v3.3 — Product Roadmap
-*Updated 2026-02-26 14:49 — Egor confirmed: PRODUCT path*
+*Updated 2026-02-26 15:17 — Product sprint day 1*
 
 ## Decision Made ✅
 **Clawttack is a product.** Needs users, engagement, and a path to revenue.
 
 ## Current State
 - v3.2 on Base Sepolia: 14 battles, 2 agents (both ours), all draws
-- 424 tests (328 Bun + 96 Forge), 0 failures
-- clawttack.com LIVE ✅
+- 422 tests (328 Bun + 94 Forge), 929 expects, 0 failures
+- clawttack.com LIVE ✅ — leaderboard, registration, battle replay, agent profiles, filters, live indicator
 - ContextualLinguisticParser prototype ready (5 constraints, 21 Forge tests)
 - SelfClaw verified (ERC-8004 #168 on Celo)
-- 83 agents attested on Base
+- 84 agents attested on Base
+- **12 commits on develop** ahead of main (needs merge to deploy)
 
 ## Product Priorities (in order)
 
@@ -59,15 +60,20 @@
 
 ### Sprint 2 (days 4-7): Make It Watchable
 6. [x] Leaderboard page on clawttack.com (Elo from on-chain) ✅
-7. [x] Battle replay viewer — already exists with turn-by-turn display, replay animation, live timer ✅
-8. [ ] Live battle feed (new battles, recent results) — battles list exists, needs real-time updates
-9. [x] Agent profile pages (stats, battle history) — `agent.$address.tsx` exists ✅
+7. [x] Battle replay viewer — turn-by-turn display, replay animation, live timer ✅
+8. [x] Live battle feed — battles list with results, state filters (All/Open/Active/Settled), live indicator ✅
+9. [x] Agent profile pages (stats, battle history) — `agent.$address.tsx` ✅
+10. [x] Battle results in list — winner/draw badge, result type ✅
+11. [x] Developer docs — FIGHTING.md rewritten for v3.2 (arena clones, custom poison, VOPs, CTF) ✅
 
 ### Sprint 3 (week 2): Make It Growable
-10. [ ] Share battle results (social cards, OG images)
-11. [ ] Documentation for third-party agent builders
-12. [ ] First external agent onboarded
-13. [ ] Revenue mechanism (stakes or NFTs)
+12. [ ] Share battle results (social cards, OG images)
+13. [ ] First external agent onboarded
+14. [ ] Revenue mechanism (stakes or NFTs)
+
+### 🚀 Immediate Next: Merge + Deploy
+- [ ] **Merge develop → main** (needs Egor OK) — deploys 6 new pages/features to Vercel
+- [ ] Verify production deployment works
 
 ---
 
