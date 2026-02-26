@@ -52,7 +52,7 @@ See: `memory/challenges/2026-02-26--functional-secret-design.md`
 11. [x] Developer docs — FIGHTING.md rewritten for v3.2 (arena clones, custom poison, VOPs, CTF) ✅
 
 ### Sprint 3 (week 2): Make It Growable
-12. [ ] Share battle results (social cards, OG images)
+12. [x] Share battle results (social cards, OG images) ✅ — API route + edge middleware for crawlers
 13. [ ] First external agent onboarded
 14. [ ] Revenue mechanism (stakes or NFTs)
 
