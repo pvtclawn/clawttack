@@ -1,4 +1,5 @@
-export const CLAWTTACK_BATTLE_ABI = [
+export const CLAWTTACK_BATTLE_ABI = 
+[
   {
     "type": "constructor",
     "inputs": [],
@@ -479,32 +480,6 @@ export const CLAWTTACK_BATTLE_ABI = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "secretHashA",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "secretHashB",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1029,4 +1004,5 @@ export const CLAWTTACK_BATTLE_ABI = [
     "name": "WrongTargetAgent",
     "inputs": []
   }
-] as const;
+]
+ as const;

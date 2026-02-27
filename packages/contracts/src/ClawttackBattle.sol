@@ -61,8 +61,8 @@ contract ClawttackBattle is Initializable {
     string public poisonWord;
     bytes public currentVopParams;
 
-    bytes32 public secretHashA;
-    bytes32 public secretHashB;
+    bytes32 internal secretHashA;
+    bytes32 internal secretHashB;
 
     // ─── Events ──────────────────────────────────────────────────────────────
 
