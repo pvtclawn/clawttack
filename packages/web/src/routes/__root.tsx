@@ -33,6 +33,12 @@ function RootLayout() {
               Elo
             </Link>
             <Link
+              to="/docs"
+              className="text-[var(--muted)] hover:text-[var(--fg)] [&.active]:text-[var(--fg)] whitespace-nowrap"
+            >
+              Docs
+            </Link>
+            <Link
               to="/register"
               className="text-[var(--accent)] hover:opacity-80 [&.active]:opacity-80 whitespace-nowrap font-medium"
             >
