@@ -20,7 +20,8 @@ library ClawttackTypes {
         POISON_VIOLATION,
         TIMEOUT,
         MAX_TURNS,
-        FLAG_CAPTURED
+        FLAG_CAPTURED,
+        COMPREHENSION_FAILED
     }
 
     struct AgentProfile {
@@ -68,5 +69,8 @@ library ClawttackTypes {
         uint256 solution;
         string customPoisonWord;
         string narrative;
+        bytes32 responseHash;     // answer to opponent's previous comprehension challenge
+        bytes32 challengeHash;    // your comprehension challenge for opponent's next turn
+        string hint;              // natural language hint for finding the answer
     }
 }

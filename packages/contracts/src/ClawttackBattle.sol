@@ -64,6 +64,9 @@ contract ClawttackBattle is Initializable {
     bytes32 internal secretHashA;
     bytes32 internal secretHashB;
 
+    bytes32 public pendingChallengeHash;  // NCC: comprehension challenge awaiting answer
+    address public pendingChallenger;      // NCC: who set the pending challenge
+
     // ─── Events ──────────────────────────────────────────────────────────────
 
     event BattleAccepted(uint256 indexed battleId, uint256 indexed acceptorId, bool challengerGoesFirst);
@@ -82,7 +85,9 @@ contract ClawttackBattle is Initializable {
         uint16 targetWord,
         string poisonWord,
         bytes nextVopParams,
-        string narrative
+        string narrative,
+        bytes32 challengeHash,
+        string hint
     );
     event JokerPlayed(uint256 indexed battleId, uint256 indexed agentId, uint8 jokersRemaining);
     event FlagCaptured(uint256 indexed battleId, uint256 indexed winnerId, uint256 indexed loserId);
@@ -189,7 +194,26 @@ contract ClawttackBattle is Initializable {
 
         if (block.number > turnDeadlineBlock) revert ClawttackErrors.TurnDeadlineExpired();
 
-        // 1. Joker / narrative-length enforcement
+        // 1. NCC: Comprehension challenge verification
+        if (pendingChallengeHash != bytes32(0)) {
+            // There's a pending challenge from the opponent — defender must answer
+            if (payload.responseHash != pendingChallengeHash) {
+                // Failed comprehension → opponent wins
+                _settleBattle(
+                    isPlayerA ? acceptorId : challengerId,
+                    isPlayerA ? challengerId : acceptorId,
+                    ClawttackTypes.ResultType.COMPREHENSION_FAILED
+                );
+                return;
+            }
+        }
+
+        // Store new challenge for opponent's next turn
+        if (payload.challengeHash == bytes32(0)) revert ClawttackErrors.MissingChallenge();
+        pendingChallengeHash = payload.challengeHash;
+        pendingChallenger = msg.sender;
+
+        // 2. Joker / narrative-length enforcement
         uint256 narrativeLen = bytes(payload.narrative).length;
         bool isJoker = narrativeLen > MAX_NARRATIVE_LEN;
         if (isJoker) {
@@ -200,7 +224,7 @@ contract ClawttackBattle is Initializable {
             emit JokerPlayed(battleId, isPlayerA ? challengerId : acceptorId, isPlayerA ? jokersRemainingA : jokersRemainingB);
         }
 
-        // 2. Linguistic verification
+        // 3. Linguistic verification
         address wordDictionary = IClawttackArenaView(arena).wordDictionary();
         string memory targetWord = IWordDictionary(wordDictionary).word(targetWordIndex);
         string memory _currentPoison = currentTurn > 0 ? poisonWord : "";
@@ -214,7 +238,7 @@ contract ClawttackBattle is Initializable {
             if (uint8(bytes(payload.customPoisonWord)[i]) > LinguisticParser.MAX_ASCII_VALUE) revert ClawttackErrors.InvalidPoisonWord();
         }
 
-        // 3. VOP puzzle verification
+        // 4. VOP puzzle verification
         bool puzzlePassed;
         if (currentVopParams.length == 0) {
             puzzlePassed = true; // Turn 0 has no required VOP solution
@@ -235,7 +259,7 @@ contract ClawttackBattle is Initializable {
             return;
         }
 
-        // 4. Advance sequence hash (chains narrative + solution)
+        // 5. Advance sequence hash (chains narrative + solution)
         sequenceHash = keccak256(
             abi.encodePacked(
                 DOMAIN_TYPE_TURN, sequenceHash, keccak256(bytes(payload.narrative)), payload.solution
@@ -276,7 +300,9 @@ contract ClawttackBattle is Initializable {
             targetWordIndex,
             poisonWord,
             currentVopParams,
-            payload.narrative
+            payload.narrative,
+            payload.challengeHash,
+            payload.hint
         );
 
         if (currentTurn == config.maxTurns) {

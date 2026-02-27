@@ -125,7 +125,7 @@ contract ClawttackBattleTest is Test {
             solution: 42,
             customPoisonWord: "poison",
             narrative: narrative
-        });
+        , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
 
         vm.prank(firstPlayer);
         battle.submitTurn(payload);
@@ -146,7 +146,7 @@ contract ClawttackBattleTest is Test {
             solution: 42,
             customPoisonWord: "another",
             narrative: badNarrative
-        });
+        , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
 
         vm.prank(secondPlayer);
         vm.expectRevert(ClawttackErrors.PoisonWordDetected.selector);

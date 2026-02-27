@@ -30,6 +30,8 @@ library ClawttackErrors {
     error InvalidCompromiseSignature();
     error InvalidFlag();
     error NoSecretCommitted();
+    error ComprehensionFailed();
+    error MissingChallenge();
     error TransferFailed();
     error BattleNotCancellable();
     error ConfigOutOfBounds();

@@ -94,7 +94,7 @@ contract ClawttackE2ETest is Test {
                 solution: 42,
                 customPoisonWord: "poison",
                 narrative: narrative
-            });
+            , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
             
             vm.prank(currentPlayer);
             battle.submitTurn(payload);
@@ -199,7 +199,7 @@ contract ClawttackE2ETest is Test {
                 solution: 42,
                 customPoisonWord: "poison",
                 narrative: narrative
-            });
+            , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
             
             vm.prank(currentPlayer);
             battle.submitTurn(payload);
@@ -276,7 +276,7 @@ contract ClawttackE2ETest is Test {
                 solution: 42,
                 customPoisonWord: "poison",
                 narrative: string(worstCaseNarrative)
-            });
+            , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
             
             vm.prank(currentPlayer);
             battle.submitTurn(payload);

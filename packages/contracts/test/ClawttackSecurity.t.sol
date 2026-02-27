@@ -75,6 +75,9 @@ contract ClawttackSecurityTest is Test {
     bytes32 constant SECRET_HASH_A = keccak256("alpha-secret-phrase");
     bytes32 constant SECRET_HASH_B = keccak256("bravo-secret-phrase");
 
+    // NCC test constants
+    bytes32 constant NCC_CHALLENGE = keccak256("test-challenge");
+
     function setUp() public {
         alice = vm.addr(alicePK);
         bob   = vm.addr(bobPK);
@@ -142,9 +145,11 @@ contract ClawttackSecurityTest is Test {
         string memory narrative = string(
             abi.encodePacked("Long narrative which safely contains the target word: ", target, ", and nothing else.")
         );
+        // NCC: always pass matching response (ignored on turn 0, matches on turn 1+)
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
             solution: 42, customPoisonWord: "poison",
-            narrative: narrative
+            narrative: narrative,
+            responseHash: NCC_CHALLENGE, challengeHash: NCC_CHALLENGE, hint: "test hint"
         });
         vm.prank(player);
         battle.submitTurn(p);
@@ -326,7 +331,7 @@ contract ClawttackSecurityTest is Test {
     function test_submitTurn_nonParticipant_reverts() public {
         ClawttackBattle battle = _createAndAccept(0);
         ClawttackTypes.TurnPayload memory p =
-            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "poison", narrative: "x"  });
+            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "poison", narrative: "x"  , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
 
         vm.prank(eve);
         vm.expectRevert(ClawttackErrors.NotParticipant.selector);
@@ -344,7 +349,7 @@ contract ClawttackSecurityTest is Test {
         string memory target = dict.word(targetIdx);
         string memory narrative = string(abi.encodePacked("Long narrative about ", target, " that is quite long."));
         ClawttackTypes.TurnPayload memory p =
-            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "poison", narrative: narrative  });
+            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "poison", narrative: narrative  , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
 
         vm.prank(wrongPlayer);
         vm.expectRevert(ClawttackErrors.UnauthorizedTurn.selector);
@@ -364,7 +369,7 @@ contract ClawttackSecurityTest is Test {
         string memory target = dict.word(targetIdx);
         string memory narrative = string(abi.encodePacked("Long narrative about ", target, " that is quite long."));
         ClawttackTypes.TurnPayload memory p =
-            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "poison", narrative: narrative  });
+            ClawttackTypes.TurnPayload({solution: 42, customPoisonWord: "poison", narrative: narrative  , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
 
         vm.prank(player);
         vm.expectRevert(ClawttackErrors.TurnDeadlineExpired.selector);
@@ -388,7 +393,7 @@ contract ClawttackSecurityTest is Test {
         ClawttackTypes.TurnPayload memory p1 = ClawttackTypes.TurnPayload({
             solution: 42, customPoisonWord: "poison",
             narrative: narrative0
-                                });
+                                , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
         vm.prank(firstPlayer);
         battle.submitTurn(p1);
         assertEq(battle.currentTurn(), 1);
@@ -404,7 +409,7 @@ contract ClawttackSecurityTest is Test {
         ClawttackTypes.TurnPayload memory p2 = ClawttackTypes.TurnPayload({
             solution: 0, customPoisonWord: "poison",
             narrative: narrative2
-                                });
+                                , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
         vm.prank(secondPlayer);
         battle.submitTurn(p2);
 
@@ -425,7 +430,7 @@ contract ClawttackSecurityTest is Test {
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
             solution: 0, customPoisonWord: "poison", // Any solution should pass since params are empty
             narrative: narrative
-                                });
+                                , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
         vm.prank(firstPlayer);
         battle.submitTurn(p);
         assertEq(battle.currentTurn(), 1);
@@ -447,7 +452,7 @@ contract ClawttackSecurityTest is Test {
         ClawttackTypes.TurnPayload memory p1 = ClawttackTypes.TurnPayload({
             solution: 42, customPoisonWord: "poison",
             narrative: narrative
-                                });
+                                , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
         vm.prank(firstPlayer);
         battle.submitTurn(p1);
 
@@ -459,7 +464,7 @@ contract ClawttackSecurityTest is Test {
         ClawttackTypes.TurnPayload memory p2 = ClawttackTypes.TurnPayload({
             solution: 999, customPoisonWord: "poison", // WRONG — MockVOP expects 42
             narrative: narrative2
-                                });
+                                , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
         vm.prank(secondPlayer);
         battle.submitTurn(p2);
 
@@ -484,7 +489,7 @@ contract ClawttackSecurityTest is Test {
         ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
             solution: 42, customPoisonWord: "poison",
             narrative: narrative
-        });
+        , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
         vm.prank(firstPlayer);
         battle.submitTurn(p); 
 
@@ -659,7 +664,7 @@ contract ClawttackSecurityTest is Test {
             solution: 42, customPoisonWord: "poison",
             narrative: jokerNarrative
                          // set art as poison for playerB
-        });
+        , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
         vm.prank(playerA);
         battle.submitTurn(p1);
 
@@ -673,7 +678,7 @@ contract ClawttackSecurityTest is Test {
             solution: 42, customPoisonWord: "poison",
             narrative: safeNarrative
                          // set ignore as poison for playerA next
-        });
+        , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
         vm.prank(playerB);
         battle.submitTurn(p2);
 
@@ -687,7 +692,7 @@ contract ClawttackSecurityTest is Test {
         ClawttackTypes.TurnPayload memory p3 = ClawttackTypes.TurnPayload({
             solution: 42, customPoisonWord: "poison",
             narrative: jokerNarrative2
-                                });
+                                , responseHash: keccak256("test-challenge"), challengeHash: keccak256("test-challenge"), hint: "test hint"});
         vm.prank(playerA);
         vm.expectRevert(ClawttackErrors.NoJokersRemaining.selector);
         battle.submitTurn(p3);
@@ -905,5 +910,81 @@ contract ClawttackSecurityTest is Test {
         vm.prank(alice);
         vm.expectRevert(ClawttackErrors.NoSecretCommitted.selector);
         battle.captureFlag("anything");
+    }
+
+    // ─── NCC: Narrative Comprehension Challenge ─────────────────────────────────
+
+    /// @notice Verifies that wrong comprehension response settles battle (opponent wins)
+    function test_ncc_wrongResponse_settles() public {
+        ClawttackBattle battle = _createAndAccept(1 ether);
+
+        // Turn 0: first mover submits with a challenge
+        _submitPass(battle, battle.firstMoverA() ? alice : bob, 0);
+
+        // Turn 1: responder submits with WRONG responseHash
+        address responder = battle.firstMoverA() ? bob : alice;
+        uint16 targetIdx = battle.targetWordIndex();
+        string memory target = dict.word(targetIdx);
+        string memory narrative = string(
+            abi.encodePacked("Long narrative which safely contains the target word: ", target, ", and nothing else.")
+        );
+        ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
+            solution: 42, customPoisonWord: "poison",
+            narrative: narrative,
+            responseHash: keccak256("wrong-answer"),
+            challengeHash: NCC_CHALLENGE,
+            hint: "test hint"
+        });
+        vm.prank(responder);
+        battle.submitTurn(p);
+
+        // Battle should be settled — responder lost due to failed comprehension
+        assertEq(uint8(battle.state()), uint8(ClawttackTypes.BattleState.Settled));
+    }
+
+    /// @notice Verifies that correct comprehension response allows turn to proceed
+    function test_ncc_correctResponse_proceeds() public {
+        ClawttackBattle battle = _createAndAccept(1 ether);
+
+        // Turn 0
+        _submitPass(battle, battle.firstMoverA() ? alice : bob, 0);
+        assertEq(battle.currentTurn(), 1);
+
+        // Turn 1 with correct response
+        _submitPass(battle, battle.firstMoverA() ? bob : alice, 0);
+        assertEq(battle.currentTurn(), 2);
+    }
+
+    /// @notice Verifies that missing challengeHash reverts
+    function test_ncc_missingChallenge_reverts() public {
+        ClawttackBattle battle = _createAndAccept(1 ether);
+
+        address mover = battle.firstMoverA() ? alice : bob;
+        uint16 targetIdx = battle.targetWordIndex();
+        string memory target = dict.word(targetIdx);
+        string memory narrative = string(
+            abi.encodePacked("Long narrative which safely contains the target word: ", target, ", and nothing else.")
+        );
+        ClawttackTypes.TurnPayload memory p = ClawttackTypes.TurnPayload({
+            solution: 42, customPoisonWord: "poison",
+            narrative: narrative,
+            responseHash: keccak256("test-challenge"),
+            challengeHash: bytes32(0),  // missing!
+            hint: "test hint"
+        });
+        vm.prank(mover);
+        vm.expectRevert(ClawttackErrors.MissingChallenge.selector);
+        battle.submitTurn(p);
+    }
+
+    /// @notice Verifies that pendingChallengeHash is updated after each turn
+    function test_ncc_challengeHashUpdated() public {
+        ClawttackBattle battle = _createAndAccept(1 ether);
+
+        assertEq(battle.pendingChallengeHash(), bytes32(0));
+
+        // Turn 0 sets challenge
+        _submitPass(battle, battle.firstMoverA() ? alice : bob, 0);
+        assertEq(battle.pendingChallengeHash(), NCC_CHALLENGE);
     }
 }
