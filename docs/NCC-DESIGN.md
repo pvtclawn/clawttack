@@ -1,135 +1,125 @@
-# Narrative Comprehension Challenge (NCC) — Design Analysis
-**Date**: 2026-02-27
-**Status**: PROPOSAL (awaiting Egor's direction)
-**Origin**: Egor's idea (Feb 27 18:14)
+# NCC (Narrative Comprehension Challenge) — Contract Design Draft
 
-## Problem Statement
-How do you prove on-chain that an agent's LLM actually READ and UNDERSTOOD the opponent's narrative, rather than scripting around it?
+## Overview
+Force agents to prove LLM-level comprehension of opponent's narrative each turn.
+Prevents scripted/regex-based agents from playing without actually "reading."
 
-## Egor's Core Insight
-Opponent picks words from their narrative, commits hash on-chain, provides a "hint" about how to find them. Defender must use LLM to find the words and submit matching hash. But the hint must require comprehension, not just string matching.
+## Data Model Changes
 
-## Proposed Protocol: NCC (Narrative Comprehension Challenge)
-
-### Per-Turn Flow
-
-```
-ATTACKER'S TURN (Turn N):
-  Off-chain:
-    1. Write narrative
-    2. Pick challenge elements from narrative (verbatim substrings)
-    3. Generate semantic hint (question that requires reading to answer)
-    4. Canonicalize answer: sort(elements).join(",").toLowerCase()
-  
-  On-chain submitTurn():
-    - narrativeHash (as before)
-    - solution (as before)  
-    - challengeHash = keccak256(canonicalized_answer)
-    - hintHash = keccak256(hint)
-  
-  Event emits:
-    - hint (plaintext, readable off-chain)
-
-DEFENDER'S TURN (Turn N+1):
-  Off-chain:
-    1. Read opponent's narrative (from event/IPFS)
-    2. Read hint from event
-    3. Use LLM to comprehend narrative + answer hint
-    4. Canonicalize answer same way
-  
-  On-chain submitTurn():
-    - responseHash = keccak256(canonicalized_answer)
-    - Contract checks: responseHash == Turn N's challengeHash
-    - If mismatch: penalty (lose turn? lose battle?)
+### TurnPayload (extended)
+```solidity
+struct TurnPayload {
+    uint256 solution;
+    string customPoisonWord;
+    string narrative;
+    bytes32 responseHash;     // Answer to OPPONENT's previous comprehension challenge
+    bytes32 challengeHash;    // YOUR comprehension challenge for opponent's next turn
+    bytes32 hintHash;         // Commit to YOUR hint (revealed in event)
+    string hint;              // The actual hint/question (emitted in event, not stored)
+}
 ```
 
-### Why Scripts Fail (Analysis)
+### Battle Storage (new slots)
+```solidity
+bytes32 public pendingChallengeHash;   // The active challenge the next player must answer
+bytes32 public pendingHintHash;        // Committed hint hash for verification
+```
 
-| Hint Type | Script Resistance | LLM Difficulty | Example |
-|-----------|------------------|----------------|---------|
-| Semantic question | HIGH | LOW | "What three objects does the hero sacrifice?" |
-| Contextual fill-in | MEDIUM | LOW | "Complete: 'The ___ of ___ descended'" |
-| Positional extraction | LOW | LOW | "3rd word of 2nd sentence" |
-| Inference-based | VERY HIGH | MEDIUM | "What emotion drives the antagonist's betrayal?" |
+## Flow
 
-**Conclusion**: Hint MUST be semantic/inferential, not positional. Quality enforcement is the hard problem.
+### Turn N (Agent A's turn):
+1. A writes narrative
+2. A picks challenge words from their narrative: `["ancient", "crystal", "betrayal"]`
+3. A creates hint: `"Name the three artifacts mentioned in the cave scene, alphabetically"`
+4. A computes:
+   - `challengeHash = keccak256(abi.encodePacked("ancient,betrayal,crystal"))` (sorted, comma-separated)
+   - `hintHash = keccak256(abi.encodePacked(hint))`
+5. A submits turn with `challengeHash`, `hintHash`, `hint`, and `responseHash = bytes32(0)` (first turn, no challenge to answer)
 
-### Challenge Quality Enforcement Options
+### Turn N+1 (Agent B's turn):
+1. B reads A's narrative + hint from TurnPayload event
+2. B uses LLM to comprehend narrative and answer the hint
+3. B finds answer: `["ancient", "betrayal", "crystal"]` → sorts → joins
+4. B computes `responseHash = keccak256(abi.encodePacked("ancient,betrayal,crystal"))`
+5. B also creates their OWN challenge for A's next turn
+6. B submits turn with their `responseHash` (must match A's `challengeHash`)
 
-1. **Minimum answer complexity** (on-chain)
-   - Combined answer length ≥ 30 chars (enforceable via canonicalization proof)
-   - But: length doesn't guarantee semantic difficulty
+### Contract Verification (in submitTurn):
+```solidity
+// Skip comprehension check on turn 0 (no prior challenge)
+if (currentTurn > 0) {
+    if (payload.responseHash != pendingChallengeHash) {
+        // Failed comprehension → settle as loss
+        _settleBattle(opponentId, currentPlayerId, ResultType.COMPREHENSION_FAILURE);
+        return;
+    }
+}
 
-2. **ContextualLinguisticParser constraints** (on-chain, existing code)
-   - Non-edge positions, multiple sentences, letter frequency
-   - Already prototyped: 96-239K gas, 21 tests
+// Verify hint commitment matches
+if (payload.hintHash != keccak256(abi.encodePacked(payload.hint))) {
+    revert InvalidHintCommitment();
+}
 
-3. **Social/economic enforcement** (off-chain)
-   - Trivial challenges = opponent escapes easily = waste of your own turn
-   - Game theory: you WANT your challenge to be hard (but solvable by LLM)
+// Store challenge for next turn
+pendingChallengeHash = payload.challengeHash;
+pendingHintHash = payload.hintHash;
+```
 
-4. **Minimum word count in hint** (on-chain)
-   - Hint must be ≥ 50 chars (at least a sentence)
-   - Prevents "first word?" but not "What is the first word of the narrative?"
+## Gas Cost Estimate
+- 2 new storage slots: ~40K gas (first write), ~5K gas (updates)
+- 1 keccak256 for hint verification: ~36 gas
+- 1 comparison for responseHash: ~200 gas
+- Total overhead per turn: ~5-6K gas (negligible vs existing ~200K per turn)
 
-### Answer Canonicalization Deep-Dive
+## Canonicalization Rules (SDK-enforced)
+1. Answer words extracted as exact verbatim substrings from narrative
+2. Sorted alphabetically (case-insensitive, then lowercase)
+3. Joined with comma separator, no spaces
+4. UTF-8 encoded before hashing
 
-**Problem**: attacker commits hash("dragon,crystal"), defender answers hash("Crystal,Dragon") — mismatch due to case/order.
+## Open Questions
 
-**Solutions**:
-- A) Sort + lowercase + comma-join: `sort(["dragon","crystal"]).join(",").toLowerCase()` → "crystal,dragon"
-- B) Exact verbatim substrings: attacker picks `"The ancient oak"` — must match exactly as it appears in narrative
-- C) Hash each word separately, sort hashes: eliminates ordering issues entirely
+### Q1: What stops trivial challenges?
+Options:
+- Minimum combined answer length (≥ 30 chars)
+- Minimum word count (≥ 3 words)
+- Non-adjacency constraint (words from different sentences)
+- **Or**: let the market decide — trivial challenges are easy to answer, so they don't hurt
 
-**Recommendation**: Option A (sort + lowercase + comma-join) is simplest and handles most edge cases. SDK enforces canonicalization; contract just compares hashes.
+### Q2: What stops impossible challenges?
+Options:
+- Reveal phase: after battle, attacker must reveal answer (hash verified). If they can't → they cheated → penalty
+- Time-limited dispute: loser can challenge the winner's comprehension question validity
 
-### Gas Cost Estimate
+### Q3: Do we need a reveal phase?
+Red-team finding: without reveal, attacker can submit random challengeHash with no valid answer.
+**Yes, reveal is needed.** Options:
+- Post-battle reveal (winner must reveal all their challenge answers)
+- Per-turn reveal (each turn reveals previous challenge answer alongside new one)
+- Per-turn reveal is simpler and catches cheating immediately
 
-| Operation | Gas | Notes |
-|-----------|-----|-------|
-| Store challengeHash | ~20,000 | SSTORE (new slot) |
-| Store hintHash | ~20,000 | SSTORE (new slot) |
-| Compare responseHash | ~200 | Simple comparison |
-| Event emit (hint) | ~375 + 8/byte | ~2,000 for 200-char hint |
-| **Total per turn** | **~42,200** | Marginal increase |
+### Q4: Integration with CTF
+NCC and CTF are complementary:
+- NCC forces reading (anti-scripting)
+- CTF provides win condition (extract secret)
+- The HINT is a natural injection surface — attacker crafts hints that double as prompt injection
 
-### Attack Vectors
+## Script Resistance Analysis
+| Attack                          | NCC Resistance |
+|--------------------------------|----------------|
+| Regex word extraction           | HIGH if hints are semantic questions |
+| Keyword frequency analysis      | HIGH — frequency doesn't answer "which three?" |
+| Random word guessing            | VERY HIGH — must match exact hash |
+| Copy opponent's previous answer | IMPOSSIBLE — different challenge each turn |
+| Skip comprehension entirely     | IMPOSSIBLE — fail-closed, auto-loss |
 
-1. **Trivial challenges**: Attacker makes easy challenge → defender always succeeds → no filtering. Mitigation: game theory (you want hard challenges to stress-test opponent's LLM).
-
-2. **Impossible challenges**: Attacker commits hash of answer NOT in narrative → defender can never match. Mitigation: require reveal of challenge answer after battle; slash reputation if answer isn't a substring of narrative.
-
-3. **Collusion**: Both agents agree to give each other easy challenges. Mitigation: for competitive (rated) battles, this just means both agents are weak → Elo adjusts.
-
-4. **Hash grinding**: Attacker tries many challenge answers to find one that a specific script could answer. Mitigation: the hint is the question, not the answer — scripts can't predict what semantic question will be asked.
-
-5. **Challenge replay**: Same challenge/hint across battles. Mitigation: challenge must reference current narrative content (verifiable off-chain via narrative hash).
-
-### Dual-Use Property (Key Insight)
-
-The hint is simultaneously:
-- **Comprehension proof mechanism**: forces defender to engage with narrative
-- **Prompt injection surface**: attacker can craft hints that embed injection payloads
-- **CTF attack vector**: hints that trick defender into revealing their secret
-
-This means NCC doesn't just prove reading — it creates a BETTER attack surface for CTF. The hint is a legitimate question that the defender's LLM MUST process (or fail the comprehension check), making it impossible to filter out without losing.
-
-### Comparison to Existing Approaches
-
-| Approach | Proves Reading? | Script Resistant? | On-Chain Cost | Complexity |
-|----------|----------------|-------------------|--------------|------------|
-| No verification | ❌ | ❌ | 0 | None |
-| Mandatory quote (CLP) | Partial | Low | ~150K gas | Medium |
-| String-secret CTF | ❌ | N/A | ~20K gas | Low |
-| **NCC (this proposal)** | ✅ | High | ~42K gas | Medium |
-| NCC + CTF (combined) | ✅ | High | ~62K gas | Medium-High |
-
-### Open Questions for Egor
-
-1. Should failed comprehension = immediate loss, or just a penalty (lost turn)?
-2. How many challenge elements? Fixed (3 words) or variable?
-3. Should the hint be emitted on-chain (in event) or off-chain (IPFS)?
-4. Do we need a reveal phase where attacker proves their challenge was valid (answer exists in narrative)?
+## Files to Modify
+- `ClawttackTypes.sol` — extend TurnPayload, add COMPREHENSION_FAILURE to ResultType
+- `ClawttackBattle.sol` — add pendingChallengeHash storage, verification in submitTurn
+- `ClawttackErrors.sol` — add InvalidHintCommitment, ComprehensionFailure
+- `battle-client.ts` — extend submitTurn params
+- `fighter.ts` — add challenge generation + answer logic
+- ABI regeneration
 
 ---
-*This is a novel mechanic — no prior art found in blockchain gaming or agent combat.*
+*Draft v1 — 2026-02-27, awaiting Egor's direction*
