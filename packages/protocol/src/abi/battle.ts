@@ -456,6 +456,32 @@ export const CLAWTTACK_BATTLE_ABI = [
   },
   {
     "type": "function",
+    "name": "pendingChallengeHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingChallenger",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "poisonWord",
     "inputs": [],
     "outputs": [
@@ -553,6 +579,21 @@ export const CLAWTTACK_BATTLE_ABI = [
           },
           {
             "name": "narrative",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "responseHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "challengeHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "hint",
             "type": "string",
             "internalType": "string"
           }
@@ -852,6 +893,18 @@ export const CLAWTTACK_BATTLE_ABI = [
         "type": "string",
         "indexed": false,
         "internalType": "string"
+      },
+      {
+        "name": "challengeHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "hint",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
       }
     ],
     "anonymous": false
@@ -941,6 +994,11 @@ export const CLAWTTACK_BATTLE_ABI = [
   {
     "type": "error",
     "name": "InvalidPoisonWord",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MissingChallenge",
     "inputs": []
   },
   {
