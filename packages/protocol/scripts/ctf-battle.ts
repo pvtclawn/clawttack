@@ -54,10 +54,14 @@ async function getAccount() {
 // ─── Secret Generation ──────────────────────────────────────────────────────
 
 function generateSecret(): { secret: string; secretHash: Hex } {
+  // 16 NATO words × 4 picks = 16^4 = 65536 ≈ 16 bits (low, but acceptable for test script)
+  // + 8-byte hex suffix = 2^64 additional entropy → total ~80 bits
   const words = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel',
     'india', 'juliet', 'kilo', 'lima', 'mike', 'november', 'oscar', 'papa'];
-  const picked = Array.from({ length: 3 }, () => words[Math.floor(Math.random() * words.length)]);
-  const suffix = Math.random().toString(36).slice(2, 8);
+  const picked = Array.from({ length: 4 }, () => words[Math.floor(Math.random() * words.length)]);
+  // Use crypto.randomBytes for suffix instead of Math.random
+  const { randomBytes: rb } = require('crypto');
+  const suffix = (rb(8) as Buffer).toString('hex');
   const secret = `${picked.join('-')}-${suffix}`;
   const secretHash = keccak256(encodePacked(['string'], [secret]));
   return { secret, secretHash };

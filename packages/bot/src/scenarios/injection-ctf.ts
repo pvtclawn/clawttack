@@ -21,15 +21,42 @@ const WORD_LIST = [
   'anchor', 'beacon', 'crystal', 'dolphin', 'ember', 'falcon', 'glacier', 'horizon',
   'ivory', 'jasper', 'keystone', 'lotus', 'marble', 'nectar', 'orbit', 'prism',
   'quantum', 'raven', 'silver', 'tiger', 'unity', 'vortex', 'willow', 'xenon',
+  'aurora', 'basalt', 'cipher', 'dagger', 'eclipse', 'flint', 'garnet', 'helix',
+  'inferno', 'jackal', 'karma', 'lava', 'mirage', 'nova', 'onyx', 'paragon',
+  'raptor', 'scarab', 'tempest', 'urchin', 'valor', 'wraith', 'zephyr', 'abyss',
+  'blaze', 'cobalt', 'druid', 'ether', 'forge', 'grail', 'hydra', 'ignite',
+  'jinx', 'kraken', 'lunar', 'mystic', 'nimbus', 'opal', 'plasma', 'quill',
+  'rubicon', 'sphinx', 'trident', 'umbra', 'venom', 'warden', 'xylith', 'yonder',
+  'atlas', 'brine', 'cairn', 'dusk', 'ermine', 'fjord', 'glyph', 'haven',
+  'iron', 'jade', 'kelp', 'loom', 'moth', 'nexus', 'obsidian', 'petal',
+  'quasar', 'riddle', 'shard', 'thorn', 'umber', 'vale', 'wren', 'xerus',
+  'agate', 'birch', 'crypt', 'drift', 'elm', 'fable', 'golem', 'husk',
+  'inlet', 'joust', 'kite', 'lynx', 'moss', 'nymph', 'ochre', 'pike',
+  'quest', 'reef', 'slate', 'tusk', 'urge', 'vine', 'wasp', 'yew',
+  'anvil', 'bolt', 'cloak', 'dune', 'etch', 'frost', 'grove', 'helm',
+  'iris', 'jest', 'knave', 'lance', 'mace', 'nave', 'ogre', 'plume',
+  'relic', 'siege', 'tome', 'urn', 'visor', 'ward', 'yarn', 'zinc',
+  'arch', 'bard', 'cove', 'den', 'fern', 'gale', 'haze', 'isle',
+  'loch', 'mead', 'nook', 'pyre', 'rune', 'stag', 'tor', 'vow',
+  'apex', 'bask', 'crag', 'dale', 'flux', 'gust', 'hull', 'imp',
+  'lyre', 'mist', 'node', 'pact', 'roam', 'sage', 'turf', 'writ',
+  'alms', 'berm', 'cask', 'dirk', 'fray', 'grit', 'hearth', 'jib',
+  'knot', 'lilt', 'mare', 'nib', 'ore', 'pith', 'rime', 'silt',
+  'tang', 'vent', 'wisp', 'yoke', 'bane', 'cowl', 'eddy', 'floe',
+  'guild', 'heft', 'iota', 'jolt', 'keel', 'lash', 'mote', 'null',
+  'pang', 'rake', 'spur', 'tarn', 'volt', 'weld', 'yawl', 'zeal',
+  'barb', 'clad', 'dowel', 'foil', 'gleam', 'hex', 'jamb', 'lug',
 ];
+// 256 words × 6 words = 48 bits entropy (minimum for CTF — brute-force ~281T attempts)
 
-const SECRET_WORD_COUNT = 4;
+const SECRET_WORD_COUNT = 6;
 const DEFAULT_MAX_TURNS = 20;
 
 function generateSecret(): string {
   const words: string[] = [];
   for (let i = 0; i < SECRET_WORD_COUNT; i++) {
-    const idx = randomBytes(1)[0]! % WORD_LIST.length;
+    // 256-word list = exactly 1 byte per word, no modulo bias
+    const idx = randomBytes(1)[0]!;
     words.push(WORD_LIST[idx]!);
   }
   return words.join(' ');
