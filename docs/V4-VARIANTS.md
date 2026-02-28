@@ -106,12 +106,12 @@
 - Adds attacker incentive layer
 - Can be added to existing chess clock without redesign
 
-### For v2 (if needed): Consider **v4h** (Entangled Time Deposits)
-- Elegant anti-griefing: attacker pays to submit riddle, gets refund only if defender solves
-- Changes incentive structure fundamentally: attacker WANTS good riddles
-- Simpler than Brier, potentially more effective
+### ~~For v2: v4h (Entangled Time Deposits)~~ KILLED
+- Simulation proved trivial riddles exploit deposits: Trivial-Riddler wins 100% vs LLM-Strong
+- Attacker pays 20, gets 30 back every time because opponent always solves trivial riddle
+- Net +10/turn advantage for writing trivial riddles = WRONG incentive
 
-### Kill: v4a, v4b (timer decay fails), v4f (no semantic depth), v4g (too complex for v1)
+### Kill: v4a, v4b (timer decay fails), v4f (no semantic depth), v4g (too complex), v4h (trivial riddle exploit)
 
 ---
 
