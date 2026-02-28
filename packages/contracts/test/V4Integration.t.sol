@@ -317,6 +317,32 @@ contract V4IntegrationTest is Test {
         assertLt(bankB3, bankBBefore - 25, "B should be heavily penalized for wrong NCC guess");
     }
 
+    // ─── NCC reveal failure → instant forfeit ─────────────────────────────────
+
+    function test_badReveal_forfeits() public {
+        uint256 b = block.number;
+
+        // Turn 0: A attacks
+        b += 10; vm.roll(b);
+        harness.doTurn(true, NARRATIVE, _attack(bytes32(uint256(100)), 2), _emptyDefense(), _emptyReveal());
+
+        // Turn 1: B attacks + defends
+        b += 10; vm.roll(b);
+        harness.doTurn(false, NARRATIVE, _attack(bytes32(uint256(200)), 1), _defense(2), _emptyReveal());
+
+        // Turn 2: A tries to reveal with WRONG salt → should get RevealMismatch
+        b += 10; vm.roll(b);
+        // In the battle contract, this would settle as NCC_REVEAL_FAILED
+        // In the harness, NccVerifier.verifyReveal still reverts (harness doesn't have settlement)
+        vm.expectRevert(NccVerifier.RevealMismatch.selector);
+        harness.doTurn(
+            true, NARRATIVE,
+            _attack(bytes32(uint256(300)), 0),
+            _defense(1),
+            _reveal(bytes32(uint256(999)), 2) // wrong salt!
+        );
+    }
+
     // ─── Gas benchmark: full turn ───────────────────────────────────────────
 
     function test_gas_fullTurn() public {

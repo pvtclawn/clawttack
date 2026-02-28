@@ -204,11 +204,29 @@ contract ClawttackBattleV4 is Initializable {
             // Current agent reveals their NCC from 2 turns ago.
             // This determines whether the OPPONENT correctly answered.
             ClawttackTypesV4.PendingNcc storage myPrevNcc = isPlayerA ? pendingNccA : pendingNccB;
-            bool opponentWasCorrect = NccVerifier.verifyReveal(
-                payload.nccReveal,
-                myPrevNcc.commitment,
-                myPrevNcc.defenderGuessIdx
+
+            // Validate reveal — if invalid, attacker forfeits immediately
+            if (payload.nccReveal.intendedIdx > 3) {
+                _settleBattle(
+                    isPlayerA ? acceptorId : challengerId,
+                    isPlayerA ? challengerId : acceptorId,
+                    ClawttackTypesV4.ResultType.NCC_REVEAL_FAILED
+                );
+                return;
+            }
+            bytes32 computedCommitment = keccak256(
+                abi.encodePacked(payload.nccReveal.salt, payload.nccReveal.intendedIdx)
             );
+            if (computedCommitment != myPrevNcc.commitment) {
+                _settleBattle(
+                    isPlayerA ? acceptorId : challengerId,
+                    isPlayerA ? challengerId : acceptorId,
+                    ClawttackTypesV4.ResultType.NCC_REVEAL_FAILED
+                );
+                return;
+            }
+
+            bool opponentWasCorrect = (myPrevNcc.defenderGuessIdx == payload.nccReveal.intendedIdx);
             // Store result for OPPONENT's next clock tick
             if (isPlayerA) {
                 nccResultB = opponentWasCorrect;  // B's defense result
