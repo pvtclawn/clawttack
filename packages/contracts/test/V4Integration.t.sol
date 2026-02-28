@@ -22,6 +22,10 @@ contract V4IntegrationHarness {
     ChessClockLib.Clock public clock;
     ClawttackTypesV4.PendingNcc public pendingNccA;
     ClawttackTypesV4.PendingNcc public pendingNccB;
+    bool public nccResultA;
+    bool public nccResultB;
+    bool public nccResultAReady;
+    bool public nccResultBReady;
     address public dict;
     uint32 public turn;
 
@@ -31,7 +35,10 @@ contract V4IntegrationHarness {
         turn = 0;
     }
 
-    /// @notice Simulates a full turn: clock tick + NCC attack + NCC defense + NCC reveal
+    /// @notice Simulates a full turn with correct NCC flow:
+    /// 1. Current agent reveals their previous NCC → sets OPPONENT's result
+    /// 2. Clock tick uses THIS agent's stored result
+    /// 3. NCC defense + attack
     function doTurn(
         bool isAgentA,
         bytes memory narrative,
@@ -41,14 +48,33 @@ contract V4IntegrationHarness {
     ) external returns (uint128 bankAfter, bool bankDepleted, bool nccCorrect) {
         bool isFirstTurn = (turn == 0);
 
-        // 1. Resolve previous NCC reveal (turn >= 2)
-        nccCorrect = true;
+        // 1. Reveal previous NCC → determines OPPONENT's result
         if (turn >= 2) {
-            ClawttackTypesV4.PendingNcc storage myNcc = isAgentA ? pendingNccA : pendingNccB;
-            nccCorrect = NccVerifier.verifyReveal(reveal, myNcc.commitment, myNcc.defenderGuessIdx);
+            ClawttackTypesV4.PendingNcc storage myPrevNcc = isAgentA ? pendingNccA : pendingNccB;
+            bool opponentWasCorrect = NccVerifier.verifyReveal(
+                reveal, myPrevNcc.commitment, myPrevNcc.defenderGuessIdx
+            );
+            if (isAgentA) {
+                nccResultB = opponentWasCorrect;
+                nccResultBReady = true;
+            } else {
+                nccResultA = opponentWasCorrect;
+                nccResultAReady = true;
+            }
         }
 
-        // 2. Clock tick
+        // 2. Clock tick uses THIS agent's stored NCC result
+        nccCorrect = true;
+        if (!isFirstTurn) {
+            if (isAgentA && nccResultAReady) {
+                nccCorrect = nccResultA;
+                nccResultAReady = false;
+            } else if (!isAgentA && nccResultBReady) {
+                nccCorrect = nccResultB;
+                nccResultBReady = false;
+            }
+        }
+
         (bankAfter, bankDepleted) = clock.tick(isAgentA, nccCorrect, isFirstTurn);
         if (bankDepleted) return (0, true, nccCorrect);
 

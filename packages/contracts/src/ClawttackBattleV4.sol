@@ -69,7 +69,14 @@ contract ClawttackBattleV4 is Initializable {
     // Chess clock
     ChessClockLib.Clock public clock;
 
-    // NCC state
+    // NCC results (set when opponent reveals, used on own clock tick)
+    // True = this agent correctly answered opponent's NCC
+    bool public nccResultA;  // A's defense result (set when B reveals)
+    bool public nccResultB;  // B's defense result (set when A reveals)
+    bool public nccResultAReady;  // Has A's result been set?
+    bool public nccResultBReady;  // Has B's result been set?
+
+    // NCC pending state (commitment + defense tracking)
     ClawttackTypesV4.PendingNcc public pendingNccA; // NCC attack set by A, pending B's defense
     ClawttackTypesV4.PendingNcc public pendingNccB; // NCC attack set by B, pending A's defense
 
@@ -183,25 +190,43 @@ contract ClawttackBattleV4 is Initializable {
 
         if (block.number < startBlock) revert ClawttackErrors.BattleNotActive();
 
-        // ── 1. Chess Clock Tick ──
-        bool isFirstTurn = (currentTurn == 0);
-        bool nccCorrect = false;
-
-        // Resolve NCC from previous turns (turn >= 2 for reveal, turn >= 1 for defense)
+        // ── 1. NCC Reveal (attacker reveals their previous NCC → determines OPPONENT's result) ──
         if (currentTurn >= 2) {
-            // Attacker must reveal their previous NCC commitment
-            ClawttackTypesV4.PendingNcc storage myPendingNcc = isPlayerA ? pendingNccA : pendingNccB;
-            nccCorrect = NccVerifier.verifyReveal(
+            // Current agent reveals their NCC from 2 turns ago.
+            // This determines whether the OPPONENT correctly answered.
+            ClawttackTypesV4.PendingNcc storage myPrevNcc = isPlayerA ? pendingNccA : pendingNccB;
+            bool opponentWasCorrect = NccVerifier.verifyReveal(
                 payload.nccReveal,
-                myPendingNcc.commitment,
-                myPendingNcc.defenderGuessIdx
+                myPrevNcc.commitment,
+                myPrevNcc.defenderGuessIdx
             );
-        } else if (currentTurn == 1) {
-            // Turn 1: defender responds to turn 0's NCC attack, no reveal yet
-            nccCorrect = true; // No NCC penalty on turn 1
+            // Store result for OPPONENT's next clock tick
+            if (isPlayerA) {
+                nccResultB = opponentWasCorrect;  // B's defense result
+                nccResultBReady = true;
+            } else {
+                nccResultA = opponentWasCorrect;  // A's defense result
+                nccResultAReady = true;
+            }
         }
 
-        (uint128 bankAfter, bool bankDepleted) = clock.tick(isPlayerA, nccCorrect, isFirstTurn);
+        // ── 2. Chess Clock Tick (uses THIS agent's stored NCC result) ──
+        bool isFirstTurn = (currentTurn == 0);
+        bool myNccCorrect = true; // default: no penalty on first turns
+
+        if (!isFirstTurn) {
+            // Use stored result: did I correctly answer opponent's NCC?
+            if (isPlayerA && nccResultAReady) {
+                myNccCorrect = nccResultA;
+                nccResultAReady = false; // consumed
+            } else if (!isPlayerA && nccResultBReady) {
+                myNccCorrect = nccResultB;
+                nccResultBReady = false; // consumed
+            }
+            // If no result ready yet (turn 1: opponent hasn't revealed yet), no penalty
+        }
+
+        (uint128 bankAfter, bool bankDepleted) = clock.tick(isPlayerA, myNccCorrect, isFirstTurn);
 
         if (bankDepleted) {
             uint256 winnerId = isPlayerA ? acceptorId : challengerId;
@@ -210,7 +235,7 @@ contract ClawttackBattleV4 is Initializable {
             return;
         }
 
-        emit NccResolved(battleId, currentTurn, nccCorrect, bankAfter);
+        emit NccResolved(battleId, currentTurn, myNccCorrect, bankAfter);
 
         // ── 2. NCC Defense (answer opponent's previous challenge) ──
         if (currentTurn >= 1) {
