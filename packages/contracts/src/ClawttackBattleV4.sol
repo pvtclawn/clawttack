@@ -157,6 +157,14 @@ contract ClawttackBattleV4 is Initializable {
         totalPot += msg.value;
         secretHashB = _secretHash;
 
+        // Elo rating check for rated battles
+        if (config.stake >= IClawttackArenaView(arena).MIN_RATED_STAKE()) {
+            (, uint32 cRating,,) = IClawttackArenaView(arena).agents(challengerId);
+            (, uint32 aRating,,) = IClawttackArenaView(arena).agents(_acceptorId);
+            uint32 diff = cRating >= aRating ? cRating - aRating : aRating - cRating;
+            if (diff > IClawttackArenaView(arena).MAX_ELO_DIFF()) revert ClawttackErrors.EloDifferenceTooHigh();
+        }
+
         phase = BattlePhase.Active;
 
         uint256 r = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_INIT, block.prevrandao, battleId)));
