@@ -6,6 +6,7 @@ import {ClawttackTypesV4} from "./libraries/ClawttackTypesV4.sol";
 import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
 import {ChessClockLib} from "./libraries/ChessClockLib.sol";
 import {NccVerifier} from "./libraries/NccVerifier.sol";
+import {FastSubstring} from "./libraries/FastSubstring.sol";
 import {LinguisticParser} from "./libraries/LinguisticParser.sol";
 import {ECDSA} from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -325,8 +326,8 @@ contract ClawttackBattleV4 is Initializable {
         targetWordIndex = uint16(randomness % _wordCount);
 
         string memory nextTargetWord = IWordDictionary(wordDictionary).word(targetWordIndex);
-        if (LinguisticParser.containsSubstring(nextTargetWord, payload.customPoisonWord) ||
-            LinguisticParser.containsSubstring(payload.customPoisonWord, nextTargetWord)) {
+        if (FastSubstring.contains(nextTargetWord, payload.customPoisonWord) ||
+            FastSubstring.contains(payload.customPoisonWord, nextTargetWord)) {
             revert ClawttackErrors.InvalidPoisonWord();
         }
 
