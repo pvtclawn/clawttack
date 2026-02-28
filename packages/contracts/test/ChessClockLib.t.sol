@@ -174,6 +174,38 @@ contract ChessClockLibTest is Test {
         vm.roll(block.number + 500); // way past bank
         assertTrue(harness.canTimeout(true), "should be timed out after exceeding bank");
     }
+
+    // ─── Guaranteed termination via decay alone ────────────────────────────
+
+    function test_decay_alone_terminates() public {
+        // Even with 100% NCC success + minimum turn time,
+        // the 2% decay MUST eventually drain the bank to 0.
+        uint256 b = block.number;
+        bool depleted = false;
+        uint256 turns = 0;
+
+        while (!depleted && turns < 200) {
+            b += 5; // MIN_TURN_INTERVAL
+            vm.roll(b);
+            (, depleted) = harness.tick(true, true, turns == 0); // always NCC success
+            turns++;
+        }
+
+        assertTrue(depleted, "Bank must deplete via decay alone");
+        assertLt(turns, 200, "Should deplete well before 200 turns");
+        emit log_named_uint("Turns to deplete (decay only, min interval, 100% NCC)", turns);
+    }
+
+    // ─── MAX_TURN_TIMEOUT capping ──────────────────────────────────────────
+
+    function test_turn_capped_at_max_timeout() public {
+        vm.roll(block.number + 200); // 200 blocks elapsed, but MAX_TURN_TIMEOUT = 80
+        (uint128 bank,) = harness.tick(true, true, true);
+        // Should deduct only 80 (capped), not 200
+        // 400 - 80 = 320, then 2% decay = 6.4 → 314
+        // First turn so no NCC refund
+        assertGt(bank, 300, "Bank should only lose ~80 + decay, not 200");
+    }
 }
 
 /**
