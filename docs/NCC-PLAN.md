@@ -10,15 +10,19 @@
 
 ## ZK Path (if Egor greenlights)
 
-### Step 1: Optimize Circuit (1 day)
-- Pack blake2s hashes as 2×Field instead of 64×u8 public inputs
-- Reduces verification gas by ~20K
-- Test with nargo + bb
+**⚠️ REAL GAS DATA: 1.83M gas per verification (~$0.10-0.15 on Base)**
+This is 60x more expensive than the re-provide path (~30K gas).
 
-### Step 2: Forge Integration Test (1 day)
-- Deploy NccProofVerifier.sol in Forge test
-- Submit real proof from ncc_proof circuit
-- Measure actual verification gas (estimate: ~450-550K)
+### Step 1: Optimize Circuit (1 day) ✅ DONE
+- Packed blake2s hashes as 2×Field hi/lo pairs (Bn254-safe)
+- Reduced 64→4 public inputs, proof 14KB
+
+### Step 2: Forge Integration Test (1 day) ✅ DONE
+- Deployed NccProofVerifier.sol in Forge test
+- Submitted real proof from ncc_proof circuit
+- **Actual verification gas: 1,834,294 (~1.83M gas)**
+- Critical flag: `--oracle_hash keccak` required for prove + write_vk + write_solidity_verifier
+- Without keccak flag: SumcheckFailed (bb defaults to poseidon2, Solidity verifier uses keccak)
 
 ### Step 3: Contract Integration (2 days)
 - Add `verifyComprehension(bytes proof, bytes32 contextHash, bytes32 narrativeHash)` to ClawttackBattle
@@ -37,6 +41,17 @@
 - Contract verifies word ∈ narrative via substring check
 - ~30K gas overhead (vs ~500K for ZK)
 - Tradeoff: narrative visible in calldata (not hidden)
+
+## Cost Comparison (real data)
+
+| Approach | Gas/Turn | Cost on Base | Privacy | Engineering |
+|----------|----------|-------------|---------|-------------|
+| **ZK proof** | 1,830K | ~$0.10-0.15 | Word hidden | ~4 days remaining |
+| **Re-provide** | ~30K | ~$0.002 | Narrative visible | ~2 days |
+| **Current (no NCC)** | ~300K | ~$0.02 | N/A | Done |
+
+**Key question for Egor**: Is hiding the challenge word worth 60x gas cost?
+If not, re-provide is the pragmatic choice for a product.
 
 ## Blocked On
 1. Egor's NCC design direction (ZK vs re-provide vs hybrid)
