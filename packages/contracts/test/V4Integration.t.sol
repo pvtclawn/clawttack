@@ -270,6 +270,53 @@ contract V4IntegrationTest is Test {
         assertTrue(a < 100 || bb < 100, "At least one bank should be low after 30 turns of NCC failure");
     }
 
+    // ─── NCC flow direction test ──────────────────────────────────────────────
+
+    function test_nccPenalty_appliedToDefender() public {
+        // Verify: when A reveals that B guessed WRONG, B gets penalized (not A)
+        uint256 b = block.number;
+        bytes32 saltA = bytes32(uint256(100));
+        bytes32 saltB = bytes32(uint256(200));
+        bytes32 saltA2 = bytes32(uint256(300));
+
+        // Turn 0: A attacks, intendedIdx=2
+        b += 10; vm.roll(b);
+        harness.doTurn(true, NARRATIVE, _attack(saltA, 2), _emptyDefense(), _emptyReveal());
+
+        // Turn 1: B defends (guesses WRONG: 0, answer was 2) + attacks
+        b += 10; vm.roll(b);
+        harness.doTurn(false, NARRATIVE, _attack(saltB, 1), _defense(0), _emptyReveal());
+
+        (uint128 bankABefore, uint128 bankBBefore) = harness.getBanks();
+
+        // Turn 2: A reveals (intendedIdx=2, B guessed 0 → B was WRONG)
+        // A also defends B's NCC (guesses correctly: 1) + attacks
+        b += 10; vm.roll(b);
+        harness.doTurn(true, NARRATIVE, _attack(saltA2, 3), _defense(1), _reveal(saltA, 2));
+
+        (uint128 bankAAfter,) = harness.getBanks();
+
+        // A's bank should NOT be penalized (A revealed correctly, it's B who failed)
+        // A's bank decreases only by turn time (10) + decay, but gets NCC refund if A's own result is good
+        // Since A's result hasn't been set yet (B hasn't revealed), A gets no penalty
+        // So A's drain is: 10 (time) - decay ≈ moderate
+        assertGt(bankAAfter, bankABefore - 25, "A should not be heavily penalized for B's wrong guess");
+
+        // Turn 3: B's turn — B should now be penalized (nccResultB was set to false on turn 2)
+        b += 10; vm.roll(b);
+        (uint128 bankB3,,) = harness.doTurn(
+            false, NARRATIVE,
+            _attack(bytes32(uint256(400)), 0),
+            _defense(3),
+            _reveal(saltB, 1)
+        );
+
+        // B should have been penalized: -10 (time) - 20 (NCC penalty) - decay
+        // vs if B was correct: -10 (time) + 10 (refund) - decay
+        // Difference should be ~30 blocks
+        assertLt(bankB3, bankBBefore - 25, "B should be heavily penalized for wrong NCC guess");
+    }
+
     // ─── Gas benchmark: full turn ───────────────────────────────────────────
 
     function test_gas_fullTurn() public {

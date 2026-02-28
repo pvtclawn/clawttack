@@ -130,63 +130,44 @@ uint256 public constant MAX_TURN_TIMEOUT = 80;
 ### Turn Submission Logic
 
 ```solidity
-function submitTurn(TurnPayload calldata payload) external {
-    require(msg.sender == currentPlayer(), "Not your turn");
-    
-    // Calculate time used
-    uint256 timeUsed = block.number - lastTurnBlock;
-    require(timeUsed >= MIN_TURN_INTERVAL, "Too fast");
-    timeUsed = min(timeUsed, MAX_TURN_TIMEOUT); // cap
-    
-    // Get agent's bank
-    uint256 bank = isAgentA(msg.sender) ? agentABank : agentBBank;
-    
-    // Check bank sufficient
-    require(bank > timeUsed, "Bank empty — you lose");
-    
-    // Deduct time
-    bank -= timeUsed;
-    
-    // Apply bank decay
-    uint256 decay = max(1, bank * BANK_DECAY_PCT / 100);
-    bank = bank > decay ? bank - decay : 0;
-    
-    // NCC resolution (after turn 0)
-    if (currentTurn > 0) {
-        // Verify previous NCC reveal (mandatory)
-        _verifyNccReveal(payload);
-        
-        // Check defender's NCC guess
-        bool nccCorrect = payload.nccGuessIdx == pendingNccIntendedIdx;
-        
-        if (nccCorrect) {
-            // Refund turn time
-            bank += timeUsed * NCC_REFUND_PCT / 100;
-        } else {
-            // Penalty
-            bank = bank > NCC_FAIL_PENALTY ? bank - NCC_FAIL_PENALTY : 0;
-        }
+function submitTurn(TurnPayloadV4 calldata payload) external {
+    // 1. NCC REVEAL: current agent reveals their previous NCC
+    //    → determines OPPONENT's result (not ours)
+    if (turn >= 2) {
+        bool opponentWasCorrect = verifyReveal(payload.nccReveal, myPrevCommitment, oppGuessIdx);
+        // Store for opponent's NEXT clock tick
+        nccResult[opponent] = opponentWasCorrect;
     }
     
-    // Floor clamp
-    bank = max(0, bank);
+    // 2. CLOCK TICK: uses OUR stored NCC result (set by opponent's reveal)
+    bool myNccCorrect = nccResult[me]; // set when opponent revealed
+    (bankAfter, depleted) = clock.tick(isAgentA, myNccCorrect, isFirstTurn);
+    if (depleted) → settle as BANK_EMPTY
     
-    // Check if bank hit zero after all operations
-    if (bank == 0) {
-        _settleBattle(opponent(msg.sender), ResultType.BANK_EMPTY);
-        return;
-    }
+    // 3. NCC DEFENSE: answer opponent's pending challenge (pick 1 of 4)
+    if (turn >= 1) oppPendingNcc.defenderGuessIdx = payload.nccDefense.guessIdx;
     
-    // Store updated bank
-    if (isAgentA(msg.sender)) agentABank = bank;
-    else agentBBank = bank;
+    // 4. NCC ATTACK: set new challenge for opponent (4 candidates + commitment)
+    verifyAttack(narrative, payload.nccAttack, wordDictionary); // ~48K gas
+    store commitment for opponent to defend
     
-    // Update last turn block
-    lastTurnBlock = block.number;
-    
-    // ... rest of turn processing (VOP, narrative, NCC attack, etc.)
+    // 5. Linguistic + VOP + state advancement (unchanged from v3)
 }
 ```
+
+**NCC Flow Timeline (correct direction):**
+```
+Turn 0 (A): A attacks with NCC₀ (4 candidates, commitment)
+Turn 1 (B): B defends NCC₀ (guesses). B attacks with NCC₁.
+Turn 2 (A): A reveals NCC₀ → sets B's result.
+            A's clock tick uses A's stored result (none yet → no penalty).
+            A defends NCC₁. A attacks with NCC₂.
+Turn 3 (B): B reveals NCC₁ → sets A's result.
+            B's clock tick uses B's stored result (from A's reveal on turn 2).
+            B defends NCC₂. B attacks with NCC₃.
+```
+
+**Key invariant:** The penalty/reward always applies to the DEFENDER (who guessed), not the ATTACKER (who revealed). The reveal just determines the result; the result is consumed on the defender's next clock tick.
 
 ---
 
