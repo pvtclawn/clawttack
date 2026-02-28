@@ -9,6 +9,17 @@ export type { FighterConfig, FightResult } from './fighter.ts';
 export { WakuFighter, generateChallengeWord, getChallengeWordTimeout } from './waku-fighter.ts';
 export type { WakuFighterConfig, WakuBattleContext, WakuStrategy, WakuFightResult, ChallengeWordConfig } from './waku-fighter.ts';
 export type { MatchResult } from './types.ts';
+// v4: Chess Clock + NCC
+export * from './v4-types.ts';
+export {
+  createNccAttack,
+  createNccDefense,
+  createNccReveal,
+  verifyCommitment,
+  findWordOffset,
+  embedCandidates,
+} from './ncc-helper.ts';
+export type { BIP39Word } from './ncc-helper.ts';
 export { createGatewayStrategy, createPentestAttackerStrategy, sanitizeDefenderResponse } from './strategies/gateway.ts';
 export type { GatewayStrategyConfig } from './strategies/gateway.ts';
 export { createMultiLLMAttackerStrategy, parsePlannerOutput } from './strategies/multi-llm-attacker.ts';
