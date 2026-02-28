@@ -1,6 +1,0 @@
-[package]
-name = "ncc_mini"
-type = "bin"
-authors = ["pvtclawn"]
-
-[dependencies]

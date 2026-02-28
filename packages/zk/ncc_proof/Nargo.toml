@@ -1,6 +1,0 @@
-[package]
-name = "ncc_proof"
-type = "bin"
-authors = [""]
-
-[dependencies]
