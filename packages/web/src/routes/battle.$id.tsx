@@ -281,6 +281,15 @@ function BattlePage() {
   const isPending = !!turns && turns.length < info.currentTurn
   const isChallengerTurn = (info.currentTurn % 2 === 0) ? info.firstMoverA : !info.firstMoverA
 
+  // Single source of truth: whose turn is NEXT based on the last displayed turn
+  // Used by both bank bar drain and thinking skeleton so they always agree
+  const lastDisplayed = displayedTurns[displayedTurns.length - 1]
+  const nextTurnIsChallenger = lastDisplayed
+    ? lastDisplayed.playerId !== info.challengerId
+    : info.firstMoverA
+  const nextTurnAddr = nextTurnIsChallenger ? info.challengerOwner : info.acceptorOwner
+  const nextTurnId = nextTurnIsChallenger ? info.challengerId : info.acceptorId
+
   return (
     <div className="space-y-6">
       {/* Sticky Header */}
@@ -388,7 +397,7 @@ function BattlePage() {
                 : isLive ? '🔴 LIVE' : 'Current Banks'
             }
             isLive={isLive}
-            isChallengerTurn={isChallengerTurn}
+            isChallengerTurn={nextTurnIsChallenger}
             elapsedBlocks={elapsed}
             challengerName={agentLabel(info.challengerOwner, info.challengerId)}
             acceptorName={agentLabel(info.acceptorOwner, info.acceptorId)}
@@ -472,35 +481,16 @@ function BattlePage() {
             )
           })}
           {/* Thinking skeleton — always shown when battle is active or replaying */}
-          {(() => {
-            const isLive = info.state === 1
-            const showingLatest = visibleTurns >= (turns ?? []).length
-            const isReplayingMidway = isReplaying && visibleTurns < (turns ?? []).length
-            // Show skeleton: during live battle (at latest) OR during replay (between turns)
-            if (!isLive && !isReplayingMidway) return null
-
-            // Figure out whose turn is NEXT based on last displayed turn
-            const lastDisplayed = displayedTurns[displayedTurns.length - 1]
-            let nextIsChallenger: boolean
-            if (lastDisplayed) {
-              // The agent who DIDN'T just play is "thinking"
-              nextIsChallenger = lastDisplayed.playerId !== info.challengerId
-            } else {
-              nextIsChallenger = info.firstMoverA
-            }
-            const nextAddr = nextIsChallenger ? info.challengerOwner : info.acceptorOwner
-            const nextId = nextIsChallenger ? info.challengerId : info.acceptorId
-
-            return (
-              <div className={`flex ${nextIsChallenger ? 'justify-start' : 'justify-end'}`}>
-                <div className="max-w-[80%] w-full">
-                  <ThinkingSkeleton
-                    label={`${agentLabel(nextAddr, nextId)} is thinking...`}
-                  />
-                </div>
+          {/* Thinking skeleton — shown during live battle or replay */}
+          {(info.state === 1 || (isReplaying && visibleTurns < (turns ?? []).length)) && (
+            <div className={`flex ${nextTurnIsChallenger ? 'justify-start' : 'justify-end'}`}>
+              <div className="max-w-[80%] w-full">
+                <ThinkingSkeleton
+                  label={`${agentLabel(nextTurnAddr, nextTurnId)} is thinking...`}
+                />
               </div>
-            )
-          })()}
+            </div>
+          )}
           <div ref={turnsEndRef} />
         </div>
       )}
