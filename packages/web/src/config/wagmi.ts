@@ -8,17 +8,14 @@ export const config = createConfig({
   },
 })
 
-// V3.3 Contract addresses (Base Sepolia — deployed 2026-02-26)
+// V4 Contract addresses (Base Sepolia — deployed 2026-03-01)
 export const CONTRACTS = {
-  arena: '0xF5738E9cE88afCB377F5F7D9a57Ce64147b1AA9c' as const,
-  battleImpl: '0x4f4Fe27ada50E7BEA0a15a96c27d9aA9bE09D12B' as const,
-  vopRegistry: '0xF5738E9cE88afCB377F5F7D9a57Ce64147b1AA9c' as const,
-  wordDictionary: '0x70dfeE9a3c5b4d530F048cb5AF8573C1F451A0A2' as const,
-  hashPreimageVop: '0x365b620d8C3938317608180350994722E6638bAd' as const,
-  l1MetadataVop: '0xDBB1442E119363DAc8EB08E8dF893eb7E7cb75FE' as const,
-  twapOracleVop: '0x5Dbd7f45777BA0b7017955517F09e06F0D7B2cA5' as const,
-  crossChainSyncVop: '0xE0Cf493580F2c6B93258EC0Df022A6eb8a543D6E' as const,
+  arena: '0xFe8Bfd37D941e22d3E21258e2b3D143435Ba793f' as const,
+  battleImpl: '0x729F5F1b14192a99cC49f09dcEBC67b228b7C06C' as const,
+  vopRegistry: '0x3DCb3D2e0a2E7CDE27E5bA2CEeb40558C6aB5f30' as const,
+  wordDictionary: '0x0818C963ac5e7caB5F50fBd0F8F4C7D7e6a09F18' as const,
+  hashPreimageVop: '0x3DCb3D2e0a2E7CDE27E5bA2CEeb40558C6aB5f30' as const,
 } as const
 
-// Block number of the V3.3 Arena deployment (for event scanning)
-export const ARENA_DEPLOY_BLOCK = 38_176_500n
+// Block number of the V4 Arena deployment (for event scanning)
+export const ARENA_DEPLOY_BLOCK = 38_284_000n

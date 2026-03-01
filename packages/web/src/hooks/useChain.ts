@@ -85,6 +85,8 @@ export interface V3BattleInfo {
   acceptorOwner: Address
   currentTurn: number
   maxTurns: number
+  bankA?: number
+  bankB?: number
   turnDeadlineBlock: bigint
   sequenceHash: `0x${string}`
   totalPot: bigint
@@ -105,6 +107,9 @@ export interface V3TurnEvent {
   narrative: string
   blockNumber: bigint
   txHash: `0x${string}`
+  bankA?: number
+  bankB?: number
+  timestamp?: number
 }
 
 export interface V3SettledEvent {
@@ -141,7 +146,7 @@ const ARENA_ABI = [
 // ─── Battle (clone) ABI fragments ───────────────────────────────────
 
 const BATTLE_ABI = [
-  { type: 'function', name: 'getBattleState', inputs: [], outputs: [{ type: 'uint8' }, { type: 'uint32' }, { type: 'uint64' }, { type: 'bytes32' }, { type: 'uint256' }], stateMutability: 'view' },
+  { type: 'function', name: 'getBattleState', inputs: [], outputs: [{ type: 'uint8' }, { type: 'uint32' }, { type: 'uint128' }, { type: 'uint128' }, { type: 'bytes32' }, { type: 'uint256' }], stateMutability: 'view' },
   { type: 'function', name: 'firstMoverA', inputs: [], outputs: [{ type: 'bool' }], stateMutability: 'view' },
   { type: 'function', name: 'state', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
   { type: 'function', name: 'battleId', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
@@ -250,8 +255,8 @@ export function useBattleInfo(battleId?: bigint, live = false) {
         ],
       })
 
-      const battleState = results[0].result as [number, number, bigint, `0x${string}`, bigint]
-      const [state, turn, deadline, seqHash] = battleState
+      const battleState = results[0].result as [number, number, bigint, bigint, `0x${string}`, bigint]
+      const [state, turn, bankA, bankB, seqHash] = battleState
       const config = results[6].result as [bigint, number, number, bigint, number, number]
 
       return {
@@ -264,7 +269,9 @@ export function useBattleInfo(battleId?: bigint, live = false) {
         acceptorOwner: results[4].result as Address,
         currentTurn: Number(turn),
         maxTurns: config[4],
-        turnDeadlineBlock: deadline,
+        bankA: Number(bankA),
+        bankB: Number(bankB),
+        turnDeadlineBlock: 0n, // v4 uses chess clock, not block deadline
         sequenceHash: seqHash,
         totalPot: results[5].result as bigint,
         baseTimeoutBlocks: config[1],
@@ -331,9 +338,9 @@ export function useBattleList(live = false) {
       for (let i = 0; i < validBattles.length; i++) {
         const offset = i * FIELDS_PER_BATTLE
         try {
-          const battleState = stateResults[offset].result as [number, number, bigint, `0x${string}`, bigint]
+          const battleState = stateResults[offset].result as [number, number, bigint, bigint, `0x${string}`, bigint]
           const config = stateResults[offset + 7].result as [bigint, number, number, bigint, number, number]
-          const [state, turn, deadline, seqHash] = battleState
+          const [state, turn, bankA, bankB, seqHash] = battleState
 
           battles.push({
             battleId: validBattles[i].id,
@@ -345,7 +352,9 @@ export function useBattleList(live = false) {
             acceptorOwner: stateResults[offset + 4].result as Address,
             currentTurn: Number(turn),
             maxTurns: config[4],
-            turnDeadlineBlock: deadline,
+            bankA: Number(bankA),
+            bankB: Number(bankB),
+            turnDeadlineBlock: 0n,
             sequenceHash: seqHash,
             totalPot: stateResults[offset + 5].result as bigint,
             baseTimeoutBlocks: config[1],
@@ -397,6 +406,46 @@ export function useBattleTurns(battleAddress?: Address, live = false) {
     queryKey: ['v3', 'turns', battleAddress],
     enabled: !!battleAddress,
     queryFn: async (): Promise<V3TurnEvent[]> => {
+      // Try v4 event signature first (has bankA, bankB)
+      try {
+        const v4Turns = await getLogsChunked({
+          address: battleAddress!,
+          event: parseAbiItem('event TurnSubmitted(uint256 indexed battleId, uint256 indexed playerId, uint32 turnNumber, bytes32 sequenceHash, uint16 targetWord, string poisonWord, bytes nextVopParams, string narrative, uint128 bankA, uint128 bankB)'),
+          fromBlock: ARENA_DEPLOY_BLOCK,
+          mapFn: (log) => ({
+            battleId: log.args.battleId!,
+            turnNumber: Number(log.args.turnNumber!),
+            playerId: log.args.playerId!,
+            sequenceHash: log.args.sequenceHash!,
+            targetWord: Number(log.args.targetWord!),
+            poisonWord: log.args.poisonWord! as string,
+            narrative: log.args.narrative!,
+            blockNumber: log.blockNumber,
+            txHash: log.transactionHash!,
+            bankA: Number(log.args.bankA!),
+            bankB: Number(log.args.bankB!),
+          }),
+        })
+        if (v4Turns.length > 0) {
+          // Fetch timestamps for v4 turns
+          const uniqueBlocks = [...new Set(v4Turns.map(t => t.blockNumber))]
+          const blockTimestamps = new Map<bigint, number>()
+          await Promise.all(
+            uniqueBlocks.map(async (bn) => {
+              try {
+                const block = await client.getBlock({ blockNumber: bn })
+                blockTimestamps.set(bn, Number(block.timestamp))
+              } catch { /* skip */ }
+            })
+          )
+          return v4Turns.map(t => ({
+            ...t,
+            timestamp: blockTimestamps.get(t.blockNumber),
+          }))
+        }
+      } catch { /* fall through to v3 */ }
+
+      // Fallback: v3 event signature
       return getLogsChunked({
         address: battleAddress!,
         event: parseAbiItem('event TurnSubmitted(uint256 indexed battleId, uint256 indexed playerId, uint32 turnNumber, bytes32 sequenceHash, uint16 targetWord, string poisonWord, bytes nextVopParams, string narrative)'),

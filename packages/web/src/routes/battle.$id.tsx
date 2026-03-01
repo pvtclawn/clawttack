@@ -23,6 +23,49 @@ function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
+function BankBar({ bankA, bankB, label }: { bankA: number; bankB: number; label?: string }) {
+  const maxBank = 400
+  const pctA = Math.max(0, Math.min(100, (bankA / maxBank) * 100))
+  const pctB = Math.max(0, Math.min(100, (bankB / maxBank) * 100))
+
+  return (
+    <div className="mx-4 my-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+      {label && <div className="mb-2 text-center text-[10px] uppercase tracking-wider text-[var(--muted)]">{label}</div>}
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <div className="mb-1 flex items-center justify-between text-[10px]">
+            <span className="text-red-400">🗡️ Challenger</span>
+            <span className="font-mono font-bold tabular-nums text-[var(--fg)]">{bankA}</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--border)]">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${
+                pctA > 50 ? 'bg-red-400' : pctA > 20 ? 'bg-orange-400' : 'bg-red-600'
+              }`}
+              style={{ width: `${pctA}%` }}
+            />
+          </div>
+        </div>
+        <div className="text-xs font-bold text-[var(--muted)]">vs</div>
+        <div className="flex-1">
+          <div className="mb-1 flex items-center justify-between text-[10px]">
+            <span className="text-blue-400">🛡️ Acceptor</span>
+            <span className="font-mono font-bold tabular-nums text-[var(--fg)]">{bankB}</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--border)]">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ${
+                pctB > 50 ? 'bg-blue-400' : pctB > 20 ? 'bg-orange-400' : 'bg-blue-600'
+              }`}
+              style={{ width: `${pctB}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TurnTimerBar({
   deadlineBlock,
   baseTimeoutBlocks,
@@ -112,30 +155,42 @@ function TurnCard({ turn, isLeft }: { turn: V3TurnEvent; isLeft: boolean }) {
     : 'bg-blue-950/30 border border-blue-900/30'
   const roleColor = isLeft ? 'text-red-400' : 'text-blue-400'
 
+  const timeStr = turn.timestamp
+    ? new Date(turn.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : null
+
   return (
-    <div className={`flex ${isLeft ? 'justify-start' : 'justify-end'}`}>
-      <div className={`max-w-[80%] rounded-xl p-4 ${bgClass}`}>
-        <div className="mb-1 flex items-center gap-2 text-xs">
-          <span>{isLeft ? '🗡️' : '🛡️'}</span>
-          <span className={roleColor}>Agent #{turn.playerId.toString()}</span>
-          <span className="text-[var(--muted)]">Turn {turn.turnNumber}</span>
-        </div>
-        <div className="text-sm leading-relaxed">{turn.narrative}</div>
-        <div className="mt-2 flex gap-3 text-[10px] text-[var(--muted)]">
-          {targetWord && (
-            <span>🎯 <span className="font-medium text-green-400">{targetWord}</span></span>
-          )}
-          {poisonWord && turn.turnNumber > 0 && (
-            <span>☠️ <span className="font-medium text-red-400">{poisonWord}</span></span>
-          )}
-          <a
-            href={`https://sepolia.basescan.org/tx/${turn.txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[var(--accent)] hover:underline"
-          >
-            tx ↗
-          </a>
+    <div>
+      {turn.bankA !== undefined && turn.bankB !== undefined && (
+        <BankBar bankA={turn.bankA} bankB={turn.bankB} label={`After Turn ${turn.turnNumber}`} />
+      )}
+      <div className={`flex ${isLeft ? 'justify-start' : 'justify-end'}`}>
+        <div className={`max-w-[80%] rounded-xl p-4 ${bgClass}`}>
+          <div className="mb-1 flex items-center gap-2 text-xs">
+            <span>{isLeft ? '🗡️' : '🛡️'}</span>
+            <span className={roleColor}>Agent #{turn.playerId.toString()}</span>
+            <span className="text-[var(--muted)]">Turn {turn.turnNumber}</span>
+            {timeStr && (
+              <span className="ml-auto font-mono text-[10px] text-[var(--muted)]">⏰ {timeStr}</span>
+            )}
+          </div>
+          <div className="text-sm leading-relaxed">{turn.narrative}</div>
+          <div className="mt-2 flex gap-3 text-[10px] text-[var(--muted)]">
+            {targetWord && (
+              <span>🎯 <span className="font-medium text-green-400">{targetWord}</span></span>
+            )}
+            {poisonWord && turn.turnNumber > 0 && (
+              <span>☠️ <span className="font-medium text-red-400">{poisonWord}</span></span>
+            )}
+            <a
+              href={`https://sepolia.basescan.org/tx/${turn.txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--accent)] hover:underline"
+            >
+              tx ↗
+            </a>
+          </div>
         </div>
       </div>
     </div>
@@ -154,6 +209,7 @@ function BattlePage() {
 
   const [visibleTurns, setVisibleTurns] = useState(0)
   const [isReplaying, setIsReplaying] = useState(false)
+  const [replaySpeed, setReplaySpeed] = useState(1500) // ms between turns
 
   // Auto-show all on load
   useEffect(() => {
@@ -169,9 +225,9 @@ function BattlePage() {
       setIsReplaying(false)
       return
     }
-    const timer = setTimeout(() => setVisibleTurns(v => v + 1), 1500)
+    const timer = setTimeout(() => setVisibleTurns(v => v + 1), replaySpeed)
     return () => clearTimeout(timer)
-  }, [isReplaying, visibleTurns, turns])
+  }, [isReplaying, visibleTurns, turns, replaySpeed])
 
   if (loadingInfo) {
     return (
@@ -235,6 +291,16 @@ function BattlePage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <select
+            value={replaySpeed}
+            onChange={(e) => setReplaySpeed(Number(e.target.value))}
+            className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-2 text-sm text-[var(--fg)]"
+          >
+            <option value={3000}>0.5x</option>
+            <option value={1500}>1x</option>
+            <option value={750}>2x</option>
+            <option value={300}>5x</option>
+          </select>
           <button
             onClick={() => { setVisibleTurns(0); setIsReplaying(true) }}
             className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface)]"
@@ -262,6 +328,11 @@ function BattlePage() {
           </button>
         </div>
       </div>
+
+      {/* Bank Status (v4) */}
+      {info.bankA !== undefined && info.bankB !== undefined && (
+        <BankBar bankA={info.bankA} bankB={info.bankB} label="Current Banks" />
+      )}
 
       {/* Players */}
       <div className="grid grid-cols-2 gap-4">

@@ -10,7 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ScenariosRouteImport } from './routes/scenarios'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as LeaderboardRouteImport } from './routes/leaderboard'
+import { Route as DocsRouteImport } from './routes/docs'
 import { Route as BattlesRouteImport } from './routes/battles'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as BattleIdRouteImport } from './routes/battle.$id'
@@ -22,9 +24,19 @@ const ScenariosRoute = ScenariosRouteImport.update({
   path: '/scenarios',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LeaderboardRoute = LeaderboardRouteImport.update({
   id: '/leaderboard',
   path: '/leaderboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BattlesRoute = BattlesRouteImport.update({
@@ -56,7 +68,9 @@ const AgentAddressRoute = AgentAddressRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/battles': typeof BattlesRoute
+  '/docs': typeof DocsRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/register': typeof RegisterRoute
   '/scenarios': typeof ScenariosRoute
   '/agent/$address': typeof AgentAddressRoute
   '/arena/$id': typeof ArenaIdRoute
@@ -65,7 +79,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/battles': typeof BattlesRoute
+  '/docs': typeof DocsRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/register': typeof RegisterRoute
   '/scenarios': typeof ScenariosRoute
   '/agent/$address': typeof AgentAddressRoute
   '/arena/$id': typeof ArenaIdRoute
@@ -75,7 +91,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/battles': typeof BattlesRoute
+  '/docs': typeof DocsRoute
   '/leaderboard': typeof LeaderboardRoute
+  '/register': typeof RegisterRoute
   '/scenarios': typeof ScenariosRoute
   '/agent/$address': typeof AgentAddressRoute
   '/arena/$id': typeof ArenaIdRoute
@@ -86,7 +104,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/battles'
+    | '/docs'
     | '/leaderboard'
+    | '/register'
     | '/scenarios'
     | '/agent/$address'
     | '/arena/$id'
@@ -95,7 +115,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/battles'
+    | '/docs'
     | '/leaderboard'
+    | '/register'
     | '/scenarios'
     | '/agent/$address'
     | '/arena/$id'
@@ -104,7 +126,9 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/battles'
+    | '/docs'
     | '/leaderboard'
+    | '/register'
     | '/scenarios'
     | '/agent/$address'
     | '/arena/$id'
@@ -114,7 +138,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BattlesRoute: typeof BattlesRoute
+  DocsRoute: typeof DocsRoute
   LeaderboardRoute: typeof LeaderboardRoute
+  RegisterRoute: typeof RegisterRoute
   ScenariosRoute: typeof ScenariosRoute
   AgentAddressRoute: typeof AgentAddressRoute
   ArenaIdRoute: typeof ArenaIdRoute
@@ -130,11 +156,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScenariosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/leaderboard': {
       id: '/leaderboard'
       path: '/leaderboard'
       fullPath: '/leaderboard'
       preLoaderRoute: typeof LeaderboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/battles': {
@@ -178,7 +218,9 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BattlesRoute: BattlesRoute,
+  DocsRoute: DocsRoute,
   LeaderboardRoute: LeaderboardRoute,
+  RegisterRoute: RegisterRoute,
   ScenariosRoute: ScenariosRoute,
   AgentAddressRoute: AgentAddressRoute,
   ArenaIdRoute: ArenaIdRoute,
