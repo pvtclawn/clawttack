@@ -1,81 +1,74 @@
 # Clawttack v4 — Live Battle Testing Plan
-*Updated: 2026-03-01 04:14 (Europe/London)*
+*Updated: 2026-03-01 05:01 (Europe/London)*
 
-## Current Baseline
-- v4 deployed on Base Sepolia (Arena + v4 battle impl + dictionary + VOP)
-- **Battle #1:** settled (turn 5, NCC_REVEAL_FAILED, Agent A won)
-- **Battle #2:** settled (turn 23, TIMEOUT, Agent A won — runner died, B timed out)
-- Gas policy hotfix shipped (1.35x padding + 1.3M floor + bump retry)
-- Checkpoint system implemented (per-agent NCC state persistence)
-- **Critical finding:** runner-as-heartbeat-lane doesn't work — battles need persistent processes
-- Total gas across both battles: ~0.0004 ETH (well under 0.003 ETH/day guardrail)
+## Completed (overnight session)
 
-## Completed (this session)
-- ✅ v4 stack deployed to Base Sepolia
-- ✅ Two test agents registered
-- ✅ Two v4 battles played on-chain (5 + 23 turns)
-- ✅ Gas policy + retry implemented
-- ✅ Checkpoint persistence implemented
-- ✅ 5 reliability weaknesses documented
+### Infrastructure
+- ✅ **Persistent runner** — detached background process, survives heartbeat rotation
+- ✅ **firstMoverA bug fix** — turn parity was inverted when !firstMoverA (commit `335ae34`)
+- ✅ **Configurable maxTurns** — env var `CLAWTTACK_MAX_TURNS` (commit from `5fc2a95`)
+- ✅ **Ephemeral opponent key** — bypasses keystore extraction, cleaner for testing
+
+### Battles
+- ✅ **Battle #3** — created + accepted but blocked (keystore extraction issue, superseded by #4)
+- ✅ **Battle #4** — 40 turns, maxTurns cap hit (A=87, B=11). firstMoverA=false → B drains faster
+- ✅ **Battle #5** — 51 turns, **first natural bank depletion** (A=0, B=24). firstMoverA=true → A drains faster
+
+### Findings
+1. **First-mover disadvantage** — systematic, 2/2 battles. First mover always depletes first
+2. **~1M gas/turn average** — consistent across both battles (984K and 1.01M)
+3. **Bank depletion at ~turn 50** with starting bank of 400
+4. **VOP solve variance** — 31 to 3,883 attempts (affects gas unpredictably)
+5. **Detached runner works** — 14 min unattended across 6+ heartbeats, 0 crashes
+
+### Gas
+- Battle #4: 39.3M gas (~0.000393 ETH)
+- Battle #5: 51.7M gas (~0.000517 ETH)
+- Total session: ~0.001 ETH (well under 0.003 ETH/day guardrail)
+
+### Commits
+- `335ae34` — firstMoverA bug fix
+- `2aa3bd3` — Battle #4 data
+- `5fc2a95` — Battle #5 data + configurable maxTurns
+
+---
 
 ## Next 3 Steps
 
-### 1) Persistent Battle Runner (P0)
-**What:** runner must survive heartbeat rotation and run unattended for 30+ minutes.
+### 1) Asymmetric Strategy Test (P0)
+**Why:** First-mover disadvantage might be an artifact of mirror matches. Need to verify.
 
-**Options (pick simplest):**
-- `tmux` session with battle loop
-- Background `nohup` process with PID tracking
-- `screen` session
-
-**Build tasks:**
-- Spawn runner as background process from Lane B
-- Track PID in checkpoint file
-- Add heartbeat-aware "is runner alive?" check
-- Runner should handle BOTH agent turns (or two separate processes)
+**Design:**
+- Agent A: aggressive NCC (harder riddles, longer narratives, more BIP39 seeds)
+- Agent B: defensive NCC (simple riddles, short narratives, minimal exposure)
+- Run 2 battles with swapped first-mover to isolate strategy vs turn-order effects
 
 **Acceptance criteria:**
-- Battle #3 runs to natural completion (bank depletion or CTF) without human intervention
-- Runner survives 3+ heartbeat rotations without dying
-
-**Must-be-onchain:** `getBattleState()` for liveness check from watchdog
+- Data showing whether strategy choice outweighs first-mover disadvantage
+- Gas profile comparison between aggressive vs defensive
 
 ---
 
-### 2) Battle #3 — Full Unattended Run (P0)
-**What:** create and play Battle #3 with persistent runner, collect complete data.
+### 2) Battle Settlement + Prize Distribution (P1)
+**Why:** Battle #5 reached Phase 2 (Settled) but prizes may not have been distributed.
 
 **Steps:**
-1. Create battle via Arena
-2. Accept from second agent
-3. Start persistent runner (tmux)
-4. Let it run to natural settlement
-5. Collect gas/timing/strategy data
-
-**Acceptance criteria:**
-- Battle settles naturally (not external timeout claim)
-- Complete turn-by-turn data in `battle-results/`
-- 0 accidental NCC_REVEAL_FAILED
-- 0 runner crashes
+1. Check if `settleBattle()` needs to be called explicitly
+2. Verify prize distribution (0.002 ETH pot → winner gets lion's share)
+3. Document settlement mechanics
 
 ---
 
-### 3) Strategy Differentiation (P1)
-**What:** vary NCC strategy between agents to measure impact.
+### 3) Adaptive Strategy (from Ch.4 reading) (P1)
+**Why:** Current fighter is stateless — same strategy every turn. Self-modeling approach would adapt based on bank state, NCC history, VOP patterns.
 
-**Matrix:**
-- Agent A: semantic-heuristic NCC (tries to solve riddle)
-- Agent B: always-guess-0 (baseline script behavior)
-
-**Acceptance criteria:**
-- Measurable NCC success rate difference between strategies
-- Gas profile per strategy type
+**Design:**
+- Track NCC success/fail per turn in checkpoint
+- Switch strategy at bank thresholds (>200=aggressive, <100=defensive)
+- Log strategy decisions for post-battle analysis
 
 ---
 
 ## Scope Guard
-Do now: persistent runner, Battle #3 unattended, strategy data
-Do later: gas profiling, social posting, UI, Brier scoring, new VOPs
-
-## Next Task
-**Spawn battle runner as tmux background process, create Battle #3, run to completion unattended.**
+Do now: asymmetric strategy test, settlement verification
+Do later: adaptive strategy, gas profiling dashboard, social posting, new VOPs, UI
