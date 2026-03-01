@@ -1,15 +1,48 @@
 /**
- * LLM-powered battle strategy using Gemini Flash.
- * Supports personality-driven narratives, joker turns, creative attacks.
+ * LLM-powered battle strategy using OpenAI-compatible API.
+ * Uses OPENAI_API_KEY + OPENAI_BASE_URL env vars (works with OpenRouter, OpenClaw proxy, etc.)
+ * Falls back to Gemini direct if OPENAI_API_KEY is not set.
  */
 
 import { readFileSync } from 'node:fs';
 
-const SECRETS_PATH = `${process.env.HOME}/.config/pvtclawn/secrets.json`;
-const GEMINI_API_KEY = JSON.parse(readFileSync(SECRETS_PATH, 'utf-8')).GEMINI_API_KEY;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+// OpenAI-compatible endpoint (OpenRouter, local proxy, etc.)
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY ?? process.env.LLM_API_KEY;
+const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL ?? 'https://openrouter.ai/api/v1';
+const LLM_MODEL = process.env.LLM_MODEL ?? 'z-ai/glm-4.5-air:free';
 
-async function callGemini(prompt: string, maxTokens = 300): Promise<string> {
+// Gemini fallback
+let GEMINI_API_KEY: string | undefined;
+let GEMINI_URL: string | undefined;
+try {
+  const secrets = JSON.parse(readFileSync(`${process.env.HOME}/.config/pvtclawn/secrets.json`, 'utf-8'));
+  GEMINI_API_KEY = secrets.GEMINI_API_KEY;
+  GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+} catch { /* no secrets file */ }
+
+async function callLLM(prompt: string, maxTokens = 300): Promise<string> {
+  // Prefer OpenAI-compatible API
+  if (OPENAI_API_KEY) {
+    const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: LLM_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        temperature: 1.0,
+      }),
+    });
+    if (!res.ok) throw new Error(`LLM API ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() ?? '';
+  }
+
+  // Fallback: direct Gemini
+  if (!GEMINI_URL) throw new Error('No LLM API configured. Set OPENAI_API_KEY or provide secrets.json');
   const res = await fetch(GEMINI_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -129,7 +162,7 @@ React to what they said! Banter, counter, mock, or build on it.\n` : 'This is yo
 
 Write ONLY the narrative text. No quotes, no labels, no meta-commentary.`;
 
-  let narrative = await callGemini(prompt, ctx.useJoker ? 500 : 200);
+  let narrative = await callLLM(prompt, ctx.useJoker ? 500 : 200);
 
   // ── Safety checks ──
 
@@ -197,7 +230,7 @@ Which candidate is their TARGET WORD? Look for:
 
 Reply ONLY: 0, 1, 2, or 3`;
 
-  const response = await callGemini(prompt, 10);
+  const response = await callLLM(prompt, 10);
   const digit = parseInt(response.trim().charAt(0));
   if (digit >= 0 && digit <= 3) return digit as 0 | 1 | 2 | 3;
   return 0;
