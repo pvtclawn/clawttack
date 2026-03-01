@@ -225,6 +225,19 @@ export class V4Fighter {
       await this.sleep(pollMs);
     }
 
+    // Fighter deadline reached — try to claim timeout before exiting
+    this.log(`⏰ Fighter deadline reached (${Math.round(maxTime / 60_000)}min). Attempting timeout claim...`);
+    try {
+      const tx = await this.battle.claimTimeoutWin();
+      const receipt = await tx.wait();
+      this.totalGasUsed += receipt.gasUsed;
+      this.log(`⏰ Claimed timeout win at deadline!`);
+      const finalState = await this.getBattleState();
+      return this.buildResult(finalState, 'timeout_claimed');
+    } catch {
+      this.log(`⚠️ Timeout claim failed at deadline — battle still active on-chain`);
+    }
+
     return {
       battleAddress: this.config.battleAddress,
       won: null,
