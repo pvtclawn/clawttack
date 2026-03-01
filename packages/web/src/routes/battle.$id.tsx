@@ -23,6 +23,31 @@ function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
+function AnimatedNumber({ value, className }: { value: number; className?: string }) {
+  const [displayed, setDisplayed] = useState(value)
+  const prevRef = useRef(value)
+
+  useEffect(() => {
+    const from = prevRef.current
+    const to = value
+    prevRef.current = value
+    if (from === to) return
+
+    const duration = 400
+    const start = performance.now()
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / duration)
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3)
+      setDisplayed(Math.round(from + (to - from) * eased))
+      if (t < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }, [value])
+
+  return <span className={className}>{displayed}</span>
+}
+
 function BankBar({ bankA, bankB, label }: { bankA: number; bankB: number; label?: string }) {
   const maxBank = 400
   const pctA = Math.max(0, Math.min(100, (bankA / maxBank) * 100))
@@ -35,7 +60,7 @@ function BankBar({ bankA, bankB, label }: { bankA: number; bankB: number; label?
         <div className="flex-1">
           <div className="mb-1 flex items-center justify-between text-[10px]">
             <span className="text-red-400">🗡️ Challenger</span>
-            <span className="font-mono font-bold tabular-nums text-[var(--fg)]">{bankA}</span>
+            <AnimatedNumber value={bankA} className="font-mono font-bold tabular-nums text-[var(--fg)]" />
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--border)]">
             <div
@@ -50,7 +75,7 @@ function BankBar({ bankA, bankB, label }: { bankA: number; bankB: number; label?
         <div className="flex-1">
           <div className="mb-1 flex items-center justify-between text-[10px]">
             <span className="text-blue-400">🛡️ Acceptor</span>
-            <span className="font-mono font-bold tabular-nums text-[var(--fg)]">{bankB}</span>
+            <AnimatedNumber value={bankB} className="font-mono font-bold tabular-nums text-[var(--fg)]" />
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--border)]">
             <div
@@ -218,6 +243,18 @@ function BattlePage() {
   const [autoScroll, setAutoScroll] = useState(true)
   const turnsEndRef = useRef<HTMLDivElement>(null)
 
+  const displayedTurns = (turns ?? []).slice(0, visibleTurns)
+
+  // Track banks at current replay position
+  const replayBanks = useMemo(() => {
+    if (!displayedTurns.length || !info) return { bankA: 400, bankB: 400 }
+    const lastTurn = displayedTurns[displayedTurns.length - 1]
+    return {
+      bankA: lastTurn.bankA ?? info.bankA,
+      bankB: lastTurn.bankB ?? info.bankB,
+    }
+  }, [displayedTurns, info])
+
   // Auto-show all on load
   useEffect(() => {
     if (turns && !isReplaying && visibleTurns === 0) {
@@ -261,8 +298,6 @@ function BattlePage() {
       </div>
     )
   }
-
-  const displayedTurns = (turns ?? []).slice(0, visibleTurns)
 
   const isPending = !!turns && turns.length < info.currentTurn
   const isChallengerTurn = (info.currentTurn % 2 === 0) ? info.firstMoverA : !info.firstMoverA
@@ -355,9 +390,13 @@ function BattlePage() {
         </div>
       </div>
 
-      {/* Bank Status in sticky header */}
+      {/* Bank Status in sticky header — tracks replay position */}
       {info.bankA !== undefined && info.bankB !== undefined && (
-        <BankBar bankA={info.bankA} bankB={info.bankB} label="Current Banks" />
+        <BankBar bankA={replayBanks.bankA} bankB={replayBanks.bankB} label={
+          visibleTurns < (turns ?? []).length
+            ? `After Turn ${displayedTurns.length ? displayedTurns[displayedTurns.length - 1].turnNumber : 0}`
+            : 'Current Banks'
+        } />
       )}
       </div>
 
