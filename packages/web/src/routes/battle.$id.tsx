@@ -552,23 +552,36 @@ function BattlePage() {
               />
             )
           })}
-          {/* Thinking indicator for live battles */}
-          {info.state === 1 && !isReplaying && visibleTurns >= (turns ?? []).length && (
-            <div className={`flex ${isChallengerTurn ? 'justify-start' : 'justify-end'}`}>
-              <div className="max-w-[80%] w-full">
-                <ThinkingSkeleton
-                  label={`${agentLabel(isChallengerTurn ? info.challengerOwner : info.acceptorOwner, isChallengerTurn ? info.challengerId : info.acceptorId)} is thinking...`}
-                />
+          {/* Thinking skeleton — always shown when battle is active or replaying */}
+          {(() => {
+            const isLive = info.state === 1
+            const showingLatest = visibleTurns >= (turns ?? []).length
+            const isReplayingMidway = isReplaying && visibleTurns < (turns ?? []).length
+            // Show skeleton: during live battle (at latest) OR during replay (between turns)
+            if (!isLive && !isReplayingMidway) return null
+
+            // Figure out whose turn is NEXT based on last displayed turn
+            const lastDisplayed = displayedTurns[displayedTurns.length - 1]
+            let nextIsChallenger: boolean
+            if (lastDisplayed) {
+              // The agent who DIDN'T just play is "thinking"
+              nextIsChallenger = lastDisplayed.playerId !== info.challengerId
+            } else {
+              nextIsChallenger = info.firstMoverA
+            }
+            const nextAddr = nextIsChallenger ? info.challengerOwner : info.acceptorOwner
+            const nextId = nextIsChallenger ? info.challengerId : info.acceptorId
+
+            return (
+              <div className={`flex ${nextIsChallenger ? 'justify-start' : 'justify-end'}`}>
+                <div className="max-w-[80%] w-full">
+                  <ThinkingSkeleton
+                    label={`${agentLabel(nextAddr, nextId)} is thinking...`}
+                  />
+                </div>
               </div>
-            </div>
-          )}
-          {isReplaying && visibleTurns < (turns ?? []).length && (
-            <div className="flex justify-center py-4">
-              <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
-                <span className="animate-pulse">●</span> Next turn...
-              </div>
-            </div>
-          )}
+            )
+          })()}
           <div ref={turnsEndRef} />
         </div>
       )}
