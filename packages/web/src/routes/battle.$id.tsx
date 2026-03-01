@@ -165,7 +165,7 @@ function TurnCard({ turn, isLeft }: { turn: V3TurnEvent; isLeft: boolean }) {
     : null
 
   return (
-    <div>
+    <div className="turn-card-enter">
       <div className={`flex ${isLeft ? 'justify-start' : 'justify-end'}`}>
         <div className={`max-w-[80%] rounded-xl p-4 ${bgClass}`}>
           <div className="mb-1 flex items-center gap-2 text-xs">
@@ -239,7 +239,7 @@ function BattlePage() {
   // Auto-scroll to latest turn
   useEffect(() => {
     if (autoScroll && turnsEndRef.current) {
-      turnsEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      turnsEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }
   }, [visibleTurns, autoScroll])
 

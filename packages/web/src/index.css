@@ -1,5 +1,24 @@
 @import "tailwindcss";
 
+html {
+  scroll-behavior: smooth;
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.turn-card-enter {
+  animation: fadeSlideIn 0.4s ease-out;
+}
+
 :root {
   --bg: #0a0a0a;
   --fg: #e5e5e5;
