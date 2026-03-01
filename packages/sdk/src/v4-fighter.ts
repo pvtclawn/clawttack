@@ -195,6 +195,15 @@ export class V4Fighter {
         return this.buildResult(state, 'settled');
       }
 
+      // Re-read firstMoverA once the battle is Active (it's set during acceptBattle)
+      if (state.phase === BattlePhase.Active && state.currentTurn === 0 && lastProcessedTurn === -1) {
+        const fresh = await this.battle.firstMoverA();
+        if (fresh !== this.firstMoverA) {
+          this.firstMoverA = fresh;
+          this.log(`🔄 Updated first mover: ${this.firstMoverA ? 'A' : 'B'}`);
+        }
+      }
+
       // Is it my turn?
       const isMyTurn = this.isMyTurn(state.currentTurn);
       if (isMyTurn && state.currentTurn > lastProcessedTurn) {
@@ -229,7 +238,8 @@ export class V4Fighter {
 
       // Check for opponent timeout (but only after giving them reasonable time)
       // Don't spam timeout claims — wait at least 30s of opponent inactivity
-      if (!isMyTurn && (Date.now() - startTime > 60_000 || lastProcessedTurn >= 0)) {
+      // Can be disabled with NO_TIMEOUT_CLAIM=1 for testing with slow opponents
+      if (!isMyTurn && !process.env.NO_TIMEOUT_CLAIM && (Date.now() - startTime > 60_000 || lastProcessedTurn >= 0)) {
         try {
           const tx = await this.battle.claimTimeoutWin();
           const receipt = await tx.wait();
