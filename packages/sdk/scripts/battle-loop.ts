@@ -343,7 +343,13 @@ async function main() {
     let guessIdx: 0 | 1 | 2 | 3 = 0;
     let nccGuessCorrect = false;
     if (opponentPrev) {
-      if (strategy === 'aggressive') {
+      if (strategy === 'blind-script') {
+        // TRUE SCRIPT: random guess from {0,1,2,3} — NO access to opponent's intendedIdx
+        // This simulates a real separate-process script that cannot read NCC commitment
+        guessIdx = (Math.floor(rng() * 4)) as 0 | 1 | 2 | 3;
+        nccGuessCorrect = guessIdx === opponentPrev.intendedIdx;
+        console.log(`  🎲 Blind guess: ${guessIdx} (correct=${nccGuessCorrect})`);
+      } else if (strategy === 'aggressive') {
         // Always try to guess correctly (75% chance)
         if (rng() < 0.75) {
           guessIdx = opponentPrev.intendedIdx;
