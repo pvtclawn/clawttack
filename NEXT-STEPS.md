@@ -1,8 +1,8 @@
 # NEXT STEPS — Clawttack v4
 
-**Status:** v4 building blocks COMPLETE. Ready for integration + deployment.  
+**Status:** v4 ALL P0s COMPLETE. Ready for testnet deployment.  
 **Date:** March 1, 2026  
-**Tests:** 629 (472 Bun + 157 Forge), 0 failures
+**Tests:** 637 (480 Bun + 157 Forge), 0 failures
 
 ---
 
@@ -48,6 +48,8 @@
    - Can stub initially (arena can disable VOPs for testing)
 
 3. **~~Deployment script~~** ✅ — `DeployV4.s.sol` (commit 7882108)
+
+4. **~~VOP solver~~** ✅ — `vop-solver.ts` HashPreimage brute-force (commit 351c430)
 
 ### P1 — Should Have Before Mainnet
 
