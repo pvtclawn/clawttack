@@ -140,4 +140,8 @@ export interface BattleContextV4 {
   } | null;
   /** Sequence hash (for commitment/verification) */
   sequenceHash: `0x${string}`;
+  /** My recent narratives for continuity (last 3) */
+  recentNarratives?: string[];
+  /** My remaining jokers */
+  jokersRemaining?: number;
 }

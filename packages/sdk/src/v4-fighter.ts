@@ -93,6 +93,8 @@ const BATTLE_ABI = [
   'function currentVopParams() view returns (bytes)',
   'function targetWordIndex() view returns (uint16)',
   'function poisonWord() view returns (string)',
+  'function jokersRemainingA() view returns (uint8)',
+  'function jokersRemainingB() view returns (uint8)',
   'function submitTurn((string narrative, uint256 solution, string customPoisonWord, (uint16[4] candidateWordIndices, uint16[4] candidateOffsets, bytes32 nccCommitment) nccAttack, (uint8 guessIdx) nccDefense, (bytes32 salt, uint8 intendedIdx) nccReveal) payload)',
   'function captureFlag(string secret)',
   'function claimTimeoutWin()',
@@ -122,6 +124,12 @@ export class V4Fighter {
 
   private firstMoverA: boolean = true;
 
+  // Narrative history for continuity
+  private narrativeHistory: string[] = [];
+
+  // Joker tracking
+  private jokersRemaining: number = 0;
+
   constructor(config: V4FighterConfig) {
     this.config = config;
     this.battle = new ethers.Contract(config.battleAddress, BATTLE_ABI, config.wallet);
@@ -145,6 +153,15 @@ export class V4Fighter {
     this.isAgentA = myAddress.toLowerCase() === challengerOwner.toLowerCase();
     this.firstMoverA = await this.battle.firstMoverA();
     this.log(`🎮 Fighting as Agent ${this.isAgentA ? 'A (Challenger)' : 'B (Acceptor)'} | First mover: ${this.firstMoverA ? 'A' : 'B'}`);
+
+    // Load joker count
+    try {
+      const jokers = this.isAgentA
+        ? await this.battle.jokersRemainingA()
+        : await this.battle.jokersRemainingB();
+      this.jokersRemaining = Number(jokers);
+      this.log(`🃏 Jokers available: ${this.jokersRemaining}`);
+    } catch { this.jokersRemaining = 0; }
 
     // Restore NCC state from previous run (crash recovery)
     this.loadState();
@@ -282,6 +299,8 @@ export class V4Fighter {
         ? { salt: this.myPreviousNcc.salt as `0x${string}`, intendedIdx: this.myPreviousNcc.intendedIdx }
         : null,
       sequenceHash: state.sequenceHash,
+      recentNarratives: this.narrativeHistory.slice(-3),
+      jokersRemaining: this.jokersRemaining,
     };
 
     // Call strategy (LLM brain)
@@ -330,6 +349,17 @@ export class V4Fighter {
     this.totalGasUsed += receipt.gasUsed;
 
     this.log(`  ✅ Submitted (gas: ${receipt.gasUsed}, tx: ${receipt.hash.slice(0, 14)}...)`);
+
+    // Track narrative history for continuity
+    this.narrativeHistory.push(strategyResult.narrative);
+    if (this.narrativeHistory.length > 5) this.narrativeHistory.shift();
+
+    // Track joker usage
+    const encoder = new TextEncoder();
+    if (encoder.encode(strategyResult.narrative).length > 256) {
+      this.jokersRemaining = Math.max(0, this.jokersRemaining - 1);
+      this.log(`  🃏 Joker used! Remaining: ${this.jokersRemaining}`);
+    }
 
     // Store our NCC salt + intendedIdx for next reveal
     this.myPreviousNcc = { salt, intendedIdx };
