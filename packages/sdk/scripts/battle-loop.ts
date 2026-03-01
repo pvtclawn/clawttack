@@ -179,6 +179,7 @@ const BATTLE_ABI = [
   'function poisonWord() view returns (string)',
   'function currentVopParams() view returns (bytes)',
   'function startBlock() view returns (uint32)',
+  'function firstMoverA() view returns (bool)',
 ];
 
 async function submitWithRetry(
@@ -267,6 +268,7 @@ async function main() {
   while (maxTurns-- > 0) {
     const battleRead = new ethers.Contract(battleAddress, BATTLE_ABI, provider);
     const [phase, turn, bankA, bankB] = await battleRead.getBattleState();
+    const firstMoverA: boolean = await battleRead.firstMoverA();
 
     console.log(`\n${'='.repeat(60)}`);
     console.log(`📊 Turn ${turn} | Banks: A=${bankA} B=${bankB} | Phase: ${phase}`);
@@ -297,7 +299,7 @@ async function main() {
       continue;
     }
 
-    const isAgentA = Number(turn) % 2 === 0;
+    const isAgentA = firstMoverA ? (Number(turn) % 2 === 0) : (Number(turn) % 2 === 1);
     const agent: 'A' | 'B' = isAgentA ? 'A' : 'B';
     const wallet = isAgentA ? walletA : walletB;
     const battle = new ethers.Contract(battleAddress, BATTLE_ABI, wallet);

@@ -1,0 +1,64 @@
+{
+  "battle": "0x351D755E3Eb19894f4EC44369A0f1ac7fc5785dc",
+  "seed": 20260301,
+  "lastProcessedTurn": 2,
+  "lastSubmitBlock": 38285621,
+  "prevNcc": {
+    "B": {
+      "salt": "0xdb3e7852db3c5663f8eea08994997435c916f28b00bd5c0e1f1811858d777922",
+      "intendedIdx": 0,
+      "candidates": [
+        "abandon",
+        "absorb",
+        "able",
+        "across"
+      ]
+    },
+    "A": {
+      "salt": "0x579f35b501989e24d2a5e905f789a73ed73cd92a57068992b4aafae34ab0d143",
+      "intendedIdx": 0,
+      "candidates": [
+        "abandon",
+        "absorb",
+        "able",
+        "across"
+      ]
+    }
+  },
+  "results": [
+    {
+      "turn": 0,
+      "agent": "B",
+      "gas": "891903",
+      "bankA": "400",
+      "bankB": "400",
+      "targetWord": "erosion",
+      "nccGuessCorrect": false,
+      "vopAttempts": 0,
+      "txHash": "0xdd97262439a5f003551de7f1391d2ac9dc068b52e3970c81590302e9d660f914"
+    },
+    {
+      "turn": 1,
+      "agent": "A",
+      "gas": "1116247",
+      "bankA": "393",
+      "bankB": "314",
+      "targetWord": "grunt",
+      "nccGuessCorrect": false,
+      "vopAttempts": 1405,
+      "txHash": "0x31fa274973ba879e0cf44609bd7213efa99af8e060ccd07d203acf863271bd2c"
+    },
+    {
+      "turn": 2,
+      "agent": "B",
+      "gas": "899190",
+      "bankA": "393",
+      "bankB": "314",
+      "targetWord": "pipe",
+      "nccGuessCorrect": false,
+      "vopAttempts": 31,
+      "txHash": "0xa3bb9674a2b917e19805d82dc1390c84b7d81db6ea56cb495b09d84af04720fb"
+    }
+  ],
+  "updatedAt": 1772339529337
+}
