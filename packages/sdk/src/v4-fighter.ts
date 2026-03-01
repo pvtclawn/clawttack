@@ -26,6 +26,8 @@ import {
   createNccReveal,
   findWordOffset,
 } from './ncc-helper.ts';
+import { scanForBip39Words, loadWordList } from './bip39-scanner.ts';
+import type { WordMatch } from './bip39-scanner.ts';
 import type {
   BattleContextV4,
   TurnPayloadV4,
@@ -108,8 +110,9 @@ export class V4Fighter {
   private totalGasUsed: bigint = 0n;
 
   // NCC state tracking
-  private myPreviousNcc: { salt: string; intendedIdx: number } | null = null;
+  private myPreviousNcc: { salt: `0x${string}`; intendedIdx: 0 | 1 | 2 | 3 } | null = null;
   private opponentLastNccAttack: NccAttack | null = null;
+  private wordList: string[] | null = null;
 
   constructor(config: V4FighterConfig) {
     this.config = config;
@@ -134,13 +137,16 @@ export class V4Fighter {
     this.isAgentA = myAddress.toLowerCase() === challengerOwner.toLowerCase();
     this.log(`🎮 Fighting as Agent ${this.isAgentA ? 'A' : 'B'} at ${this.config.battleAddress.slice(0, 10)}...`);
 
-    // Resolve word dictionary
+    // Resolve word dictionary and load word list
     if (this.config.wordDictionaryAddress) {
       this.wordDict = new ethers.Contract(
         this.config.wordDictionaryAddress,
         WORD_DICT_ABI,
         this.config.provider,
       );
+      this.log('📖 Loading word list from contract...');
+      this.wordList = await loadWordList(this.config.wordDictionaryAddress, this.config.provider);
+      this.log(`📖 Loaded ${this.wordList.length} words`);
     }
 
     let lastProcessedTurn = -1;
@@ -233,16 +239,20 @@ export class V4Fighter {
     // Call strategy (LLM brain)
     const strategyResult = await this.config.strategy(ctx);
 
-    // Build NCC attack from the narrative
-    const nccAttack = this.buildNccAttack(strategyResult.narrative);
+    // Build NCC attack from the narrative using BIP39 scanner
+    const { nccAttack, salt, intendedIdx } = this.buildNccAttack(
+      strategyResult.narrative,
+      targetWord,
+      currentPoisonWord,
+    );
 
     // Build NCC defense (answer opponent's riddle)
     const nccDefense = createNccDefense(strategyResult.nccGuessIdx ?? 0);
 
     // Build NCC reveal (reveal our previous commitment)
     const nccReveal = state.currentTurn >= 2 && this.myPreviousNcc
-      ? createNccReveal(this.myPreviousNcc.salt as `0x${string}`, this.myPreviousNcc.intendedIdx as 0 | 1 | 2 | 3)
-      : { salt: ethers.ZeroHash, intendedIdx: 0 };
+      ? createNccReveal(this.myPreviousNcc.salt, this.myPreviousNcc.intendedIdx)
+      : { salt: ethers.ZeroHash as `0x${string}`, intendedIdx: 0 };
 
     // Build payload
     const payload: TurnPayloadV4 = {
@@ -261,34 +271,43 @@ export class V4Fighter {
 
     this.log(`  ✅ Submitted (gas: ${receipt.gasUsed}, tx: ${receipt.hash.slice(0, 14)}...)`);
 
-    // Store our NCC for next reveal
-    this.myPreviousNcc = {
-      salt: nccAttack.nccCommitment, // We need to store the actual salt, not commitment
-      intendedIdx: 0, // TODO: track from createNccAttack
-    };
+    // Store our NCC salt + intendedIdx for next reveal
+    this.myPreviousNcc = { salt, intendedIdx };
   }
 
-  private buildNccAttack(narrative: string): NccAttack {
-    // Find BIP39 words in the narrative and build attack
-    // For now, use a simple fallback — real implementation needs word dictionary lookup
-    // The SDK's createNccAttack handles this when given proper BIP39 words
-
-    // TODO: scan narrative for BIP39 words using word dictionary
-    // For now, return a placeholder that the strategy should provide
+  private buildNccAttack(
+    narrative: string,
+    targetWord: string,
+    poisonWord: string,
+  ): { nccAttack: NccAttack; salt: `0x${string}`; intendedIdx: 0 | 1 | 2 | 3 } {
     const salt = ethers.hexlify(ethers.randomBytes(32)) as `0x${string}`;
-    const intendedIdx = 0 as 0 | 1 | 2 | 3;
+    const intendedIdx = 0 as 0 | 1 | 2 | 3; // first candidate is the riddle answer
 
-    // This is a simplified version — real implementation needs:
-    // 1. Scan narrative for BIP39 words
-    // 2. Pick 4 candidates
-    // 3. Pick which one is the riddle answer
-    // 4. Find byte offsets
-    return createNccAttack(
-      ['abandon', 'ability', 'able', 'about'] as any, // placeholder
+    if (this.wordList) {
+      // Scan narrative for BIP39 words
+      const scan = scanForBip39Words(narrative, this.wordList, [targetWord, poisonWord]);
+
+      if (scan.candidates && scan.candidates.length >= 4) {
+        const candidates = scan.candidates;
+        const attack = createNccAttack(
+          [candidates[0].word, candidates[1].word, candidates[2].word, candidates[3].word] as any,
+          narrative,
+          intendedIdx,
+          salt,
+        );
+        return { nccAttack: attack, salt, intendedIdx };
+      }
+    }
+
+    // Fallback: use placeholder words (strategy should embed BIP39 words)
+    this.log('  ⚠️ Not enough BIP39 words in narrative — using placeholders');
+    const attack = createNccAttack(
+      ['abandon', 'ability', 'able', 'about'] as any,
       narrative,
       intendedIdx,
       salt,
     );
+    return { nccAttack: attack, salt, intendedIdx };
   }
 
   private async getOpponentLastNarrative(state: BattleStateV4): Promise<string> {
