@@ -152,9 +152,9 @@ export async function loadWordList(
   const count = await dict.wordCount();
   const wordCount = Number(count);
 
-  // Batch load in parallel (chunks of 100)
+  // Batch load in parallel (chunks of 20 to avoid RPC rate limits)
   const words: string[] = new Array(wordCount);
-  const chunkSize = 100;
+  const chunkSize = 20;
 
   for (let start = 0; start < wordCount; start += chunkSize) {
     const end = Math.min(start + chunkSize, wordCount);
