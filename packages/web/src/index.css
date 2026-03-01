@@ -1,8 +1,6 @@
 @import "tailwindcss";
 
-html {
-  scroll-behavior: smooth;
-}
+/* Smooth scroll handled by JS smoothScrollTo — no CSS scroll-behavior */
 
 @keyframes fadeSlideIn {
   from {

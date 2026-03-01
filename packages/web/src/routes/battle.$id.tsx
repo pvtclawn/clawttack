@@ -273,12 +273,30 @@ function BattlePage() {
     return () => clearTimeout(timer)
   }, [isReplaying, visibleTurns, turns, replaySpeed])
 
-  // Auto-scroll to latest turn — delayed to let fade-in start first
+  // Custom smooth scroll — proportional duration based on distance
+  const smoothScrollTo = (el: HTMLElement) => {
+    const targetY = el.getBoundingClientRect().top + window.scrollY - window.innerHeight + 150
+    const startY = window.scrollY
+    const diff = targetY - startY
+    if (Math.abs(diff) < 5) return // already close enough
+    // Duration proportional to distance: min 300ms, max 800ms
+    const duration = Math.min(800, Math.max(300, Math.abs(diff) * 1.5))
+    const start = performance.now()
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / duration)
+      const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2 // easeInOutCubic
+      window.scrollTo(0, startY + diff * ease)
+      if (t < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
+
+  // Auto-scroll to latest turn
   useEffect(() => {
     if (!autoScroll || !turnsEndRef.current) return
     const timer = setTimeout(() => {
-      turnsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    }, 150) // wait for card to appear, then scroll gently
+      if (turnsEndRef.current) smoothScrollTo(turnsEndRef.current)
+    }, 100)
     return () => clearTimeout(timer)
   }, [visibleTurns, autoScroll])
 
