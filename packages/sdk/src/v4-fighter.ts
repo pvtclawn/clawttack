@@ -172,16 +172,18 @@ export class V4Fighter {
       // Is it my turn?
       const isMyTurn = this.isMyTurn(state.currentTurn);
       if (isMyTurn && state.currentTurn > lastProcessedTurn) {
-        lastProcessedTurn = state.currentTurn;
-
-        // Check if we can claim timeout
-        // (opponent might have timed out before our turn)
-
         try {
           await this.playTurn(state);
-        } catch (err) {
-          this.log(`❌ Turn ${state.currentTurn} failed:`, err);
-          // Don't give up — opponent might time out
+          lastProcessedTurn = state.currentTurn; // Only mark done on success
+        } catch (err: any) {
+          const errMsg = String(err?.shortMessage ?? err?.message ?? err);
+          if (errMsg.includes('TurnTooFast') || errMsg.includes('0xb3c15f40')) {
+            this.log(`  ⏳ Turn too fast — waiting for next block...`);
+            await this.sleep(4000); // Wait ~2 blocks
+          } else {
+            this.log(`❌ Turn ${state.currentTurn} failed:`, errMsg.slice(0, 120));
+            lastProcessedTurn = state.currentTurn; // Skip this turn on other errors
+          }
         }
       }
 
