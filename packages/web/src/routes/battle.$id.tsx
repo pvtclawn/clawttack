@@ -10,8 +10,12 @@ import {
   type V3TurnEvent,
 } from '../hooks/useChain'
 import { formatEther } from 'viem'
-import { agentLabel } from '../lib/format'
+import { agentLabel, explorerUrl, copyToClipboard, formatAddress, blocksToSeconds } from '../lib/format'
 import { AgentDisplay, TxLink, ThinkingSkeleton } from '../components/ChainUI'
+import {
+  Swords, Shield, Play, Square, Pin, PinOff, Share2, ExternalLink, Copy, Check,
+  Trophy, Crown, Skull, Clock, Zap, Target, ChevronLeft,
+} from 'lucide-react'
 
 export const Route = createFileRoute('/battle/$id')({
   component: BattlePage,
@@ -20,6 +24,21 @@ export const Route = createFileRoute('/battle/$id')({
 const PHASE_NAMES = ['Open', 'Active', 'Settled', 'Cancelled'] as const
 const RESULT_TYPES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Bank Empty', 'Flag Captured', 'NCC Reveal Failed'] as const
 
+// ─── Utility: copy with brief ✓ feedback ─────────────────────────────────────
+function CopyButton({ text, className }: { text: string; className?: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      onClick={(e) => { e.preventDefault(); copyToClipboard(text); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+      className={`inline-flex items-center ${className ?? 'text-[var(--muted)] hover:text-[var(--fg)]'}`}
+      title="Copy"
+    >
+      {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+    </button>
+  )
+}
+
+// ─── Animated number ─────────────────────────────────────────────────────────
 function AnimatedNumber({ value, className }: { value: number; className?: string }) {
   const [displayed, setDisplayed] = useState(value)
   const prevRef = useRef(value)
@@ -44,46 +63,41 @@ function AnimatedNumber({ value, className }: { value: number; className?: strin
   return <span className={className}>{displayed}</span>
 }
 
+// ─── Bank Bar (shared by live + replay) ──────────────────────────────────────
 function BankBar({
-  bankA,
-  bankB,
-  label,
-  isLive,
-  isChallengerTurn,
-  elapsedBlocks,
-  challengerName,
-  acceptorName,
+  bankA, bankB, label,
+  drainBlocks, isChallengerDraining,
+  challengerName, acceptorName,
 }: {
-  bankA: number
-  bankB: number
-  label?: string
-  isLive?: boolean
-  isChallengerTurn?: boolean
-  elapsedBlocks?: number
-  challengerName?: string
-  acceptorName?: string
+  bankA: number; bankB: number; label?: string
+  drainBlocks?: number; isChallengerDraining?: boolean
+  challengerName?: string; acceptorName?: string
 }) {
   const maxBank = 400
-  const drain = isLive && elapsedBlocks !== undefined ? Math.min(elapsedBlocks, 80) : 0
-  const projectedA = isChallengerTurn ? Math.max(0, bankA - drain) : bankA
-  const projectedB = !isChallengerTurn ? Math.max(0, bankB - drain) : bankB
-  const displayA = isLive ? projectedA : bankA
-  const displayB = isLive ? projectedB : bankB
-
-  const pctA = Math.max(0, Math.min(100, (displayA / maxBank) * 100))
-  const pctB = Math.max(0, Math.min(100, (displayB / maxBank) * 100))
+  const drain = drainBlocks ?? 0
+  const cappedDrain = Math.min(drain, 80) // MAX_TURN_TIMEOUT cap
+  const drainSecs = blocksToSeconds(cappedDrain)
+  const projA = isChallengerDraining ? Math.max(0, bankA - cappedDrain) : bankA
+  const projB = !isChallengerDraining ? Math.max(0, bankB - cappedDrain) : bankB
+  const pctA = Math.max(0, Math.min(100, (projA / maxBank) * 100))
+  const pctB = Math.max(0, Math.min(100, (projB / maxBank) * 100))
 
   return (
     <div className="mx-4 my-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
       {label && <div className="mb-2 text-center text-[10px] uppercase tracking-wider text-[var(--muted)]">{label}</div>}
       <div className="flex items-center gap-3">
+        {/* Challenger */}
         <div className="flex-1">
           <div className="mb-1 flex items-center justify-between text-[10px]">
-            <span className="text-red-400">🗡️ {challengerName ?? 'Challenger'}</span>
+            <span className="inline-flex items-center gap-1 text-red-400">
+              <Swords size={10} /> {challengerName ?? 'Challenger'}
+            </span>
             <span className="inline-flex items-center gap-1">
-              <AnimatedNumber value={displayA} className="font-mono font-bold tabular-nums text-[var(--fg)]" />
-              {isLive && isChallengerTurn && drain > 0 && (
-                <span className="font-mono text-red-400 animate-pulse">-{drain}</span>
+              <AnimatedNumber value={projA} className="font-mono font-bold tabular-nums text-[var(--fg)]" />
+              {isChallengerDraining && cappedDrain > 0 && (
+                <span className="font-mono text-red-400 animate-pulse text-[10px]">
+                  -{cappedDrain} <span className="text-[var(--muted)]">({drainSecs}s)</span>
+                </span>
               )}
             </span>
           </div>
@@ -97,13 +111,18 @@ function BankBar({
           </div>
         </div>
         <div className="text-xs font-bold text-[var(--muted)]">vs</div>
+        {/* Acceptor */}
         <div className="flex-1">
           <div className="mb-1 flex items-center justify-between text-[10px]">
-            <span className="text-blue-400">🛡️ {acceptorName ?? 'Acceptor'}</span>
+            <span className="inline-flex items-center gap-1 text-blue-400">
+              <Shield size={10} /> {acceptorName ?? 'Acceptor'}
+            </span>
             <span className="inline-flex items-center gap-1">
-              <AnimatedNumber value={displayB} className="font-mono font-bold tabular-nums text-[var(--fg)]" />
-              {isLive && !isChallengerTurn && drain > 0 && (
-                <span className="font-mono text-blue-400 animate-pulse">-{drain}</span>
+              <AnimatedNumber value={projB} className="font-mono font-bold tabular-nums text-[var(--fg)]" />
+              {!isChallengerDraining && cappedDrain > 0 && (
+                <span className="font-mono text-blue-400 animate-pulse text-[10px]">
+                  -{cappedDrain} <span className="text-[var(--muted)]">({drainSecs}s)</span>
+                </span>
               )}
             </span>
           </div>
@@ -121,7 +140,7 @@ function BankBar({
   )
 }
 
-// ─── Confetti Effect ─────────────────────────────────────────────────────────
+// ─── Confetti Canvas ─────────────────────────────────────────────────────────
 function ConfettiCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -157,7 +176,7 @@ function ConfettiCanvas() {
     }
 
     let frame = 0
-    const maxFrames = 180 // ~3 seconds at 60fps
+    const maxFrames = 180
 
     const animate = () => {
       frame++
@@ -169,9 +188,9 @@ function ConfettiCanvas() {
 
       for (const p of particles) {
         p.x += p.vx
-        p.vy += 0.05 // gravity
+        p.vy += 0.05
         p.y += p.vy
-        p.vx *= 0.99 // air resistance
+        p.vx *= 0.99
         p.rotation += p.rotSpeed
         p.opacity = globalFade
 
@@ -199,25 +218,16 @@ function ConfettiCanvas() {
   )
 }
 
-// ─── Winner Banner (in sticky header) ────────────────────────────────────────
+// ─── Winner Banner ───────────────────────────────────────────────────────────
 function WinnerBanner({
-  winnerName,
-  loserName,
-  resultType,
-  txHash,
-  show,
+  winnerName, loserName, resultType, txHash, show,
 }: {
-  winnerName: string
-  loserName: string
-  resultType: string
-  txHash: string
-  show: boolean
+  winnerName: string; loserName: string; resultType: string; txHash: string; show: boolean
 }) {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
     if (show) {
-      // Delay for dramatic entrance
       const t = setTimeout(() => setVisible(true), 300)
       return () => clearTimeout(t)
     }
@@ -236,7 +246,7 @@ function WinnerBanner({
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-3xl drop-shadow-lg">🏆</span>
+            <Trophy className="text-yellow-400 drop-shadow-lg" size={28} />
             <div>
               <div className="text-lg font-bold text-yellow-300">
                 {winnerName} Wins!
@@ -255,15 +265,9 @@ function WinnerBanner({
 
 // ─── Turn Card ───────────────────────────────────────────────────────────────
 function TurnCard({
-  turn,
-  isLeft,
-  agentAddress,
-  isWinner,
+  turn, isLeft, agentAddress, isWinner,
 }: {
-  turn: V3TurnEvent
-  isLeft: boolean
-  agentAddress?: string
-  isWinner?: boolean
+  turn: V3TurnEvent; isLeft: boolean; agentAddress?: string; isWinner?: boolean
 }) {
   const { data: targetWord } = useWord(turn.targetWord)
   const poisonWord = turn.poisonWord
@@ -292,24 +296,35 @@ function TurnCard({
       <div className={`flex ${isLeft ? 'justify-start' : 'justify-end'}`}>
         <div className={`max-w-[80%] rounded-xl p-4 ${bgClass}`}>
           <div className="mb-1 flex items-center gap-2 text-xs">
-            <span>{isLeft ? '🗡️' : '🛡️'}</span>
+            {isLeft
+              ? <Swords size={12} className="text-red-400" />
+              : <Shield size={12} className="text-blue-400" />
+            }
             <span className={roleColor}>{displayName}</span>
-            {isWinner && <span className="text-yellow-500 text-[10px]">👑</span>}
+            {isWinner && <Crown size={10} className="text-yellow-500" />}
             <span className="text-[var(--muted)]">Turn {turn.turnNumber}</span>
             {bankInfo && (
-              <span className="font-mono text-[10px] text-[var(--muted)]">⚡ {bankInfo}</span>
+              <span className="inline-flex items-center gap-0.5 font-mono text-[10px] text-[var(--muted)]">
+                <Zap size={8} /> {bankInfo}
+              </span>
             )}
             {timeStr && (
-              <span className="ml-auto font-mono text-[10px] text-[var(--muted)]">⏰ {timeStr}</span>
+              <span className="ml-auto inline-flex items-center gap-0.5 font-mono text-[10px] text-[var(--muted)]">
+                <Clock size={8} /> {timeStr}
+              </span>
             )}
           </div>
           <div className="text-sm leading-relaxed">{turn.narrative}</div>
           <div className="mt-2 flex gap-3 text-[10px] text-[var(--muted)]">
             {targetWord && (
-              <span>🎯 <span className="font-medium text-green-400">{targetWord}</span></span>
+              <span className="inline-flex items-center gap-0.5">
+                <Target size={8} className="text-green-400" /> <span className="font-medium text-green-400">{targetWord}</span>
+              </span>
             )}
             {poisonWord && turn.turnNumber > 0 && (
-              <span>☠️ <span className="font-medium text-red-400">{poisonWord}</span></span>
+              <span className="inline-flex items-center gap-0.5">
+                <Skull size={8} className="text-red-400" /> <span className="font-medium text-red-400">{poisonWord}</span>
+              </span>
             )}
             <TxLink hash={turn.txHash} label="tx ↗" />
           </div>
@@ -317,6 +332,41 @@ function TurnCard({
       </div>
     </div>
   )
+}
+
+// ─── Replay drain simulation hook ────────────────────────────────────────────
+// Simulates elapsed blocks ticking up between turns during replay
+function useReplayDrain(isReplaying: boolean, displayedTurns: V3TurnEvent[], turns: V3TurnEvent[] | undefined) {
+  const [simElapsed, setSimElapsed] = useState(0)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    if (!isReplaying || !turns || !displayedTurns.length) {
+      setSimElapsed(0)
+      return
+    }
+
+    // Calculate how many blocks the NEXT turn will take
+    const lastIdx = displayedTurns.length - 1
+    const lastTurn = displayedTurns[lastIdx]
+    const nextTurn = turns[displayedTurns.length]
+    const realElapsed = nextTurn
+      ? Number(nextTurn.blockNumber - lastTurn.blockNumber)
+      : 10 // default estimate
+
+    // Tick up simulated elapsed every 2s (1 Base block = 2s)
+    setSimElapsed(0)
+    const interval = setInterval(() => {
+      setSimElapsed(prev => {
+        const next = prev + 1
+        return next >= Math.min(realElapsed, 80) ? Math.min(realElapsed, 80) : next
+      })
+    }, 2000)
+    intervalRef.current = interval
+    return () => clearInterval(interval)
+  }, [isReplaying, displayedTurns.length, turns])
+
+  return simElapsed
 }
 
 // ─── Battle Page ─────────────────────────────────────────────────────────────
@@ -340,7 +390,6 @@ function BattlePage() {
 
   const displayedTurns = (turns ?? []).slice(0, visibleTurns)
 
-  // Track banks at current replay position
   const replayBanks = useMemo(() => {
     if (!displayedTurns.length || !info) return { bankA: 400, bankB: 400 }
     const lastTurn = displayedTurns[displayedTurns.length - 1]
@@ -350,12 +399,25 @@ function BattlePage() {
     }
   }, [displayedTurns, info])
 
-  // Auto-show all on load (non-replay)
+  // ─── Unified drain logic ────────────────────────────────────────────
+  // Live: real elapsed blocks from chain
+  // Replay: simulated elapsed blocks ticking up between turns
+  const replayDrain = useReplayDrain(isReplaying, displayedTurns, turns)
+
+  const liveDrain = useMemo(() => {
+    if (!turns?.length || !currentBlockNumber) return 0
+    const lastTurnBn = turns[turns.length - 1].blockNumber
+    return Number(currentBlockNumber - lastTurnBn)
+  }, [turns, currentBlockNumber])
+
+  const isLive = !!(info && info.state === 1 && !isReplaying && visibleTurns >= (turns ?? []).length)
+  const drainBlocks = isLive ? liveDrain : isReplaying ? replayDrain : 0
+
+  // ─── Auto-show & replay ──────────────────────────────────────────────
   useEffect(() => {
     if (turns && !isReplaying) {
       if (visibleTurns === 0) {
         setVisibleTurns(turns.length)
-        // If battle is already settled, show settlement immediately
         if (settlement) setShowSettlement(true)
       } else if (turns.length > visibleTurns) {
         setVisibleTurns(turns.length)
@@ -363,11 +425,9 @@ function BattlePage() {
     }
   }, [turns, settlement])
 
-  // Replay animation — advance turns, then show settlement at the end
   useEffect(() => {
     if (!isReplaying || !turns) return
     if (visibleTurns >= turns.length) {
-      // All turns shown — if settled, delay then reveal settlement
       if (settlement) {
         const timer = setTimeout(() => {
           setShowSettlement(true)
@@ -382,7 +442,7 @@ function BattlePage() {
     return () => clearTimeout(timer)
   }, [isReplaying, visibleTurns, turns, replaySpeed, settlement])
 
-  // Custom smooth scroll
+  // ─── Scroll ──────────────────────────────────────────────────────────
   const smoothScrollTo = useCallback((el: HTMLElement) => {
     const targetY = el.getBoundingClientRect().top + window.scrollY - window.innerHeight + 150
     const startY = window.scrollY
@@ -399,7 +459,6 @@ function BattlePage() {
     requestAnimationFrame(step)
   }, [])
 
-  // Auto-scroll to latest turn
   useEffect(() => {
     if (!autoScroll || !turnsEndRef.current) return
     const timer = setTimeout(() => {
@@ -408,28 +467,21 @@ function BattlePage() {
     return () => clearTimeout(timer)
   }, [visibleTurns, autoScroll, showSettlement, smoothScrollTo])
 
+  // ─── Loading / Not found ─────────────────────────────────────────────
   if (loadingInfo) {
-    return (
-      <div className="py-12 text-center text-[var(--muted)]">
-        ⏳ Loading battle...
-      </div>
-    )
+    return <div className="py-12 text-center text-[var(--muted)]">⏳ Loading battle...</div>
   }
 
   if (!info) {
     return (
       <div className="space-y-4 py-12 text-center">
         <div className="text-[var(--muted)]">Battle #{id} not found</div>
-        <Link to="/battles" className="text-sm text-[var(--accent)]">
-          ← Back to battles
-        </Link>
+        <Link to="/battles" className="text-sm text-[var(--accent)]">← Back to battles</Link>
       </div>
     )
   }
 
-  const isPending = !!turns && turns.length < info.currentTurn
-
-  // Single source of truth: whose turn is NEXT based on the last displayed turn
+  // ─── Derived state ──────────────────────────────────────────────────
   const lastDisplayed = displayedTurns[displayedTurns.length - 1]
   const nextTurnIsChallenger = lastDisplayed
     ? lastDisplayed.playerId !== info.challengerId
@@ -437,169 +489,178 @@ function BattlePage() {
   const nextTurnAddr = nextTurnIsChallenger ? info.challengerOwner : info.acceptorOwner
   const nextTurnId = nextTurnIsChallenger ? info.challengerId : info.acceptorId
 
-  // Determine winner for turn highlighting
   const winnerId = settlement?.winnerId
-
-  // Replay or live: show skeleton between turns
-  const replayShowsSkeleton = isReplaying && visibleTurns < (turns ?? []).length
-  const liveShowsSkeleton = info.state === 1 && !isReplaying
-  const showSkeleton = replayShowsSkeleton || liveShowsSkeleton
-
-  // During replay of settled battle, hide settlement until all turns shown
+  const showSkeleton = (isReplaying && visibleTurns < (turns ?? []).length) || isLive
   const settlementRevealed = settlement && showSettlement
 
-  // Winner/loser names for banner
-  const winnerName = settlement && winnerId
-    ? agentLabel(
-        winnerId === info.challengerId ? info.challengerOwner : info.acceptorOwner,
-        winnerId
-      )
+  const winnerName = winnerId
+    ? agentLabel(winnerId === info.challengerId ? info.challengerOwner : info.acceptorOwner, winnerId)
     : ''
   const loserName = settlement
-    ? agentLabel(
-        settlement.loserId === info.challengerId ? info.challengerOwner : info.acceptorOwner,
-        settlement.loserId
-      )
+    ? agentLabel(settlement.loserId === info.challengerId ? info.challengerOwner : info.acceptorOwner, settlement.loserId)
     : ''
 
+  const displayTurn = isReplaying
+    ? (lastDisplayed?.turnNumber ?? 0)
+    : info.currentTurn
+
+  const challengerName = agentLabel(info.challengerOwner, info.challengerId)
+  const acceptorName = agentLabel(info.acceptorOwner, info.acceptorId)
+
+  // ─── Handlers ────────────────────────────────────────────────────────
+  const toggleReplay = () => {
+    if (isReplaying) {
+      // Stop — show everything
+      setVisibleTurns((turns ?? []).length)
+      setShowSettlement(!!settlement)
+      setIsReplaying(false)
+    } else {
+      // Start replay from beginning
+      setVisibleTurns(0)
+      setShowSettlement(false)
+      setIsReplaying(true)
+    }
+  }
+
+  const showAll = () => {
+    setVisibleTurns((turns ?? []).length)
+    setShowSettlement(!!settlement)
+    setIsReplaying(false)
+  }
+
+  // ─── Render ──────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       {/* Sticky Header */}
       <div className="sticky top-0 z-10 -mx-4 bg-[var(--bg)]/95 px-4 pb-3 pt-2 backdrop-blur-sm border-b border-[var(--border)]">
         <div className="flex items-center justify-between">
-        <div>
-          <Link to="/battles" className="text-xs text-[var(--muted)] hover:text-[var(--fg)]">
-            ← Battles
-          </Link>
-          <h1 className="mt-1 text-2xl font-bold">
-            Battle #{info.battleId.toString()}
-          </h1>
-          <div className="text-sm text-[var(--muted)]">
-            {agentLabel(info.challengerOwner, info.challengerId)} vs {info.acceptorId > 0n ? agentLabel(info.acceptorOwner, info.acceptorId) : 'Waiting...'}
-            {' · '}
-            Turn {isReplaying ? (displayedTurns[displayedTurns.length - 1]?.turnNumber ?? 0) : info.currentTurn}
-            {' · '}
-            {info.totalPot > 0n ? `${formatEther(info.totalPot)} ETH` : 'Free'}
+          <div>
+            <Link to="/battles" className="inline-flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--fg)]">
+              <ChevronLeft size={12} /> Battles
+            </Link>
+            <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold">
+              <span>Battle #{info.battleId.toString()}</span>
+              <a
+                href={explorerUrl('address', info.address)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[var(--muted)] hover:text-[var(--accent)]"
+                title="View contract"
+              >
+                <ExternalLink size={14} />
+              </a>
+              <CopyButton text={info.address} />
+            </h1>
+            <div className="text-sm text-[var(--muted)]">
+              {challengerName} vs {info.acceptorId > 0n ? acceptorName : 'Waiting...'}
+              {' · '}Turn {displayTurn}
+              {' · '}{info.totalPot > 0n ? `${formatEther(info.totalPot)} ETH` : 'Free'}
+            </div>
+            <div className="mt-1 flex gap-3 text-xs text-[var(--muted)]">
+              <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                info.state === 2 ? 'bg-green-900/50 text-green-400' :
+                info.state === 1 ? 'bg-yellow-900/50 text-yellow-400' :
+                info.state === 0 ? 'bg-orange-900/50 text-orange-400' :
+                'bg-red-900/50 text-red-400'
+              }`}>
+                {isLive ? '🔴 Live' : PHASE_NAMES[info.state]}
+              </span>
+            </div>
           </div>
-          <div className="mt-1 flex gap-3 text-xs text-[var(--muted)]">
-            <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-              info.state === 2 ? 'bg-green-900/50 text-green-400' :
-              info.state === 1 ? 'bg-yellow-900/50 text-yellow-400' :
-              info.state === 0 ? 'bg-orange-900/50 text-orange-400' :
-              'bg-red-900/50 text-red-400'
-            }`}>
-              {isReplaying ? '▶ Replaying' : PHASE_NAMES[info.state]}
-            </span>
-            <a
-              href={`https://sepolia.basescan.org/address/${info.address}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[var(--accent)] hover:underline"
+          <div className="flex gap-2">
+            {info.state === 2 && (<>
+              <select
+                value={replaySpeed}
+                onChange={(e) => setReplaySpeed(Number(e.target.value))}
+                className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-2 text-sm text-[var(--fg)]"
+              >
+                <option value={3000}>0.5x</option>
+                <option value={1500}>1x</option>
+                <option value={750}>2x</option>
+                <option value={300}>5x</option>
+              </select>
+              <button
+                onClick={toggleReplay}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm ${
+                  isReplaying
+                    ? 'border-red-600 bg-red-900/30 text-red-400'
+                    : 'border-[var(--border)] hover:bg-[var(--surface)]'
+                }`}
+              >
+                {isReplaying ? <><Square size={14} /> Stop</> : <><Play size={14} /> Replay</>}
+              </button>
+              {!isReplaying && (
+                <button
+                  onClick={showAll}
+                  className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface)]"
+                >
+                  Show All
+                </button>
+              )}
+            </>)}
+            <button
+              onClick={() => setAutoScroll(v => !v)}
+              className={`rounded-lg border px-3 py-2 text-sm ${
+                autoScroll
+                  ? 'border-green-600 bg-green-900/30 text-green-400'
+                  : 'border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]'
+              }`}
+              title={autoScroll ? 'Auto-scroll ON' : 'Auto-scroll OFF'}
             >
-              Contract ↗
-            </a>
+              {autoScroll ? <Pin size={14} /> : <PinOff size={14} />}
+            </button>
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/battle/${info.battleId.toString()}`
+                const result = settlement ? RESULT_TYPES[settlement.resultType] : PHASE_NAMES[info.state]
+                const text = `⚔️ Clawttack Battle #${info.battleId.toString()} — ${result}\n${challengerName} vs ${acceptorName}\n${url}`
+                copyToClipboard(text).then(() => alert('Copied to clipboard!'))
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface)]"
+            >
+              <Share2 size={14} /> Share
+            </button>
           </div>
         </div>
-        <div className="flex gap-2">
-          {info.state === 2 && (<>
-          <select
-            value={replaySpeed}
-            onChange={(e) => setReplaySpeed(Number(e.target.value))}
-            className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-2 text-sm text-[var(--fg)]"
-          >
-            <option value={3000}>0.5x</option>
-            <option value={1500}>1x</option>
-            <option value={750}>2x</option>
-            <option value={300}>5x</option>
-          </select>
-          <button
-            onClick={() => { setVisibleTurns(0); setShowSettlement(false); setIsReplaying(true) }}
-            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface)]"
-          >
-            ▶ Replay
-          </button>
-          <button
-            onClick={() => { setVisibleTurns((turns ?? []).length); setShowSettlement(true); setIsReplaying(false) }}
-            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface)]"
-          >
-            Show All
-          </button>
-          </>)}
-          <button
-            onClick={() => setAutoScroll(v => !v)}
-            className={`rounded-lg border px-3 py-2 text-sm ${
-              autoScroll
-                ? 'border-green-600 bg-green-900/30 text-green-400'
-                : 'border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]'
-            }`}
-            title={autoScroll ? 'Auto-scroll ON' : 'Auto-scroll OFF'}
-          >
-            📌
-          </button>
-          <button
-            onClick={() => {
-              const url = `${window.location.origin}/battle/${info.battleId.toString()}`
-              const result = settlement ? RESULT_TYPES[settlement.resultType] : PHASE_NAMES[info.state]
-              const text = `⚔️ Clawttack Battle #${info.battleId.toString()} — ${result}\n${agentLabel(info.challengerOwner, info.challengerId)} vs ${agentLabel(info.acceptorOwner, info.acceptorId)}\n${url}`
-              navigator.clipboard.writeText(text)
-                .then(() => alert('Copied to clipboard!'))
-                .catch(() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank'))
-            }}
-            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface)]"
-          >
-            📤 Share
-          </button>
-        </div>
-      </div>
 
-      {/* Bank Status */}
-      {info.bankA !== undefined && info.bankB !== undefined && (() => {
-        const isLive = info.state === 1 && !isReplaying && visibleTurns >= (turns ?? []).length
-        const lastTurnBn = turns?.length ? turns[turns.length - 1].blockNumber : 0n
-        const elapsed = isLive && currentBlockNumber && lastTurnBn
-          ? Number(currentBlockNumber - lastTurnBn)
-          : 0
-        return (
+        {/* Bank Bar — unified for live + replay */}
+        {info.bankA !== undefined && info.bankB !== undefined && (
           <BankBar
             bankA={replayBanks.bankA}
             bankB={replayBanks.bankB}
             label={
               isReplaying
-                ? `Turn ${displayedTurns.length ? displayedTurns[displayedTurns.length - 1].turnNumber : 0} of ${info.currentTurn}`
+                ? `Turn ${lastDisplayed?.turnNumber ?? 0} of ${info.currentTurn}`
                 : isLive ? '🔴 LIVE' : 'Final Banks'
             }
-            isLive={isLive}
-            isChallengerTurn={nextTurnIsChallenger}
-            elapsedBlocks={elapsed}
-            challengerName={agentLabel(info.challengerOwner, info.challengerId)}
-            acceptorName={agentLabel(info.acceptorOwner, info.acceptorId)}
+            drainBlocks={drainBlocks}
+            isChallengerDraining={nextTurnIsChallenger}
+            challengerName={challengerName}
+            acceptorName={acceptorName}
           />
-        )
-      })()}
+        )}
 
-      {/* Winner Banner — in sticky header area */}
-      {settlementRevealed && winnerId && winnerId > 0n && (
-        <WinnerBanner
-          winnerName={winnerName}
-          loserName={loserName}
-          resultType={RESULT_TYPES[settlement.resultType] ?? 'Unknown'}
-          txHash={settlement.txHash}
-          show={true}
-        />
-      )}
+        {/* Winner Banner */}
+        {settlementRevealed && winnerId && winnerId > 0n && (
+          <WinnerBanner
+            winnerName={winnerName}
+            loserName={loserName}
+            resultType={RESULT_TYPES[settlement.resultType] ?? 'Unknown'}
+            txHash={settlement.txHash}
+            show={true}
+          />
+        )}
       </div>
 
       {/* Players */}
       <div className="grid grid-cols-2 gap-4">
         <div className={`rounded-xl border p-4 ${
-          winnerId === info.challengerId
-            ? 'border-yellow-700/40 bg-yellow-950/10'
-            : 'border-red-900/30 bg-red-950/20'
+          winnerId === info.challengerId ? 'border-yellow-700/40 bg-yellow-950/10' : 'border-red-900/30 bg-red-950/20'
         }`}>
           <div className="text-xs text-[var(--muted)]">Challenger</div>
           <div className="font-medium">
             <AgentDisplay address={info.challengerOwner} agentId={info.challengerId} showId />
-            {winnerId === info.challengerId && <span className="ml-2 text-yellow-500">👑</span>}
+            {winnerId === info.challengerId && <Crown size={14} className="ml-2 inline text-yellow-500" />}
           </div>
           {challenger && (
             <div className="mt-2 text-xs text-[var(--muted)]">
@@ -608,16 +669,14 @@ function BattlePage() {
           )}
         </div>
         <div className={`rounded-xl border p-4 ${
-          winnerId === info.acceptorId
-            ? 'border-yellow-700/40 bg-yellow-950/10'
-            : 'border-blue-900/30 bg-blue-950/20'
+          winnerId === info.acceptorId ? 'border-yellow-700/40 bg-yellow-950/10' : 'border-blue-900/30 bg-blue-950/20'
         }`}>
           <div className="text-xs text-[var(--muted)]">Acceptor</div>
           <div className="font-medium">
             {info.acceptorId > 0n
               ? <>
                   <AgentDisplay address={info.acceptorOwner} agentId={info.acceptorId} showId />
-                  {winnerId === info.acceptorId && <span className="ml-2 text-yellow-500">👑</span>}
+                  {winnerId === info.acceptorId && <Crown size={14} className="ml-2 inline text-yellow-500" />}
                 </>
               : 'Waiting...'}
           </div>
@@ -646,7 +705,7 @@ function BattlePage() {
               />
             )
           })}
-          {/* Thinking skeleton — during live or replay */}
+          {/* Thinking skeleton — shared for live + replay */}
           {showSkeleton && (
             <div className={`flex ${nextTurnIsChallenger ? 'justify-start' : 'justify-end'}`}>
               <div className="max-w-[80%] w-full">

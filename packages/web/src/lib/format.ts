@@ -6,11 +6,32 @@ const KNOWN_AGENTS: Record<string, string> = {
 }
 
 const BASE_SEPOLIA_EXPLORER = 'https://sepolia.basescan.org'
+const BASE_BLOCK_TIME_SECONDS = 2
 
 /** Shorten an address: 0x1234…abcd */
 export function formatAddress(address: string): string {
   if (!address || address === '0x0000000000000000000000000000000000000000') return '—'
   return `${address.slice(0, 6)}…${address.slice(-4)}`
+}
+
+/** Convert blocks to human-readable time string */
+export function blocksToTime(blocks: number): string {
+  const seconds = blocks * BASE_BLOCK_TIME_SECONDS
+  if (seconds < 60) return `${seconds}s`
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`
+}
+
+/** Convert blocks to seconds */
+export function blocksToSeconds(blocks: number): number {
+  return blocks * BASE_BLOCK_TIME_SECONDS
+}
+
+/** Format blocks with both blocks and seconds: "15 blocks (~30s)" */
+export function formatBlocksWithTime(blocks: number): string {
+  const secs = blocksToSeconds(blocks)
+  return `${blocks} blocks (~${blocksToTime(blocks)})`
 }
 
 /** Get display name for an agent: known name or shortened address */
