@@ -210,8 +210,14 @@ function BattlePage() {
 
   // Auto-show all on load
   useEffect(() => {
-    if (turns && !isReplaying && visibleTurns === 0) {
-      setVisibleTurns(turns.length)
+    if (turns && !isReplaying) {
+      if (visibleTurns === 0) {
+        // Initial load — show all turns immediately
+        setVisibleTurns(turns.length)
+      } else if (turns.length > visibleTurns) {
+        // New turns arrived during live battle — auto-advance to latest
+        setVisibleTurns(turns.length)
+      }
     }
   }, [turns])
 
