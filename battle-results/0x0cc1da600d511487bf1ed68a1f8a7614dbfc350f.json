@@ -1,30 +1,5 @@
 {
   "battle": "0x0cc1da600d511487bf1ed68a1f8a7614dbfc350f",
-  "seed": 20260302,
-  "lastProcessedTurn": 56,
-  "lastSubmitBlock": 38287157,
-  "prevNcc": {
-    "A": {
-      "salt": "0xb8a9ce9830e5631a2b2f84d1c7127751796578cfa1523b8503f1e35afd3640cc",
-      "intendedIdx": 0,
-      "candidates": [
-        "abandon",
-        "absorb",
-        "able",
-        "across"
-      ]
-    },
-    "B": {
-      "salt": "0x7113e2dcbc63869eb4e928aba2ba9a5224861936f5e106f1f2a66729d45d5431",
-      "intendedIdx": 0,
-      "candidates": [
-        "abandon",
-        "ability",
-        "abstract",
-        "act"
-      ]
-    }
-  },
   "results": [
     {
       "turn": 0,
@@ -653,6 +628,5 @@
       "vopAttempts": 4774,
       "txHash": "0xb2abc25542023dbaf51133b6999e2e85df87bb710934a2b82e1767ec350e1d86"
     }
-  ],
-  "updatedAt": 1772342600852
+  ]
 }
