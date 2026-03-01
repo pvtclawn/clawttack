@@ -267,7 +267,7 @@ function BattlePage() {
           <div className="text-sm text-[var(--muted)]">
             Agent #{info.challengerId.toString()} vs Agent #{info.acceptorId.toString()}
             {' · '}
-            {info.currentTurn}/{info.maxTurns} turns
+            Turn {info.currentTurn}
             {' · '}
             {info.totalPot > 0n ? `${formatEther(info.totalPot)} ETH` : 'Free'}
           </div>
@@ -389,7 +389,7 @@ function BattlePage() {
       )}
 
       {/* Turns */}
-      {info.state === 1 && info.currentTurn < info.maxTurns && (
+      {info.state === 1 && (
         <TurnTimerBar
           deadlineBlock={info.turnDeadlineBlock}
           baseTimeoutBlocks={info.baseTimeoutBlocks}

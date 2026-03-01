@@ -1,0 +1,64 @@
+{
+  "battle": "0x7d9c71e6e2f6211802a5c1d065fa087a4e22b5c2",
+  "seed": 30003,
+  "lastProcessedTurn": 2,
+  "lastSubmitBlock": 38292673,
+  "prevNcc": {
+    "B": {
+      "salt": "0x696d6d9729ff34fec62489cea5e0bd6b1fa8749b961592944d35775750d55982",
+      "intendedIdx": 0,
+      "candidates": [
+        "abandon",
+        "absorb",
+        "able",
+        "across"
+      ]
+    },
+    "A": {
+      "salt": "0x91c08a8de99de6a6ae81e0f3e51f5dd754473f1521a263e5bd7aad29a060c2c3",
+      "intendedIdx": 0,
+      "candidates": [
+        "abandon",
+        "ability",
+        "abstract",
+        "act"
+      ]
+    }
+  },
+  "results": [
+    {
+      "turn": 0,
+      "agent": "B",
+      "gas": "1248967",
+      "bankA": "400",
+      "bankB": "368",
+      "targetWord": "garden",
+      "nccGuessCorrect": false,
+      "vopAttempts": 0,
+      "txHash": "0x57b18fa35a5ad6dc0646dd05bd0e26ea43416c65c09f8a8f9614b908c78c2644"
+    },
+    {
+      "turn": 1,
+      "agent": "A",
+      "gas": "1322308",
+      "bankA": "393",
+      "bankB": "368",
+      "targetWord": "side",
+      "nccGuessCorrect": true,
+      "vopAttempts": 1093,
+      "txHash": "0x494a8934aac7e7fe7f41ce7b500101cd9f11c4bcee790df46e3739eac8841d0f"
+    },
+    {
+      "turn": 2,
+      "agent": "B",
+      "gas": "1248118",
+      "bankA": "393",
+      "bankB": "361",
+      "targetWord": "negative",
+      "nccGuessCorrect": false,
+      "vopAttempts": 2637,
+      "txHash": "0x6d3deabbc4f6bdf76d99fa61a2deda252f52d814a9d1232403d94b6fe9ff50e1"
+    }
+  ],
+  "updatedAt": 1772353638326
+}

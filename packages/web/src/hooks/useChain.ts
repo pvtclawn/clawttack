@@ -172,10 +172,8 @@ const WORD_DICTIONARY_ABI = [
 const BATTLE_CONFIG_ABI = [
   { type: 'function', name: 'config', inputs: [], outputs: [
     { name: 'stake', type: 'uint256' },
-    { name: 'baseTimeoutBlocks', type: 'uint32' },
     { name: 'warmupBlocks', type: 'uint32' },
     { name: 'targetAgentId', type: 'uint256' },
-    { name: 'maxTurns', type: 'uint8' },
     { name: 'maxJokers', type: 'uint8' },
   ], stateMutability: 'view' },
 ] as const
@@ -207,6 +205,24 @@ export function useBattleCreatedEvents(live = false) {
   return useQuery({
     queryKey: ['v3', 'battles', 'created'],
     queryFn: async (): Promise<V3BattleCreatedEvent[]> => {
+      // Try v4 event first
+      const v4Events = await getLogsChunked({
+        address: CONTRACTS.arena,
+        event: parseAbiItem('event BattleV4Created(uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint256 targetAgentId)'),
+        fromBlock: ARENA_DEPLOY_BLOCK,
+        mapFn: (log) => ({
+          battleId: log.args.battleId!,
+          challengerId: log.args.challengerId!,
+          stake: log.args.stake!,
+          baseTimeoutBlocks: 0,
+          maxTurns: 0,
+          blockNumber: log.blockNumber,
+          txHash: log.transactionHash!,
+        }),
+      })
+      if (v4Events.length > 0) return v4Events
+
+      // Fallback: v3 event
       return getLogsChunked({
         address: CONTRACTS.arena,
         event: parseAbiItem('event BattleCreated(uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint32 baseTimeoutBlocks, uint8 maxTurns)'),
@@ -257,7 +273,7 @@ export function useBattleInfo(battleId?: bigint, live = false) {
 
       const battleState = results[0].result as [number, number, bigint, bigint, `0x${string}`, bigint]
       const [state, turn, bankA, bankB, seqHash] = battleState
-      const config = results[6].result as [bigint, number, number, bigint, number, number]
+      const config = results[6].result as [bigint, number, bigint, number]
 
       return {
         battleId: battleId!,
@@ -268,13 +284,13 @@ export function useBattleInfo(battleId?: bigint, live = false) {
         challengerOwner: results[3].result as Address,
         acceptorOwner: results[4].result as Address,
         currentTurn: Number(turn),
-        maxTurns: config[4],
+        maxTurns: 0, // v4 has no maxTurns — bank decay guarantees termination
         bankA: Number(bankA),
         bankB: Number(bankB),
-        turnDeadlineBlock: 0n, // v4 uses chess clock, not block deadline
+        turnDeadlineBlock: 0n,
         sequenceHash: seqHash,
         totalPot: results[5].result as bigint,
-        baseTimeoutBlocks: config[1],
+        baseTimeoutBlocks: 0,
         firstMoverA: results[7].result as boolean,
       }
     },
@@ -339,7 +355,7 @@ export function useBattleList(live = false) {
         const offset = i * FIELDS_PER_BATTLE
         try {
           const battleState = stateResults[offset].result as [number, number, bigint, bigint, `0x${string}`, bigint]
-          const config = stateResults[offset + 7].result as [bigint, number, number, bigint, number, number]
+          const config = stateResults[offset + 7].result as [bigint, number, bigint, number]
           const [state, turn, bankA, bankB, seqHash] = battleState
 
           battles.push({
@@ -351,13 +367,13 @@ export function useBattleList(live = false) {
             challengerOwner: stateResults[offset + 3].result as Address,
             acceptorOwner: stateResults[offset + 4].result as Address,
             currentTurn: Number(turn),
-            maxTurns: config[4],
+            maxTurns: 0,
             bankA: Number(bankA),
             bankB: Number(bankB),
             turnDeadlineBlock: 0n,
             sequenceHash: seqHash,
             totalPot: stateResults[offset + 5].result as bigint,
-            baseTimeoutBlocks: config[1],
+            baseTimeoutBlocks: 0,
             firstMoverA: stateResults[offset + 6].result as boolean,
           })
         } catch {
