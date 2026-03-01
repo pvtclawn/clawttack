@@ -67,7 +67,9 @@ Write ONLY the text. No quotes. Under 180 chars.`;
   let narrative = await callGemini(prompt);
 
   // Safety: ensure target word is present
-  if (!narrative.toLowerCase().includes(ctx.targetWord.toLowerCase())) {
+  // Word-boundary check (matches contract's LinguisticParser)
+  const targetRe = new RegExp(`(?<![a-zA-Z])${ctx.targetWord}(?![a-zA-Z])`, 'i');
+  if (!targetRe.test(narrative)) {
     narrative = `${ctx.targetWord}: ${narrative}`;
   }
 
@@ -94,7 +96,7 @@ Write ONLY the text. No quotes. Under 180 chars.`;
   }
 
   // Final safety: re-check target word (might have been in trimmed part)
-  if (!narrative.toLowerCase().includes(ctx.targetWord.toLowerCase())) {
+  if (!targetRe.test(narrative)) {
     // Prepend target word
     narrative = `${ctx.targetWord} ${narrative}`;
     while (encoder.encode(narrative).length > 250) {

@@ -194,6 +194,12 @@ export class V4Fighter {
             // Empty revert data — likely gas estimation issue, retry once
             this.log(`  ⚠️ Empty revert — retrying in 4s...`);
             await this.sleep(4000);
+          } else if (errMsg.includes('TargetWordMissing') || String(errData).includes('72bea98a') ||
+                     errMsg.includes('CandidateNotInNarrative') || String(errData).includes('71b895eb') ||
+                     errMsg.includes('InvalidPoisonWord') || String(errData).includes('3b3a5e43')) {
+            // Narrative validation failed — retry with a new narrative
+            this.log(`  🔄 Narrative rejected (${errMsg.includes('Target') ? 'target word missing' : errMsg.includes('Candidate') ? 'candidate not found' : 'poison word issue'}) — regenerating...`);
+            await this.sleep(2000);
           } else {
             this.log(`❌ Turn ${state.currentTurn} failed: ${errMsg} | data=${errData}`);
             lastProcessedTurn = state.currentTurn; // Skip this turn on other errors
