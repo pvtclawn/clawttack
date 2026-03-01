@@ -206,6 +206,60 @@ contract ChessClockLibTest is Test {
         // First turn so no NCC refund
         assertGt(bank, 300, "Bank should only lose ~80 + decay, not 200");
     }
+
+    // ─── Fuzz Tests ─────────────────────────────────────────────────────────
+
+    /// @notice Bank NEVER goes negative (underflow) regardless of elapsed time or NCC result
+    function testFuzz_bankNeverUnderflows(uint8 elapsed, bool nccCorrect) public {
+        // Bound elapsed to valid range (MIN_TURN_INTERVAL to MAX_TURN_TIMEOUT * 2)
+        uint256 e = bound(uint256(elapsed), 5, 160);
+        vm.roll(block.number + e);
+
+        (uint128 bank, bool depleted) = harness.tick(true, nccCorrect, true);
+
+        if (depleted) {
+            assertEq(bank, 0, "Depleted bank must be 0");
+        } else {
+            assertGt(bank, 0, "Non-depleted bank must be positive");
+            assertLe(bank, 400, "Bank must never exceed initial");
+        }
+    }
+
+    /// @notice Bank is monotonically non-increasing when NCC always fails
+    function testFuzz_failingNcc_alwaysDrains(uint8 numTurns) public {
+        uint256 turns = bound(uint256(numTurns), 1, 50);
+        uint256 b = block.number;
+        uint128 prevBank = 400;
+
+        for (uint256 i = 0; i < turns; i++) {
+            b += 10; // 10 blocks per turn
+            vm.roll(b);
+
+            (uint128 bank, bool depleted) = harness.tick(true, false, i == 0);
+
+            if (depleted) {
+                assertEq(bank, 0);
+                return; // game over
+            }
+            assertLe(bank, prevBank, "Bank must decrease on NCC fail");
+            prevBank = bank;
+        }
+    }
+
+    /// @notice NCC success refund never exceeds INITIAL_BANK (cap invariant CC1)
+    function testFuzz_refundCapped(uint8 elapsed) public {
+        uint256 e = bound(uint256(elapsed), 5, 80);
+
+        // First turn: establish baseline
+        vm.roll(block.number + 5);
+        harness.tick(true, true, true);
+
+        // Second turn with NCC success
+        vm.roll(block.number + e);
+        (uint128 bank,) = harness.tick(true, true, false);
+
+        assertLe(bank, 400, "Refund must never push bank above INITIAL_BANK");
+    }
 }
 
 /**
