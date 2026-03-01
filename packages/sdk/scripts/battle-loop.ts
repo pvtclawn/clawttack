@@ -486,7 +486,7 @@ async function main() {
     checkpoint.updatedAt = Date.now();
     saveCheckpoint(checkpointPath, checkpoint);
 
-    await new Promise((r) => setTimeout(r, 4000)); // 4s between turns (Base Sepolia = 2s blocks)
+    // No sleep needed — contract enforces turn order, tx.wait() handles confirmation
   }
 
   console.log('\n' + '='.repeat(60));
