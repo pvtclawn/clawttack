@@ -293,7 +293,6 @@ export class V4Fighter {
     targetWord: string,
     poisonWord: string,
   ): { nccAttack: NccAttack; salt: `0x${string}`; intendedIdx: 0 | 1 | 2 | 3 } {
-    const salt = ethers.hexlify(ethers.randomBytes(32)) as `0x${string}`;
     const intendedIdx = 0 as 0 | 1 | 2 | 3; // first candidate is the riddle answer
 
     if (this.wordList) {
@@ -302,25 +301,46 @@ export class V4Fighter {
 
       if (scan.candidates && scan.candidates.length >= 4) {
         const candidates = scan.candidates;
-        const attack = createNccAttack(
-          [candidates[0].word, candidates[1].word, candidates[2].word, candidates[3].word] as any,
+        const bip39Candidates: [
+          { word: string; index: number },
+          { word: string; index: number },
+          { word: string; index: number },
+          { word: string; index: number },
+        ] = [
+          { word: candidates[0].word, index: candidates[0].wordIndex },
+          { word: candidates[1].word, index: candidates[1].wordIndex },
+          { word: candidates[2].word, index: candidates[2].wordIndex },
+          { word: candidates[3].word, index: candidates[3].wordIndex },
+        ];
+
+        const { attack, salt, intendedIdx: idx } = createNccAttack(
           narrative,
+          bip39Candidates as any,
           intendedIdx,
-          salt,
         );
-        return { nccAttack: attack, salt, intendedIdx };
+        return { nccAttack: attack, salt, intendedIdx: idx as 0 | 1 | 2 | 3 };
       }
     }
 
     // Fallback: use placeholder words (strategy should embed BIP39 words)
     this.log('  ⚠️ Not enough BIP39 words in narrative — using placeholders');
-    const attack = createNccAttack(
-      ['abandon', 'ability', 'able', 'about'] as any,
+    const fallbackCandidates: [
+      { word: string; index: number },
+      { word: string; index: number },
+      { word: string; index: number },
+      { word: string; index: number },
+    ] = [
+      { word: 'abandon', index: 0 },
+      { word: 'ability', index: 1 },
+      { word: 'able', index: 2 },
+      { word: 'about', index: 3 },
+    ];
+    const { attack: fbAttack, salt: fbSalt, intendedIdx: fbIdx } = createNccAttack(
       narrative,
+      fallbackCandidates as any,
       intendedIdx,
-      salt,
     );
-    return { nccAttack: attack, salt, intendedIdx };
+    return { nccAttack: fbAttack, salt: fbSalt, intendedIdx: fbIdx as 0 | 1 | 2 | 3 };
   }
 
   private async getOpponentLastNarrative(state: BattleStateV4): Promise<string> {
