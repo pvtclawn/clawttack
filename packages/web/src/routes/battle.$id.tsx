@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useBlockNumber } from 'wagmi'
 import {
   useBattleInfo,
@@ -20,8 +20,6 @@ export const Route = createFileRoute('/battle/$id')({
 const PHASE_NAMES = ['Open', 'Active', 'Settled', 'Cancelled'] as const
 const RESULT_TYPES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Bank Empty', 'Flag Captured', 'NCC Reveal Failed'] as const
 
-// shortAddr removed — use formatAddress from lib/format
-
 function AnimatedNumber({ value, className }: { value: number; className?: string }) {
   const [displayed, setDisplayed] = useState(value)
   const prevRef = useRef(value)
@@ -36,7 +34,6 @@ function AnimatedNumber({ value, className }: { value: number; className?: strin
     const start = performance.now()
     const step = (now: number) => {
       const t = Math.min(1, (now - start) / duration)
-      // ease-out cubic
       const eased = 1 - Math.pow(1 - t, 3)
       setDisplayed(Math.round(from + (to - from) * eased))
       if (t < 1) requestAnimationFrame(step)
@@ -67,7 +64,6 @@ function BankBar({
   acceptorName?: string
 }) {
   const maxBank = 400
-  // Show predictive drain: current player's bank minus elapsed blocks
   const drain = isLive && elapsedBlocks !== undefined ? Math.min(elapsedBlocks, 80) : 0
   const projectedA = isChallengerTurn ? Math.max(0, bankA - drain) : bankA
   const projectedB = !isChallengerTurn ? Math.max(0, bankB - drain) : bankB
@@ -125,23 +121,166 @@ function BankBar({
   )
 }
 
-// TurnTimerBar removed — v4 uses chess clock (bank drain), not fixed timeouts.
-// The BankBar component with live drain prediction replaces this.
+// ─── Confetti Effect ─────────────────────────────────────────────────────────
+function ConfettiCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
-function TurnCard({ turn, isLeft, agentAddress }: { turn: V3TurnEvent; isLeft: boolean; agentAddress?: string }) {
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    canvas.width = canvas.offsetWidth
+    canvas.height = canvas.offsetHeight
+
+    const colors = ['#ffd700', '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#e056fd', '#7bed9f', '#ff9ff3']
+    const particles: Array<{
+      x: number; y: number; vx: number; vy: number
+      w: number; h: number; color: string; rotation: number
+      rotSpeed: number; opacity: number
+    }> = []
+
+    for (let i = 0; i < 80; i++) {
+      particles.push({
+        x: canvas.width * Math.random(),
+        y: -20 - Math.random() * canvas.height * 0.5,
+        vx: (Math.random() - 0.5) * 4,
+        vy: Math.random() * 3 + 2,
+        w: Math.random() * 8 + 4,
+        h: Math.random() * 4 + 2,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.2,
+        opacity: 1,
+      })
+    }
+
+    let frame = 0
+    const maxFrames = 180 // ~3 seconds at 60fps
+
+    const animate = () => {
+      frame++
+      if (frame > maxFrames) return
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      const fadeStart = maxFrames * 0.6
+      const globalFade = frame > fadeStart ? 1 - (frame - fadeStart) / (maxFrames - fadeStart) : 1
+
+      for (const p of particles) {
+        p.x += p.vx
+        p.vy += 0.05 // gravity
+        p.y += p.vy
+        p.vx *= 0.99 // air resistance
+        p.rotation += p.rotSpeed
+        p.opacity = globalFade
+
+        ctx.save()
+        ctx.translate(p.x, p.y)
+        ctx.rotate(p.rotation)
+        ctx.globalAlpha = p.opacity
+        ctx.fillStyle = p.color
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h)
+        ctx.restore()
+      }
+
+      requestAnimationFrame(animate)
+    }
+
+    animate()
+  }, [])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="pointer-events-none absolute inset-0 z-20"
+      style={{ width: '100%', height: '100%' }}
+    />
+  )
+}
+
+// ─── Winner Banner (in sticky header) ────────────────────────────────────────
+function WinnerBanner({
+  winnerName,
+  loserName,
+  resultType,
+  txHash,
+  show,
+}: {
+  winnerName: string
+  loserName: string
+  resultType: string
+  txHash: string
+  show: boolean
+}) {
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    if (show) {
+      // Delay for dramatic entrance
+      const t = setTimeout(() => setVisible(true), 300)
+      return () => clearTimeout(t)
+    }
+    setVisible(false)
+  }, [show])
+
+  if (!show) return null
+
+  return (
+    <div className="relative overflow-hidden">
+      {visible && <ConfettiCanvas />}
+      <div
+        className={`relative z-10 mx-4 my-2 rounded-xl border-2 border-yellow-500/60 bg-gradient-to-r from-yellow-950/40 via-amber-950/30 to-yellow-950/40 p-4 transition-all duration-700 ${
+          visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl drop-shadow-lg">🏆</span>
+            <div>
+              <div className="text-lg font-bold text-yellow-300">
+                {winnerName} Wins!
+              </div>
+              <div className="text-sm text-yellow-200/70">
+                defeated {loserName} · <span className="font-medium text-yellow-200">{resultType}</span>
+              </div>
+            </div>
+          </div>
+          <TxLink hash={txHash} label="View tx ↗" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Turn Card ───────────────────────────────────────────────────────────────
+function TurnCard({
+  turn,
+  isLeft,
+  agentAddress,
+  isWinner,
+}: {
+  turn: V3TurnEvent
+  isLeft: boolean
+  agentAddress?: string
+  isWinner?: boolean
+}) {
   const { data: targetWord } = useWord(turn.targetWord)
   const poisonWord = turn.poisonWord
 
-  const bgClass = isLeft
-    ? 'bg-red-950/30 border border-red-900/30'
-    : 'bg-blue-950/30 border border-blue-900/30'
+  const bgClass = isWinner
+    ? isLeft
+      ? 'bg-red-950/30 border border-yellow-700/40 shadow-[0_0_12px_rgba(234,179,8,0.08)]'
+      : 'bg-blue-950/30 border border-yellow-700/40 shadow-[0_0_12px_rgba(234,179,8,0.08)]'
+    : isLeft
+      ? 'bg-red-950/30 border border-red-900/30'
+      : 'bg-blue-950/30 border border-blue-900/30'
   const roleColor = isLeft ? 'text-red-400' : 'text-blue-400'
 
   const timeStr = turn.timestamp
     ? new Date(turn.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : null
 
-  // Compact bank delta indicator
   const bankInfo = turn.bankA !== undefined && turn.bankB !== undefined
     ? `${turn.bankA}/${turn.bankB}`
     : null
@@ -155,6 +294,7 @@ function TurnCard({ turn, isLeft, agentAddress }: { turn: V3TurnEvent; isLeft: b
           <div className="mb-1 flex items-center gap-2 text-xs">
             <span>{isLeft ? '🗡️' : '🛡️'}</span>
             <span className={roleColor}>{displayName}</span>
+            {isWinner && <span className="text-yellow-500 text-[10px]">👑</span>}
             <span className="text-[var(--muted)]">Turn {turn.turnNumber}</span>
             {bankInfo && (
               <span className="font-mono text-[10px] text-[var(--muted)]">⚡ {bankInfo}</span>
@@ -179,6 +319,7 @@ function TurnCard({ turn, isLeft, agentAddress }: { turn: V3TurnEvent; isLeft: b
   )
 }
 
+// ─── Battle Page ─────────────────────────────────────────────────────────────
 function BattlePage() {
   const { id } = Route.useParams()
   const battleId = BigInt(id)
@@ -192,8 +333,9 @@ function BattlePage() {
 
   const [visibleTurns, setVisibleTurns] = useState(0)
   const [isReplaying, setIsReplaying] = useState(false)
-  const [replaySpeed, setReplaySpeed] = useState(1500) // ms between turns
+  const [replaySpeed, setReplaySpeed] = useState(1500)
   const [autoScroll, setAutoScroll] = useState(true)
+  const [showSettlement, setShowSettlement] = useState(false)
   const turnsEndRef = useRef<HTMLDivElement>(null)
 
   const displayedTurns = (turns ?? []).slice(0, visibleTurns)
@@ -208,47 +350,54 @@ function BattlePage() {
     }
   }, [displayedTurns, info])
 
-  // Auto-show all on load
+  // Auto-show all on load (non-replay)
   useEffect(() => {
     if (turns && !isReplaying) {
       if (visibleTurns === 0) {
-        // Initial load — show all turns immediately
         setVisibleTurns(turns.length)
+        // If battle is already settled, show settlement immediately
+        if (settlement) setShowSettlement(true)
       } else if (turns.length > visibleTurns) {
-        // New turns arrived during live battle — auto-advance to latest
         setVisibleTurns(turns.length)
       }
     }
-  }, [turns])
+  }, [turns, settlement])
 
-  // Replay animation
+  // Replay animation — advance turns, then show settlement at the end
   useEffect(() => {
     if (!isReplaying || !turns) return
     if (visibleTurns >= turns.length) {
+      // All turns shown — if settled, delay then reveal settlement
+      if (settlement) {
+        const timer = setTimeout(() => {
+          setShowSettlement(true)
+          setIsReplaying(false)
+        }, replaySpeed * 1.5)
+        return () => clearTimeout(timer)
+      }
       setIsReplaying(false)
       return
     }
     const timer = setTimeout(() => setVisibleTurns(v => v + 1), replaySpeed)
     return () => clearTimeout(timer)
-  }, [isReplaying, visibleTurns, turns, replaySpeed])
+  }, [isReplaying, visibleTurns, turns, replaySpeed, settlement])
 
-  // Custom smooth scroll — proportional duration based on distance
-  const smoothScrollTo = (el: HTMLElement) => {
+  // Custom smooth scroll
+  const smoothScrollTo = useCallback((el: HTMLElement) => {
     const targetY = el.getBoundingClientRect().top + window.scrollY - window.innerHeight + 150
     const startY = window.scrollY
     const diff = targetY - startY
-    if (Math.abs(diff) < 5) return // already close enough
-    // Duration proportional to distance: min 300ms, max 800ms
+    if (Math.abs(diff) < 5) return
     const duration = Math.min(800, Math.max(300, Math.abs(diff) * 1.5))
     const start = performance.now()
     const step = (now: number) => {
       const t = Math.min(1, (now - start) / duration)
-      const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2 // easeInOutCubic
+      const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
       window.scrollTo(0, startY + diff * ease)
       if (t < 1) requestAnimationFrame(step)
     }
     requestAnimationFrame(step)
-  }
+  }, [])
 
   // Auto-scroll to latest turn
   useEffect(() => {
@@ -257,7 +406,7 @@ function BattlePage() {
       if (turnsEndRef.current) smoothScrollTo(turnsEndRef.current)
     }, 100)
     return () => clearTimeout(timer)
-  }, [visibleTurns, autoScroll])
+  }, [visibleTurns, autoScroll, showSettlement, smoothScrollTo])
 
   if (loadingInfo) {
     return (
@@ -279,16 +428,39 @@ function BattlePage() {
   }
 
   const isPending = !!turns && turns.length < info.currentTurn
-  const isChallengerTurn = (info.currentTurn % 2 === 0) ? info.firstMoverA : !info.firstMoverA
 
   // Single source of truth: whose turn is NEXT based on the last displayed turn
-  // Used by both bank bar drain and thinking skeleton so they always agree
   const lastDisplayed = displayedTurns[displayedTurns.length - 1]
   const nextTurnIsChallenger = lastDisplayed
     ? lastDisplayed.playerId !== info.challengerId
     : info.firstMoverA
   const nextTurnAddr = nextTurnIsChallenger ? info.challengerOwner : info.acceptorOwner
   const nextTurnId = nextTurnIsChallenger ? info.challengerId : info.acceptorId
+
+  // Determine winner for turn highlighting
+  const winnerId = settlement?.winnerId
+
+  // Replay or live: show skeleton between turns
+  const replayShowsSkeleton = isReplaying && visibleTurns < (turns ?? []).length
+  const liveShowsSkeleton = info.state === 1 && !isReplaying
+  const showSkeleton = replayShowsSkeleton || liveShowsSkeleton
+
+  // During replay of settled battle, hide settlement until all turns shown
+  const settlementRevealed = settlement && showSettlement
+
+  // Winner/loser names for banner
+  const winnerName = settlement && winnerId
+    ? agentLabel(
+        winnerId === info.challengerId ? info.challengerOwner : info.acceptorOwner,
+        winnerId
+      )
+    : ''
+  const loserName = settlement
+    ? agentLabel(
+        settlement.loserId === info.challengerId ? info.challengerOwner : info.acceptorOwner,
+        settlement.loserId
+      )
+    : ''
 
   return (
     <div className="space-y-6">
@@ -305,7 +477,7 @@ function BattlePage() {
           <div className="text-sm text-[var(--muted)]">
             {agentLabel(info.challengerOwner, info.challengerId)} vs {info.acceptorId > 0n ? agentLabel(info.acceptorOwner, info.acceptorId) : 'Waiting...'}
             {' · '}
-            Turn {info.currentTurn}
+            Turn {isReplaying ? (displayedTurns[displayedTurns.length - 1]?.turnNumber ?? 0) : info.currentTurn}
             {' · '}
             {info.totalPot > 0n ? `${formatEther(info.totalPot)} ETH` : 'Free'}
           </div>
@@ -316,7 +488,7 @@ function BattlePage() {
               info.state === 0 ? 'bg-orange-900/50 text-orange-400' :
               'bg-red-900/50 text-red-400'
             }`}>
-              {PHASE_NAMES[info.state]}
+              {isReplaying ? '▶ Replaying' : PHASE_NAMES[info.state]}
             </span>
             <a
               href={`https://sepolia.basescan.org/address/${info.address}`}
@@ -341,13 +513,13 @@ function BattlePage() {
             <option value={300}>5x</option>
           </select>
           <button
-            onClick={() => { setVisibleTurns(0); setIsReplaying(true) }}
+            onClick={() => { setVisibleTurns(0); setShowSettlement(false); setIsReplaying(true) }}
             className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface)]"
           >
             ▶ Replay
           </button>
           <button
-            onClick={() => { setVisibleTurns((turns ?? []).length); setIsReplaying(false) }}
+            onClick={() => { setVisibleTurns((turns ?? []).length); setShowSettlement(true); setIsReplaying(false) }}
             className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface)]"
           >
             Show All
@@ -362,7 +534,7 @@ function BattlePage() {
             }`}
             title={autoScroll ? 'Auto-scroll ON' : 'Auto-scroll OFF'}
           >
-            {autoScroll ? '📌' : '📌'}
+            📌
           </button>
           <button
             onClick={() => {
@@ -380,7 +552,7 @@ function BattlePage() {
         </div>
       </div>
 
-      {/* Bank Status in sticky header — tracks replay position */}
+      {/* Bank Status */}
       {info.bankA !== undefined && info.bankB !== undefined && (() => {
         const isLive = info.state === 1 && !isReplaying && visibleTurns >= (turns ?? []).length
         const lastTurnBn = turns?.length ? turns[turns.length - 1].blockNumber : 0n
@@ -392,9 +564,9 @@ function BattlePage() {
             bankA={replayBanks.bankA}
             bankB={replayBanks.bankB}
             label={
-              visibleTurns < (turns ?? []).length
-                ? `After Turn ${displayedTurns.length ? displayedTurns[displayedTurns.length - 1].turnNumber : 0}`
-                : isLive ? '🔴 LIVE' : 'Current Banks'
+              isReplaying
+                ? `Turn ${displayedTurns.length ? displayedTurns[displayedTurns.length - 1].turnNumber : 0} of ${info.currentTurn}`
+                : isLive ? '🔴 LIVE' : 'Final Banks'
             }
             isLive={isLive}
             isChallengerTurn={nextTurnIsChallenger}
@@ -404,24 +576,49 @@ function BattlePage() {
           />
         )
       })()}
+
+      {/* Winner Banner — in sticky header area */}
+      {settlementRevealed && winnerId && winnerId > 0n && (
+        <WinnerBanner
+          winnerName={winnerName}
+          loserName={loserName}
+          resultType={RESULT_TYPES[settlement.resultType] ?? 'Unknown'}
+          txHash={settlement.txHash}
+          show={true}
+        />
+      )}
       </div>
 
       {/* Players */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-xl border border-red-900/30 bg-red-950/20 p-4">
+        <div className={`rounded-xl border p-4 ${
+          winnerId === info.challengerId
+            ? 'border-yellow-700/40 bg-yellow-950/10'
+            : 'border-red-900/30 bg-red-950/20'
+        }`}>
           <div className="text-xs text-[var(--muted)]">Challenger</div>
-          <div className="font-medium"><AgentDisplay address={info.challengerOwner} agentId={info.challengerId} showId /></div>
+          <div className="font-medium">
+            <AgentDisplay address={info.challengerOwner} agentId={info.challengerId} showId />
+            {winnerId === info.challengerId && <span className="ml-2 text-yellow-500">👑</span>}
+          </div>
           {challenger && (
             <div className="mt-2 text-xs text-[var(--muted)]">
               Elo: {challenger.eloRating} · W:{challenger.totalWins} L:{challenger.totalLosses}
             </div>
           )}
         </div>
-        <div className="rounded-xl border border-blue-900/30 bg-blue-950/20 p-4">
+        <div className={`rounded-xl border p-4 ${
+          winnerId === info.acceptorId
+            ? 'border-yellow-700/40 bg-yellow-950/10'
+            : 'border-blue-900/30 bg-blue-950/20'
+        }`}>
           <div className="text-xs text-[var(--muted)]">Acceptor</div>
           <div className="font-medium">
             {info.acceptorId > 0n
-              ? <AgentDisplay address={info.acceptorOwner} agentId={info.acceptorId} showId />
+              ? <>
+                  <AgentDisplay address={info.acceptorOwner} agentId={info.acceptorId} showId />
+                  {winnerId === info.acceptorId && <span className="ml-2 text-yellow-500">👑</span>}
+                </>
               : 'Waiting...'}
           </div>
           {acceptor && (
@@ -432,44 +629,12 @@ function BattlePage() {
         </div>
       </div>
 
-      {/* Settlement */}
-      {settlement && (
-        <div className="rounded-xl border-2 border-green-500/50 bg-green-950/30 p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-3xl">🏆</span>
-              <div>
-                <div className="text-lg font-bold">
-                  {settlement.winnerId > 0n
-                    ? <>{agentLabel(
-                        settlement.winnerId === info.challengerId ? info.challengerOwner : info.acceptorOwner,
-                        settlement.winnerId
-                      )} Wins!</>
-                    : 'Draw'}
-                </div>
-                <div className="text-sm text-[var(--muted)]">
-                  {settlement.winnerId > 0n && <>defeated {agentLabel(
-                    settlement.loserId === info.challengerId ? info.challengerOwner : info.acceptorOwner,
-                    settlement.loserId
-                  )}{' · '}</>}
-                  <span className="font-medium text-[var(--fg)]">
-                    {RESULT_TYPES[settlement.resultType] ?? 'Unknown'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <TxLink hash={settlement.txHash} label="View tx ↗" />
-          </div>
-        </div>
-      )}
-
       {/* Turns */}
-
       {loadingTurns ? (
         <div className="py-4 text-center text-[var(--muted)]">⏳ Loading turns...</div>
       ) : (
         <div className="space-y-3">
-          {displayedTurns.map((turn, idx) => {
+          {displayedTurns.map((turn) => {
             const isChallTurn = turn.playerId === info.challengerId
             return (
               <TurnCard
@@ -477,12 +642,12 @@ function BattlePage() {
                 turn={turn}
                 isLeft={isChallTurn}
                 agentAddress={isChallTurn ? info.challengerOwner : info.acceptorOwner}
+                isWinner={winnerId === turn.playerId && showSettlement}
               />
             )
           })}
-          {/* Thinking skeleton — always shown when battle is active or replaying */}
-          {/* Thinking skeleton — shown during live battle or replay */}
-          {(info.state === 1 || (isReplaying && visibleTurns < (turns ?? []).length)) && (
+          {/* Thinking skeleton — during live or replay */}
+          {showSkeleton && (
             <div className={`flex ${nextTurnIsChallenger ? 'justify-start' : 'justify-end'}`}>
               <div className="max-w-[80%] w-full">
                 <ThinkingSkeleton
