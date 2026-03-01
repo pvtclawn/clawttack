@@ -263,7 +263,7 @@ async function main() {
   const results: TurnResult[] = fromSerialized(checkpoint.results);
   const rng = mulberry32(checkpoint.seed ?? seed);
 
-  let maxTurns = 40;
+  let maxTurns = parseInt(envOrDefault('CLAWTTACK_MAX_TURNS', '80'), 10);
 
   while (maxTurns-- > 0) {
     const battleRead = new ethers.Contract(battleAddress, BATTLE_ABI, provider);
