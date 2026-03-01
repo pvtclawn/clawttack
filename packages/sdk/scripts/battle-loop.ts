@@ -240,6 +240,8 @@ async function main() {
   const rpcUrl = envOrDefault('CLAWTTACK_RPC', DEFAULT_RPC);
   const dictAddress = envOrDefault('CLAWTTACK_DICT', DEFAULT_DICT);
   const seed = parseSeed(envOrDefault('CLAWTTACK_SEED', '1337'));
+  const strategyA = envOrDefault('CLAWTTACK_STRATEGY_A', 'default') as 'default' | 'aggressive' | 'defensive';
+  const strategyB = envOrDefault('CLAWTTACK_STRATEGY_B', 'default') as 'default' | 'aggressive' | 'defensive';
 
   const checkpointPath = envOrDefault(
     'CLAWTTACK_CHECKPOINT_PATH',
@@ -312,7 +314,20 @@ async function main() {
     console.log(`🎮 ${agent}'s turn`);
     console.log(`🎯 Target: "${targetWord}" (idx=${targetIdx}), Poison: "${poisonWord}"`);
 
-    const narrative = `On this ${targetWord} we abandon old limits and gain ability to absorb abstract truth, able to act across every boundary about cosmic wisdom.`;
+    const strategy = isAgentA ? strategyA : strategyB;
+    console.log(`📋 Strategy: ${strategy}`);
+
+    // Narrative varies by strategy
+    let narrative: string;
+    if (strategy === 'aggressive') {
+      // Longer narrative with more BIP39 words — higher NCC attack surface but more costly
+      narrative = `On this ${targetWord} we abandon old limits and gain ability to absorb abstract truth, able to act across every boundary about cosmic wisdom. The erosion of ancient walls reveals hidden abandon paths toward ability and abstract understanding, across all boundaries above cosmic design.`;
+    } else if (strategy === 'defensive') {
+      // Minimal narrative — fewer BIP39 candidates, less attack surface
+      narrative = `On this ${targetWord} we abandon old limits and gain ability to absorb abstract truth, able to act about cosmic wisdom.`;
+    } else {
+      narrative = `On this ${targetWord} we abandon old limits and gain ability to absorb abstract truth, able to act across every boundary about cosmic wisdom.`;
+    }
 
     const scan = scanForBip39Words(narrative, BIP39, [targetWord]);
     if (!scan.candidates || scan.candidates.length < 4) {
@@ -324,14 +339,30 @@ async function main() {
 
     // Defense uses deterministic PRNG for reproducible experiments.
     const opponentPrev = isAgentA ? prevNcc.B : prevNcc.A;
+    // Defense strategy varies
     let guessIdx: 0 | 1 | 2 | 3 = 0;
     let nccGuessCorrect = false;
     if (opponentPrev) {
-      if (rng() < 0.5) {
-        guessIdx = opponentPrev.intendedIdx;
-        nccGuessCorrect = true;
+      if (strategy === 'aggressive') {
+        // Always try to guess correctly (75% chance)
+        if (rng() < 0.75) {
+          guessIdx = opponentPrev.intendedIdx;
+          nccGuessCorrect = true;
+        } else {
+          guessIdx = ((opponentPrev.intendedIdx + 1) % 4) as 0 | 1 | 2 | 3;
+        }
+      } else if (strategy === 'defensive') {
+        // Always guess 0 — baseline scripted behavior
+        guessIdx = 0;
+        nccGuessCorrect = opponentPrev.intendedIdx === 0;
       } else {
-        guessIdx = ((opponentPrev.intendedIdx + 1) % 4) as 0 | 1 | 2 | 3;
+        // Default: 50% correct
+        if (rng() < 0.5) {
+          guessIdx = opponentPrev.intendedIdx;
+          nccGuessCorrect = true;
+        } else {
+          guessIdx = ((opponentPrev.intendedIdx + 1) % 4) as 0 | 1 | 2 | 3;
+        }
       }
     }
     const defense = createNccDefense(guessIdx);
