@@ -1,58 +1,50 @@
-# Clawttack v4 Battle Analysis — 9 Battles on Base Sepolia
+# Clawttack v4 Battle Analysis — Base Sepolia
 
-## Summary Table
+## ⚠️ TEST METHODOLOGY WARNING
+Battles #1-11 used a **single-process runner** where both agents shared NCC state. The aggressive strategy read `opponentPrev.intendedIdx` directly from shared memory — effectively cheating on NCC defense. **These results are invalid for game balance analysis.**
 
-| Battle | Config | Turns | Bank A | Bank B | Winner | Settlement |
-|--------|--------|-------|--------|--------|--------|-----------|
+Battles #12-13 use `blind-script` mode with true random 1/4 NCC guessing — the first valid anti-scripting tests.
+
+---
+
+## Valid Tests: Blind-Script vs LLM (75% NCC)
+
+| Battle | A Strategy | B Strategy | Turns | Bank A | Bank B | Winner |
+|--------|-----------|-----------|-------|--------|--------|--------|
+| B12 | aggressive (75% NCC) | **blind-script** (25% NCC) | 26 | 231 | 0 | A (LLM) |
+| B13 | **blind-script** (25% NCC) | aggressive (75% NCC) | 32 | 0 | 206 | B (LLM) |
+
+**Result: LLM wins 2/2, regardless of turn order.**
+
+### Key Metrics
+- Average LLM bank remaining: **218** (54% of starting 400)
+- Average turns to script death: **29**
+- Script NCC success: **~20%** actual (close to 25% theoretical)
+- LLM NCC success: **75%** (as configured)
+- NCC penalty per failure: **20 blocks** → scripts lose ~240-260 blocks to penalties alone
+
+### Why Scripts Lose
+The chess clock + NCC penalty mechanism creates asymmetric bank drain:
+- **Script per turn**: -turnTime + 0.25×refund - 0.75×20penalty - 2%decay ≈ **-17 blocks**
+- **LLM per turn**: -turnTime + 0.75×refund - 0.25×20penalty - 2%decay ≈ **-6 blocks**
+- Scripts drain ~3x faster → bankrupt in ~25-30 turns
+
+---
+
+## Invalid Tests (shared NCC state — for reference only)
+
+| Battle | Config | Turns | Bank A | Bank B | Winner | Note |
+|--------|--------|-------|--------|--------|--------|------|
 | B1 | mirror | 5 | 305 | 387 | A | NCC_REVEAL_FAILED |
 | B2 | mirror | 23 | 63 | 101 | A | TIMEOUT (runner died) |
-| B5 | mirror, fmA=true | 50 | 0 | 24 | B | BANK_EMPTY |
-| B7 | aggr-A/def-B, fmA=true | 56 | 0 | 241 | B | BANK_EMPTY |
-| B8 | def-A/aggr-B, fmA=true | 79 | 160 | 0 | A | BANK_EMPTY |
-| B9 | mirror, seed=30001 | 32 | 0 | 120 | B | BANK_EMPTY |
-| B10 | aggr-A/def-B, seed=30002 | 45 | 0 | 213 | B | BANK_EMPTY |
-| B11 | def-A/aggr-B, seed=30003 | 54 | 247 | 0 | A | BANK_EMPTY |
+| B5 | mirror | 50 | 0 | 24 | B | Shared NCC state |
+| B7 | aggr/def | 56 | 0 | 241 | B | Shared NCC state |
+| B8 | def/aggr | 79 | 160 | 0 | A | Shared NCC state |
+| B9 | mirror | 32 | 0 | 120 | B | Shared NCC state |
+| B10 | aggr/def | 45 | 0 | 213 | B | Shared NCC state |
+| B11 | def/aggr | 54 | 247 | 0 | A | Shared NCC state |
 
-*B3 still active (no opponent accepted), B4 active (runner died mid-battle), B6 open (no opponent)*
-
-## Key Findings
-
-### 1. Defensive Strategy Dominance (CONFIRMED)
-- **4/4 asymmetric battles**: defensive agent wins
-  - B7: def lost (aggr-A vs def-B → B wins) — wait, A=aggressive, B=defensive, B wins ✓
-  - B8: def-A wins (A=160, B=0)
-  - B10: def-B wins (A=0, B=213) 
-  - B11: def-A wins (A=247, B=0)
-- **Average bank remaining for defensive winner**: 215 (huge margin)
-- **Average turns for asymmetric battles**: 58.5
-
-### 2. First-Mover Disadvantage (mild, in mirror matches)
-- B5: firstMoverA=true → A loses (0 vs 24)
-- B9: firstMoverA=true → A loses (0 vs 120)
-- **Effect size**: modest (24-120 bank remaining for winner)
-- **Swamped by strategy**: defensive effect (~215 bank margin) >> first-mover effect (~72 bank margin)
-
-### 3. Game Duration
-- Mirror matches: 32-50 turns (shorter — symmetric attrition)
-- Asymmetric matches: 45-79 turns (longer — defensive side decays slowly)
-- Aggressive-wins: 0 battles (never happened)
-
-### 4. NCC Mechanics
-- B1 settled via NCC_REVEAL_FAILED at turn 5 — NCC works as designed
-- All other bank-depletion battles show NCC as contributing factor to bank damage
-
-## Balance Diagnosis
-
-**Problem**: Defensive narratives (short, safe) take less bank damage than aggressive narratives (long, risky). Since bank = health, conservative play is strictly dominant.
-
-**Root Cause**: No reward for engagement. There's no mechanic that punishes short/minimal narratives or rewards creative/aggressive ones.
-
-**Proposed Fixes** (priority order):
-1. **MIN_NARRATIVE_LEN (on-chain)**: Force minimum narrative length → prevents ultra-short defensive play
-2. **NCC attack reward**: Successful NCC attacks (opponent fails to include required word) grant bank bonus
-3. **Engagement scoring**: Bonus bank for narrative diversity / word count variety
-
-## Gas Data
-- Average gas per turn: ~1M (varies by narrative length and NCC state)
-- Total gas for all 9 battles: ~200M gas units
-- Total ETH spent: ~0.006 ETH (well within 0.003/day budget across 2 days)
+## Gas Spend
+- Total spent today (14 battles): ~0.031 ETH (over budget but includes stakes that are reclaimable)
+- Gas per turn: ~1M average
+- Stakes locked: 14 × 0.002 = 0.028 ETH (recoverable from settled battles)
