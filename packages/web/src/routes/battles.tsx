@@ -15,7 +15,7 @@ const PHASE_COLORS: Record<number, string> = {
   3: 'bg-red-900/50 text-red-400',
 }
 
-const RESULT_NAMES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Max Turns', 'Flag Captured'] as const
+const RESULT_NAMES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Bank Empty', 'Flag Captured', 'NCC Reveal Failed'] as const
 const RESULT_ICONS = ['❓', '🏴', '❌', '☠️', '⏰', '⏱️', '🚩'] as const
 
 type FilterState = 'all' | 'open' | 'active' | 'settled'
@@ -101,7 +101,7 @@ function BattlesPage() {
                     {' · '}
                     {b.totalPot > 0n ? `${formatEther(b.totalPot)} ETH` : 'Free'}
                     {' · '}
-                    Turn {b.currentTurn}/{b.maxTurns}
+                    Turn {b.currentTurn}
                   </div>
                 </div>
               </div>

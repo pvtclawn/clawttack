@@ -94,7 +94,7 @@ export interface V3BattleInfo {
   firstMoverA: boolean
   winnerId?: bigint
   loserId?: bigint
-  resultType?: number  // 0=None, 1=Compromise, 2=InvalidSolution, 3=PoisonViolation, 4=Timeout, 5=MaxTurns, 6=FlagCaptured
+  resultType?: number  // 0=None, 1=Compromise, 2=InvalidSolution, 3=PoisonViolation, 4=Timeout, 5=BankEmpty, 6=FlagCaptured, 7=NccRevealFailed
 }
 
 export interface V3TurnEvent {
@@ -116,7 +116,7 @@ export interface V3SettledEvent {
   battleId: bigint
   winnerId: bigint
   loserId: bigint
-  resultType: number  // 0=None, 1=Compromise, 2=InvalidSolution, 3=PoisonViolation, 4=Timeout, 5=MaxTurns, 6=FlagCaptured
+  resultType: number  // 0=None, 1=Compromise, 2=InvalidSolution, 3=PoisonViolation, 4=Timeout, 5=BankEmpty, 6=FlagCaptured, 7=NccRevealFailed
   blockNumber: bigint
   txHash: `0x${string}`
 }

@@ -78,6 +78,10 @@ for i, (strat_a, strat_b, seed) in enumerate(BATTLES):
         continue
     print(f'  Accepted')
 
+    # Wait for warmup period (15 blocks × 2s = ~30s)
+    print(f'  Waiting 35s for warmup...')
+    time.sleep(35)
+
     # Run battle
     log_path = f'{RESULTS_DIR}/batch-{seed}.log'
     cp_path = f'{RESULTS_DIR}/checkpoints/batch-{seed}.json'
