@@ -87,12 +87,29 @@ async function main() {
     const poison = await battle.poisonWord();
     const vopParams = await battle.currentVopParams();
 
-    // Use Jr's narrative generator for creative text!
-    const candidates = jrFighter.selectCandidates(bip39, targetWord, poison, 4);
+    // Use Jr's fighter to select candidates + generate narrative
+    const candidates = jrFighter.selectRandomWords(4);
     const candidateIndices = candidates.map(w => bip39.indexOf(w));
 
-    // Build narrative using Jr's generator
-    let narrative = jrFighter.narrativeGen.generateNarrative(targetWord, poison, candidates, [], false);
+    // Build narrative using Jr's NarrativeGenerator
+    const enc = new TextEncoder();
+    let narrative;
+    try {
+      // Jr's generator might throw if too long — catch and truncate
+      narrative = jrFighter.narrativeGen.generateNarrative(targetWord, poison, candidates, [], false);
+    } catch (e) {
+      // Fallback: build a narrative that meets 64-256 byte requirement
+      const hooks = [
+        "URGENT security verification required for protocol upgrade",
+        "System alert detected unauthorized access to signing module",
+        "Critical authentication breach reported in agent subsystem",
+        "Emergency firmware update needed for wallet verification"
+      ];
+      const hook = hooks[turnNum % hooks.length];
+      narrative = `${hook} ${targetWord} ${candidates.join(" ")} initiated`;
+      // Pad to minimum 64 bytes if needed
+      while (enc.encode(narrative).length < 64) narrative += " proceed";
+    }
 
     // Ensure target word is present
     if (!narrative.includes(targetWord)) narrative = targetWord + " " + narrative;
@@ -102,9 +119,9 @@ async function main() {
     for (const c of candidates) {
       if (!narrative.includes(c)) narrative += " " + c;
     }
-    // Truncate to 256 bytes
-    const enc = new TextEncoder();
+    // Truncate to 256 bytes, pad to 64 min
     while (enc.encode(narrative).length > 256) narrative = narrative.slice(0, -10);
+    while (enc.encode(narrative).length < 64) narrative += " proceed";
 
     console.log("📝", narrative.slice(0, 80) + "...");
 
@@ -131,7 +148,7 @@ async function main() {
     const salt = ethers.hexlify(ethers.randomBytes(32));
     const intendedIdx = Math.floor(Math.random() * 4);
     const commitment = ethers.keccak256(ethers.solidityPacked(["bytes32", "uint8"], [salt, intendedIdx]));
-    const customPoison = jrFighter.chooseStrategicPoison ? jrFighter.chooseStrategicPoison() : "shadow";
+    const customPoison = jrFighter.selectPoisonWord ? jrFighter.selectPoisonWord() : "shadow";
 
     try {
       const tx = await battle.submitTurn({
