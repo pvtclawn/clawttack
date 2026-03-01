@@ -63,6 +63,8 @@ export interface V4FighterConfig {
   strategy: V4Strategy;
   /** Word dictionary address (resolved from arena if not provided) */
   wordDictionaryAddress?: string;
+  /** Pre-loaded word list (avoids on-chain loading) */
+  preloadedWordList?: string[];
   /** Poll interval in ms (default: 4000 = 2 Base blocks) */
   pollIntervalMs?: number;
   /** Max time to wait for the battle to finish (default: 60 min) */
@@ -85,6 +87,7 @@ const BATTLE_ABI = [
   'function getBattleState() view returns (uint8 phase, uint32 currentTurn, uint128 bankA, uint128 bankB, bytes32 sequenceHash, uint256 battleId)',
   'function challengerOwner() view returns (address)',
   'function acceptorOwner() view returns (address)',
+  'function firstMoverA() view returns (bool)',
   'function currentVopParams() view returns (bytes)',
   'function targetWordIndex() view returns (uint16)',
   'function poisonWord() view returns (string)',
@@ -115,6 +118,8 @@ export class V4Fighter {
   private opponentLastNccAttack: NccAttack | null = null;
   private wordList: string[] | null = null;
 
+  private firstMoverA: boolean = true;
+
   constructor(config: V4FighterConfig) {
     this.config = config;
     this.battle = new ethers.Contract(config.battleAddress, BATTLE_ABI, config.wallet);
@@ -136,10 +141,14 @@ export class V4Fighter {
     const myAddress = await this.config.wallet.getAddress();
     const challengerOwner = await this.battle.challengerOwner();
     this.isAgentA = myAddress.toLowerCase() === challengerOwner.toLowerCase();
-    this.log(`🎮 Fighting as Agent ${this.isAgentA ? 'A' : 'B'} at ${this.config.battleAddress.slice(0, 10)}...`);
+    this.firstMoverA = await this.battle.firstMoverA();
+    this.log(`🎮 Fighting as Agent ${this.isAgentA ? 'A (Challenger)' : 'B (Acceptor)'} | First mover: ${this.firstMoverA ? 'A' : 'B'}`);
 
     // Resolve word dictionary and load word list
-    if (this.config.wordDictionaryAddress) {
+    if (this.config.preloadedWordList) {
+      this.wordList = this.config.preloadedWordList;
+      this.log(`📖 Using pre-loaded word list (${this.wordList.length} words)`);
+    } else if (this.config.wordDictionaryAddress) {
       this.wordDict = new ethers.Contract(
         this.config.wordDictionaryAddress,
         WORD_DICT_ABI,
@@ -213,9 +222,11 @@ export class V4Fighter {
     ]);
 
     // Get target word string
-    const targetWord = this.wordDict
-      ? await this.wordDict.word(targetWordIdx)
-      : `word_${targetWordIdx}`;
+    const targetWord = this.wordList
+      ? this.wordList[targetWordIdx]
+      : this.wordDict
+        ? await this.wordDict.word(targetWordIdx)
+        : `word_${targetWordIdx}`;
 
     // Get opponent's last narrative from events
     const opponentNarrative = await this.getOpponentLastNarrative(state);
@@ -362,11 +373,10 @@ export class V4Fighter {
   }
 
   private isMyTurn(currentTurn: number): boolean {
-    // Turn 0: first mover. Turn 1: second mover. Alternating.
-    // First mover is determined by the contract (firstMoverA field)
-    // For simplicity, assume A goes first on even turns
-    const expectedA = currentTurn % 2 === 0;
-    return this.isAgentA === expectedA;
+    // First mover determined by firstMoverA flag from contract
+    const isEvenTurn = currentTurn % 2 === 0;
+    const isATurn = this.firstMoverA ? isEvenTurn : !isEvenTurn;
+    return this.isAgentA === isATurn;
   }
 
   private async getBattleState(): Promise<BattleStateV4> {
