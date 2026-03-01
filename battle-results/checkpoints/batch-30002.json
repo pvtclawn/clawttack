@@ -1,8 +1,8 @@
 {
   "battle": "0x8fAC5120046d8fA005fA3c68fdA168d34676527a",
   "seed": 30002,
-  "lastProcessedTurn": 44,
-  "lastSubmitBlock": 38293530,
+  "lastProcessedTurn": 45,
+  "lastSubmitBlock": 38294087,
   "prevNcc": {
     "B": {
       "salt": "0x595bc77f32ab7bd466976e50aec6e66273cadf8462507fe8cc2fdce11773b55b",
@@ -15,7 +15,7 @@
       ]
     },
     "A": {
-      "salt": "0x2abdc5fc022f4fa95481563924a51a02433cf412c6fbcc6ccf9ae76b577933d9",
+      "salt": "0x498cb84f2462611c948b0015d7937cfcab5e1ec3b32c5db6c741beea7c72e5f2",
       "intendedIdx": 0,
       "candidates": [
         "abandon",
@@ -520,7 +520,18 @@
       "nccGuessCorrect": true,
       "vopAttempts": 665,
       "txHash": "0x091d725faff153f636960ca474f8c57b719090433ec197fc4e6244fde39656a4"
+    },
+    {
+      "turn": 45,
+      "agent": "A",
+      "gas": "117663",
+      "bankA": "81",
+      "bankB": "213",
+      "targetWord": "legend",
+      "nccGuessCorrect": true,
+      "vopAttempts": 68,
+      "txHash": "0x4573400a88e78621c1382e04751432f774a02d2662ab371c2219cc84ea3dfae4"
     }
   ],
-  "updatedAt": 1772355351947
+  "updatedAt": 1772356461499
 }
