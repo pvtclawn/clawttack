@@ -1,0 +1,53 @@
+{
+  "battle": "0x0cc1da600d511487bf1ed68a1f8a7614dbfc350f",
+  "seed": 20260302,
+  "lastProcessedTurn": 1,
+  "lastSubmitBlock": 38286698,
+  "prevNcc": {
+    "A": {
+      "salt": "0x526a7b5b30c4759b95dbfdc6d749e7f0e67d1296e52c65bf72da843357f71bf5",
+      "intendedIdx": 0,
+      "candidates": [
+        "abandon",
+        "absorb",
+        "able",
+        "across"
+      ]
+    },
+    "B": {
+      "salt": "0xc9c18e7082508edf550a60b363e0a98806895828591630f78d97d8341812bc6a",
+      "intendedIdx": 0,
+      "candidates": [
+        "abandon",
+        "ability",
+        "abstract",
+        "act"
+      ]
+    }
+  },
+  "results": [
+    {
+      "turn": 0,
+      "agent": "A",
+      "gas": "1209348",
+      "bankA": "400",
+      "bankB": "400",
+      "targetWord": "chuckle",
+      "nccGuessCorrect": false,
+      "vopAttempts": 0,
+      "txHash": "0x5bd62bf930a9546f7368a81386c07d40fba80401ce6cb58ff3604f1fcc867dd8"
+    },
+    {
+      "turn": 1,
+      "agent": "B",
+      "gas": "1387775",
+      "bankA": "337",
+      "bankB": "400",
+      "targetWord": "usual",
+      "nccGuessCorrect": true,
+      "vopAttempts": 309,
+      "txHash": "0xc0696ae6a1bbdd0368be216f68fd0abb2b20b30ec35da58ab54a2a2e1b9fbe23"
+    }
+  ],
+  "updatedAt": 1772341683774
+}

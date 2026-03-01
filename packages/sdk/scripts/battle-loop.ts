@@ -320,8 +320,8 @@ async function main() {
     // Narrative varies by strategy
     let narrative: string;
     if (strategy === 'aggressive') {
-      // Longer narrative with more BIP39 words — higher NCC attack surface but more costly
-      narrative = `On this ${targetWord} we abandon old limits and gain ability to absorb abstract truth, able to act across every boundary about cosmic wisdom. The erosion of ancient walls reveals hidden abandon paths toward ability and abstract understanding, across all boundaries above cosmic design.`;
+      // Longer narrative with more BIP39 words — higher NCC attack surface (must stay ≤256 bytes)
+      narrative = `On this ${targetWord} we abandon old limits and gain ability to absorb abstract truth, able to act across every boundary about cosmic wisdom. The erosion reveals hidden abandon paths toward ability and abstract gains.`;
     } else if (strategy === 'defensive') {
       // Minimal narrative — fewer BIP39 candidates, less attack surface
       narrative = `On this ${targetWord} we abandon old limits and gain ability to absorb abstract truth, able to act about cosmic wisdom.`;
