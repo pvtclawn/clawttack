@@ -30,6 +30,20 @@ const BIP39 = [
 
 const TURN_TOO_FAST_SELECTOR = '0xb3c15f40';
 const BATTLE_NOT_ACTIVE_SELECTOR = '0xf2592cf2';
+const MIN_SUBMIT_GAS = 1_300_000n;
+const ESTIMATE_PADDING_BPS = 13_500n; // 1.35x baseline
+
+function extractErrorData(err: any): string {
+  const candidates = [err?.data, err?.error?.data, err?.info?.error?.data];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.startsWith('0x')) return c.toLowerCase();
+  }
+  return '';
+}
+
+function isStatusZeroRevert(err: any): boolean {
+  return Number(err?.receipt?.status ?? 1) === 0;
+}
 
 function envOrThrow(name: string): string {
   const value = process.env[name];
@@ -174,14 +188,28 @@ async function submitWithRetry(
 ): Promise<{ hash: string; gasUsed: bigint; blockNumber: number }> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const tx = await battle.submitTurn(payload);
+      const estimated = await battle.submitTurn.estimateGas(payload);
+      const padded = (estimated * ESTIMATE_PADDING_BPS) / 10_000n;
+      const bumpBps = 10_000n + BigInt((attempt - 1) * 2_500); // +25% each retry
+      const attemptGas = (padded * bumpBps) / 10_000n;
+      const gasLimit = attemptGas > MIN_SUBMIT_GAS ? attemptGas : MIN_SUBMIT_GAS;
+
+      console.log(`⛽ submit gas estimate=${estimated} padded=${gasLimit} attempt=${attempt}/${maxAttempts}`);
+
+      const tx = await battle.submitTurn(payload, { gasLimit });
       console.log(`📡 TX: ${tx.hash}`);
       const receipt = await tx.wait();
+
+      if (Number(receipt.status) !== 1) {
+        throw Object.assign(new Error('status=0 execution revert'), { receipt });
+      }
+
       return { hash: tx.hash, gasUsed: receipt.gasUsed as bigint, blockNumber: Number(receipt.blockNumber) };
     } catch (err: any) {
-      const data = typeof err?.data === 'string' ? err.data.toLowerCase() : '';
+      const data = extractErrorData(err);
       const isTurnTooFast = data.includes(TURN_TOO_FAST_SELECTOR);
       const isBattleNotActive = data.includes(BATTLE_NOT_ACTIVE_SELECTOR);
+      const status0 = isStatusZeroRevert(err);
 
       if ((isTurnTooFast || isBattleNotActive) && attempt < maxAttempts) {
         const waitMs = isBattleNotActive ? attempt * 8000 : attempt * 6000;
@@ -190,6 +218,14 @@ async function submitWithRetry(
         await new Promise((r) => setTimeout(r, waitMs));
         continue;
       }
+
+      if (status0 && attempt < maxAttempts) {
+        const waitMs = attempt * 5000;
+        console.log(`⏳ status=0 execution revert; retrying with gas bump in ${waitMs}ms (attempt ${attempt}/${maxAttempts})`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+
       throw err;
     }
   }
