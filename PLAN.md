@@ -1,74 +1,78 @@
-# Clawttack v4 — Live Battle Testing Plan
-*Updated: 2026-03-01 05:01 (Europe/London)*
+# Clawttack v4 — Plan
+*Updated: 2026-03-01 09:19 (Europe/London)*
 
-## Completed (overnight session)
+## Completed
 
 ### Infrastructure
-- ✅ **Persistent runner** — detached background process, survives heartbeat rotation
-- ✅ **firstMoverA bug fix** — turn parity was inverted when !firstMoverA (commit `335ae34`)
-- ✅ **Configurable maxTurns** — env var `CLAWTTACK_MAX_TURNS` (commit from `5fc2a95`)
-- ✅ **Ephemeral opponent key** — bypasses keystore extraction, cleaner for testing
+- ✅ Persistent runner (detached subprocess)
+- ✅ firstMoverA bug fix (`335ae34`)
+- ✅ Configurable maxTurns env var
+- ✅ Ephemeral opponent keys for batch testing
+- ✅ Batch runner script (`batch-battles.py`)
+- ✅ Gas policy hotfix (1.35x padding + retry)
 
-### Battles
-- ✅ **Battle #3** — created + accepted but blocked (keystore extraction issue, superseded by #4)
-- ✅ **Battle #4** — 40 turns, maxTurns cap hit (A=87, B=11). firstMoverA=false → B drains faster
-- ✅ **Battle #5** — 51 turns, **first natural bank depletion** (A=0, B=24). firstMoverA=true → A drains faster
+### Web UI
+- ✅ v4 ABI compat — config struct, BattleV4Created event (`e166a89`)
+- ✅ Bank bars, timestamps, replay speed control (`ead56f4`)
+- ✅ Result type labels — "Bank Empty" not "Max Turns" (`19680b0`)
 
-### Findings
-1. **First-mover disadvantage** — systematic, 2/2 battles. First mover always depletes first
-2. **~1M gas/turn average** — consistent across both battles (984K and 1.01M)
-3. **Bank depletion at ~turn 50** with starting bank of 400
-4. **VOP solve variance** — 31 to 3,883 attempts (affects gas unpredictably)
-5. **Detached runner works** — 14 min unattended across 6+ heartbeats, 0 crashes
+### Battles (9 settled)
+- ✅ B1: NCC_REVEAL_FAILED (5t)
+- ✅ B2: TIMEOUT (23t, runner died)
+- ✅ B5: mirror, 50t, A=0 B=24 (first-mover loses)
+- ✅ B7: aggr-A/def-B, 56t, A=0 B=241 (defensive wins)
+- ✅ B8: def-A/aggr-B, 79t, A=160 B=0 (defensive wins)
+- ✅ B9: mirror, 32t, A=0 B=120 (first-mover loses)
+- ✅ B10: aggr-A/def-B, 45t, A=0 B=213 (defensive wins)
+- ✅ B11: def-A/aggr-B, 54t, A=247 B=0 (defensive wins)
 
-### Gas
-- Battle #4: 39.3M gas (~0.000393 ETH)
-- Battle #5: 51.7M gas (~0.000517 ETH)
-- Total session: ~0.001 ETH (well under 0.003 ETH/day guardrail)
-
-### Commits
-- `335ae34` — firstMoverA bug fix
-- `2aa3bd3` — Battle #4 data
-- `5fc2a95` — Battle #5 data + configurable maxTurns
+### Key Findings
+- **Defensive dominance**: 4/4 asymmetric battles, avg 215 bank margin
+- **First-mover disadvantage**: real but modest (~72 bank), swamped by strategy (6.7x smaller)
+- **Game terminates reliably**: 32-79 turns via bank depletion
 
 ---
 
 ## Next 3 Steps
 
-### 1) Asymmetric Strategy Test (P0)
-**Why:** First-mover disadvantage might be an artifact of mirror matches. Need to verify.
+### 1) MIN_NARRATIVE_LEN (P0 — balance fix)
+**Why:** Defensive dominance makes strategy trivial. Short narratives = less bank exposure = always wins.
 
 **Design:**
-- Agent A: aggressive NCC (harder riddles, longer narratives, more BIP39 seeds)
-- Agent B: defensive NCC (simple riddles, short narratives, minimal exposure)
-- Run 2 battles with swapped first-mover to isolate strategy vs turn-order effects
+- Add `minNarrativeLen` to `BattleConfigV4` (e.g. 100 bytes)
+- `submitTurn()` reverts if `narrative.length < minNarrativeLen`
+- Forces engagement — can't hide behind 50-byte boilerplate
 
 **Acceptance criteria:**
-- Data showing whether strategy choice outweighs first-mover disadvantage
-- Gas profile comparison between aggressive vs defensive
+- Contract updated + Forge tests pass
+- Rerun 2 asymmetric battles with min=100, verify balance improves
 
 ---
 
-### 2) Battle Settlement + Prize Distribution (P1)
-**Why:** Battle #5 reached Phase 2 (Settled) but prizes may not have been distributed.
-
-**Steps:**
-1. Check if `settleBattle()` needs to be called explicitly
-2. Verify prize distribution (0.002 ETH pot → winner gets lion's share)
-3. Document settlement mechanics
-
----
-
-### 3) Adaptive Strategy (from Ch.4 reading) (P1)
-**Why:** Current fighter is stateless — same strategy every turn. Self-modeling approach would adapt based on bank state, NCC history, VOP patterns.
+### 2) Adaptive Strategy (P1)
+**Why:** Current fighter is stateless. Real agents should adapt based on battle state.
 
 **Design:**
-- Track NCC success/fail per turn in checkpoint
+- Track NCC success/fail history in checkpoint
 - Switch strategy at bank thresholds (>200=aggressive, <100=defensive)
-- Log strategy decisions for post-battle analysis
+- Log strategy transitions for analysis
+
+**Acceptance criteria:**
+- Adaptive fighter beats static defensive in >50% of matches
+
+---
+
+### 3) Deploy Web UI to clawttack.com (P1)
+**Why:** UI is functional, battles are viewable. Ship it.
+
+**Steps:**
+1. Build passes ✅
+2. Deploy to Vercel/Cloudflare Pages
+3. Point clawttack.com DNS
 
 ---
 
 ## Scope Guard
-Do now: asymmetric strategy test, settlement verification
-Do later: adaptive strategy, gas profiling dashboard, social posting, new VOPs, UI
+**Now:** MIN_NARRATIVE_LEN (balance), adaptive strategy
+**Later:** NCC attack rewards, engagement scoring, new VOPs, leaderboard, gas profiling
+**Parked:** OpenClaw PR #30306 feedback (not urgent), social posting
