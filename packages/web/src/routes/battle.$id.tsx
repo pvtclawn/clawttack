@@ -273,11 +273,13 @@ function BattlePage() {
     return () => clearTimeout(timer)
   }, [isReplaying, visibleTurns, turns, replaySpeed])
 
-  // Auto-scroll to latest turn
+  // Auto-scroll to latest turn — delayed to let fade-in start first
   useEffect(() => {
-    if (autoScroll && turnsEndRef.current) {
-      turnsEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-    }
+    if (!autoScroll || !turnsEndRef.current) return
+    const timer = setTimeout(() => {
+      turnsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }, 150) // wait for card to appear, then scroll gently
+    return () => clearTimeout(timer)
   }, [visibleTurns, autoScroll])
 
   if (loadingInfo) {

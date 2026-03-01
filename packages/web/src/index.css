@@ -7,7 +7,7 @@ html {
 @keyframes fadeSlideIn {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
@@ -16,7 +16,8 @@ html {
 }
 
 .turn-card-enter {
-  animation: fadeSlideIn 0.4s ease-out;
+  animation: fadeSlideIn 0.5s ease-out;
+  scroll-margin-bottom: 80px;
 }
 
 :root {
