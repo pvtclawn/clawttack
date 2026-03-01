@@ -16,7 +16,7 @@ export const Route = createFileRoute('/battle/$id')({
 })
 
 const PHASE_NAMES = ['Open', 'Active', 'Settled', 'Cancelled'] as const
-const RESULT_TYPES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Max Turns', 'Flag Captured'] as const
+const RESULT_TYPES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Bank Empty', 'Flag Captured', 'NCC Reveal Failed'] as const
 
 function shortAddr(addr: string) {
   if (!addr || addr === '0x0000000000000000000000000000000000000000') return '—'
@@ -361,6 +361,7 @@ function BattlePage() {
           </div>
         </div>
         <div className="flex gap-2">
+          {info.state === 2 && (<>
           <select
             value={replaySpeed}
             onChange={(e) => setReplaySpeed(Number(e.target.value))}
@@ -383,6 +384,7 @@ function BattlePage() {
           >
             Show All
           </button>
+          </>)}
           <button
             onClick={() => setAutoScroll(v => !v)}
             className={`rounded-lg border px-3 py-2 text-sm ${
@@ -448,28 +450,35 @@ function BattlePage() {
 
       {/* Settlement */}
       {settlement && (
-        <div className="rounded-xl border border-green-900/50 bg-green-950/20 p-4">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🏆</span>
-            <div>
-              <div className="font-medium">
-                {settlement.winnerId > 0n
-                  ? `Winner: Agent #${settlement.winnerId.toString()}`
-                  : 'Draw'}
-              </div>
-              <div className="text-xs text-[var(--muted)]">
-                {RESULT_TYPES[settlement.resultType] ?? 'Unknown'}
-                {' · '}
-                <a
-                  href={`https://sepolia.basescan.org/tx/${settlement.txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[var(--accent)] hover:underline"
-                >
-                  View tx ↗
-                </a>
+        <div className="rounded-xl border-2 border-green-500/50 bg-green-950/30 p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">🏆</span>
+              <div>
+                <div className="text-lg font-bold">
+                  {settlement.winnerId > 0n
+                    ? `Agent #${settlement.winnerId.toString()} Wins!`
+                    : 'Draw'}
+                </div>
+                <div className="text-sm text-[var(--muted)]">
+                  {settlement.winnerId > 0n
+                    ? `defeated Agent #${settlement.loserId.toString()}`
+                    : 'No winner'}
+                  {' · '}
+                  <span className="font-medium text-[var(--fg)]">
+                    {RESULT_TYPES[settlement.resultType] ?? 'Unknown'}
+                  </span>
+                </div>
               </div>
             </div>
+            <a
+              href={`https://sepolia.basescan.org/tx/${settlement.txHash}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--accent)] hover:bg-[var(--surface)]"
+            >
+              View tx ↗
+            </a>
           </div>
         </div>
       )}
