@@ -10,6 +10,8 @@ import {
   type V3TurnEvent,
 } from '../hooks/useChain'
 import { formatEther } from 'viem'
+import { agentLabel } from '../lib/format'
+import { AgentDisplay, TxLink, ThinkingSkeleton } from '../components/ChainUI'
 
 export const Route = createFileRoute('/battle/$id')({
   component: BattlePage,
@@ -18,10 +20,7 @@ export const Route = createFileRoute('/battle/$id')({
 const PHASE_NAMES = ['Open', 'Active', 'Settled', 'Cancelled'] as const
 const RESULT_TYPES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Bank Empty', 'Flag Captured', 'NCC Reveal Failed'] as const
 
-function shortAddr(addr: string) {
-  if (!addr || addr === '0x0000000000000000000000000000000000000000') return '—'
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
-}
+// shortAddr removed — use formatAddress from lib/format
 
 function AnimatedNumber({ value, className }: { value: number; className?: string }) {
   const [displayed, setDisplayed] = useState(value)
@@ -171,7 +170,7 @@ function TurnTimerBar({
   )
 }
 
-function TurnCard({ turn, isLeft }: { turn: V3TurnEvent; isLeft: boolean }) {
+function TurnCard({ turn, isLeft, agentAddress }: { turn: V3TurnEvent; isLeft: boolean; agentAddress?: string }) {
   const { data: targetWord } = useWord(turn.targetWord)
   const poisonWord = turn.poisonWord
 
@@ -189,13 +188,15 @@ function TurnCard({ turn, isLeft }: { turn: V3TurnEvent; isLeft: boolean }) {
     ? `${turn.bankA}/${turn.bankB}`
     : null
 
+  const displayName = agentAddress ? agentLabel(agentAddress, turn.playerId) : `Agent #${turn.playerId.toString()}`
+
   return (
     <div className="turn-card-enter">
       <div className={`flex ${isLeft ? 'justify-start' : 'justify-end'}`}>
         <div className={`max-w-[80%] rounded-xl p-4 ${bgClass}`}>
           <div className="mb-1 flex items-center gap-2 text-xs">
             <span>{isLeft ? '🗡️' : '🛡️'}</span>
-            <span className={roleColor}>Agent #{turn.playerId.toString()}</span>
+            <span className={roleColor}>{displayName}</span>
             <span className="text-[var(--muted)]">Turn {turn.turnNumber}</span>
             {bankInfo && (
               <span className="font-mono text-[10px] text-[var(--muted)]">⚡ {bankInfo}</span>
@@ -212,14 +213,7 @@ function TurnCard({ turn, isLeft }: { turn: V3TurnEvent; isLeft: boolean }) {
             {poisonWord && turn.turnNumber > 0 && (
               <span>☠️ <span className="font-medium text-red-400">{poisonWord}</span></span>
             )}
-            <a
-              href={`https://sepolia.basescan.org/tx/${turn.txHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[var(--accent)] hover:underline"
-            >
-              tx ↗
-            </a>
+            <TxLink hash={turn.txHash} label="tx ↗" />
           </div>
         </div>
       </div>
@@ -335,7 +329,7 @@ function BattlePage() {
             Battle #{info.battleId.toString()}
           </h1>
           <div className="text-sm text-[var(--muted)]">
-            Agent #{info.challengerId.toString()} vs Agent #{info.acceptorId.toString()}
+            {agentLabel(info.challengerOwner, info.challengerId)} vs {info.acceptorId > 0n ? agentLabel(info.acceptorOwner, info.acceptorId) : 'Waiting...'}
             {' · '}
             Turn {info.currentTurn}
             {' · '}
@@ -400,7 +394,7 @@ function BattlePage() {
             onClick={() => {
               const url = `${window.location.origin}/battle/${info.battleId.toString()}`
               const result = settlement ? RESULT_TYPES[settlement.resultType] : PHASE_NAMES[info.state]
-              const text = `⚔️ Clawttack Battle #${info.battleId.toString()} — ${result}\nAgent #${info.challengerId.toString()} vs Agent #${info.acceptorId.toString()}\n${url}`
+              const text = `⚔️ Clawttack Battle #${info.battleId.toString()} — ${result}\n${agentLabel(info.challengerOwner, info.challengerId)} vs ${agentLabel(info.acceptorOwner, info.acceptorId)}\n${url}`
               navigator.clipboard.writeText(text)
                 .then(() => alert('Copied to clipboard!'))
                 .catch(() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank'))
@@ -426,8 +420,7 @@ function BattlePage() {
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-xl border border-red-900/30 bg-red-950/20 p-4">
           <div className="text-xs text-[var(--muted)]">Challenger</div>
-          <div className="font-medium">Agent #{info.challengerId.toString()}</div>
-          <div className="text-xs text-[var(--muted)] font-mono">{shortAddr(info.challengerOwner)}</div>
+          <div className="font-medium"><AgentDisplay address={info.challengerOwner} agentId={info.challengerId} showId /></div>
           {challenger && (
             <div className="mt-2 text-xs text-[var(--muted)]">
               Elo: {challenger.eloRating} · W:{challenger.totalWins} L:{challenger.totalLosses}
@@ -437,9 +430,10 @@ function BattlePage() {
         <div className="rounded-xl border border-blue-900/30 bg-blue-950/20 p-4">
           <div className="text-xs text-[var(--muted)]">Acceptor</div>
           <div className="font-medium">
-            {info.acceptorId > 0n ? `Agent #${info.acceptorId.toString()}` : 'Waiting...'}
+            {info.acceptorId > 0n
+              ? <AgentDisplay address={info.acceptorOwner} agentId={info.acceptorId} showId />
+              : 'Waiting...'}
           </div>
-          <div className="text-xs text-[var(--muted)] font-mono">{shortAddr(info.acceptorOwner)}</div>
           {acceptor && (
             <div className="mt-2 text-xs text-[var(--muted)]">
               Elo: {acceptor.eloRating} · W:{acceptor.totalWins} L:{acceptor.totalLosses}
@@ -457,28 +451,24 @@ function BattlePage() {
               <div>
                 <div className="text-lg font-bold">
                   {settlement.winnerId > 0n
-                    ? `Agent #${settlement.winnerId.toString()} Wins!`
+                    ? <>{agentLabel(
+                        settlement.winnerId === info.challengerId ? info.challengerOwner : info.acceptorOwner,
+                        settlement.winnerId
+                      )} Wins!</>
                     : 'Draw'}
                 </div>
                 <div className="text-sm text-[var(--muted)]">
-                  {settlement.winnerId > 0n
-                    ? `defeated Agent #${settlement.loserId.toString()}`
-                    : 'No winner'}
-                  {' · '}
+                  {settlement.winnerId > 0n && <>defeated {agentLabel(
+                    settlement.loserId === info.challengerId ? info.challengerOwner : info.acceptorOwner,
+                    settlement.loserId
+                  )}{' · '}</>}
                   <span className="font-medium text-[var(--fg)]">
                     {RESULT_TYPES[settlement.resultType] ?? 'Unknown'}
                   </span>
                 </div>
               </div>
             </div>
-            <a
-              href={`https://sepolia.basescan.org/tx/${settlement.txHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--accent)] hover:bg-[var(--surface)]"
-            >
-              View tx ↗
-            </a>
+            <TxLink hash={settlement.txHash} label="View tx ↗" />
           </div>
         </div>
       )}
@@ -489,7 +479,7 @@ function BattlePage() {
           deadlineBlock={info.turnDeadlineBlock}
           baseTimeoutBlocks={info.baseTimeoutBlocks}
           currentTurn={info.currentTurn}
-          whoseTurnName={`Agent #${isChallengerTurn ? info.challengerId.toString() : info.acceptorId.toString()}`}
+          whoseTurnName={agentLabel(isChallengerTurn ? info.challengerOwner : info.acceptorOwner, isChallengerTurn ? info.challengerId : info.acceptorId)}
           isChallenger={isChallengerTurn}
           pending={isPending}
         />
@@ -499,13 +489,27 @@ function BattlePage() {
         <div className="py-4 text-center text-[var(--muted)]">⏳ Loading turns...</div>
       ) : (
         <div className="space-y-3">
-          {displayedTurns.map((turn, idx) => (
-            <TurnCard
-              key={turn.turnNumber}
-              turn={turn}
-              isLeft={idx % 2 === 0}
-            />
-          ))}
+          {displayedTurns.map((turn, idx) => {
+            const isChallTurn = turn.playerId === info.challengerId
+            return (
+              <TurnCard
+                key={turn.turnNumber}
+                turn={turn}
+                isLeft={isChallTurn}
+                agentAddress={isChallTurn ? info.challengerOwner : info.acceptorOwner}
+              />
+            )
+          })}
+          {/* Thinking indicator for live battles */}
+          {info.state === 1 && !isReplaying && visibleTurns >= (turns ?? []).length && (
+            <div className={`flex ${isChallengerTurn ? 'justify-start' : 'justify-end'}`}>
+              <div className="max-w-[80%] w-full">
+                <ThinkingSkeleton
+                  label={`${agentLabel(isChallengerTurn ? info.challengerOwner : info.acceptorOwner, isChallengerTurn ? info.challengerId : info.acceptorId)} is thinking...`}
+                />
+              </div>
+            </div>
+          )}
           {isReplaying && visibleTurns < (turns ?? []).length && (
             <div className="flex justify-center py-4">
               <div className="flex items-center gap-3 text-sm text-[var(--muted)]">

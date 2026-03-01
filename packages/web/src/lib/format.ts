@@ -2,19 +2,55 @@
 const KNOWN_AGENTS: Record<string, string> = {
   '0xec6cd01f6fdeaec192b88eb7b62f5e72d65719af': 'PrivateClawn',
   '0xd1033447b9a7297bdc91265eed761fbe5a3b8961': 'ClawnJr',
+  '0x9b259323cac345e5fd46569c941dd8cda202bd70': 'PrivateClawnJr',
 }
 
+const BASE_SEPOLIA_EXPLORER = 'https://sepolia.basescan.org'
+
+/** Shorten an address: 0x1234…abcd */
 export function formatAddress(address: string): string {
+  if (!address || address === '0x0000000000000000000000000000000000000000') return '—'
   return `${address.slice(0, 6)}…${address.slice(-4)}`
 }
 
+/** Get display name for an agent: known name or shortened address */
 export function agentName(address: string): string {
+  if (!address) return '—'
   return KNOWN_AGENTS[address.toLowerCase()] ?? formatAddress(address)
 }
 
+/** Check if address has a known name */
+export function hasKnownName(address: string): boolean {
+  return !!KNOWN_AGENTS[address.toLowerCase()]
+}
+
+/** Agent display label: "PrivateClawn" or "0xAbCd…1234" */
+export function agentLabel(address: string, agentId?: bigint | number): string {
+  if (!address) return agentId ? `Agent #${agentId}` : '—'
+  const known = KNOWN_AGENTS[address.toLowerCase()]
+  if (known) return known
+  return formatAddress(address)
+}
+
+/** Format wei as ETH string */
 export function formatEth(wei: bigint): string {
   const eth = Number(wei) / 1e18
   return eth.toFixed(4)
+}
+
+/** Build explorer URL for address/tx/block */
+export function explorerUrl(type: 'address' | 'tx' | 'block', value: string | number | bigint): string {
+  return `${BASE_SEPOLIA_EXPLORER}/${type}/${value}`
+}
+
+/** Copy text to clipboard, returns success */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
 }
 
 // Known scenario names
