@@ -28,6 +28,7 @@ import {
 } from './ncc-helper.ts';
 import { scanForBip39Words, loadWordList } from './bip39-scanner.ts';
 import type { WordMatch } from './bip39-scanner.ts';
+import { solveHashPreimage } from './vop-solver.ts';
 import type {
   BattleContextV4,
   TurnPayloadV4,
@@ -255,9 +256,21 @@ export class V4Fighter {
       : { salt: ethers.ZeroHash as `0x${string}`, intendedIdx: 0 };
 
     // Build payload
+    // Solve VOP challenge
+    let vopSolution = 0n;
+    if (vopParams && vopParams !== '0x' && vopParams !== '0x00') {
+      try {
+        const solved = solveHashPreimage(vopParams);
+        vopSolution = solved.solution;
+        this.log(`  🧩 VOP solved in ${solved.attempts} attempts (${solved.timeMs}ms)`);
+      } catch (err) {
+        this.log(`  ⚠️ VOP solve failed:`, err);
+      }
+    }
+
     const payload: TurnPayloadV4 = {
       narrative: strategyResult.narrative,
-      solution: 0n, // TODO: VOP solver
+      solution: vopSolution,
       customPoisonWord: strategyResult.poisonWord,
       nccAttack,
       nccDefense,

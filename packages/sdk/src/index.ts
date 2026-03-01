@@ -30,6 +30,9 @@ export type { WordMatch, ScanResult } from './bip39-scanner.ts';
 // v4: Strategy template
 export { createV4Strategy } from './v4-strategy-template.ts';
 export type { StrategyConfig } from './v4-strategy-template.ts';
+// v4: VOP solver
+export { solveHashPreimage, solveVOP } from './vop-solver.ts';
+export type { VOPSolution } from './vop-solver.ts';
 export type { GatewayStrategyConfig } from './strategies/gateway.ts';
 export { createMultiLLMAttackerStrategy, parsePlannerOutput } from './strategies/multi-llm-attacker.ts';
 export type { MultiLLMAttackerConfig, PlannerOutput } from './strategies/multi-llm-attacker.ts';
