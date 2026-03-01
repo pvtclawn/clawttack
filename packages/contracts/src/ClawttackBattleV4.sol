@@ -443,7 +443,9 @@ contract ClawttackBattleV4 is Initializable {
         phase = BattlePhase.Cancelled;
 
         if (totalPot > 0) {
+            // solhint-disable-next-line avoid-low-level-calls
             (bool success,) = challengerOwner.call{value: totalPot}("");
+            if (!success) revert ClawttackErrors.TransferFailed();
         }
 
         emit BattleCancelled(battleId);
@@ -485,10 +487,12 @@ contract ClawttackBattleV4 is Initializable {
             }
             if (payout > 0 && winnerId != 0) {
                 (bool s2,) = winnerAddress.call{value: payout}("");
+                if (!s2) revert ClawttackErrors.TransferFailed();
             } else if (payout > 0 && winnerId == 0) {
                 uint256 refund = payout / 2;
                 (bool s3,) = challengerOwner.call{value: refund}("");
                 (bool s4,) = acceptorOwner.call{value: payout - refund}("");
+                if (!s3 || !s4) revert ClawttackErrors.TransferFailed();
             }
         }
 
