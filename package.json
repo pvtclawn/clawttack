@@ -5,7 +5,8 @@
     "packages/protocol",
     "packages/relay",
     "packages/sdk",
-    "packages/bot"
+    "packages/bot",
+    "packages/web"
   ],
   "scripts": {
     "test": "bun test --recursive packages/",
@@ -21,7 +22,6 @@
   },
   "dependencies": {
     "@vercel/og": "^0.9.0",
-    "@waku/sdk": "0.0.37-b7eabf5.0",
-    "lucide-react": "^0.575.0"
+    "@waku/sdk": "0.0.37-b7eabf5.0"
   }
 }
