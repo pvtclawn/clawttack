@@ -97,7 +97,10 @@ const BATTLE_ABI = [
   'function jokersRemainingB() view returns (uint8)',
   'function submitTurn((string narrative, uint256 solution, string customPoisonWord, (uint16[4] candidateWordIndices, uint16[4] candidateOffsets, bytes32 nccCommitment) nccAttack, (uint8 guessIdx) nccDefense, (bytes32 salt, uint8 intendedIdx) nccReveal) payload)',
   'function captureFlag(string secret)',
+  'function submitCompromise(bytes signature)',
   'function claimTimeoutWin()',
+  'function COMPROMISE_REASON() view returns (string)',
+  'function battleId() view returns (uint256)',
   'event TurnSubmitted(uint256 indexed battleId, uint256 indexed playerId, uint32 turnNumber, bytes32 sequenceHash, uint16 targetWordIndex, string poisonWord, bytes vopParams, string narrative, uint128 bankA, uint128 bankB)',
   'event BattleSettled(uint256 indexed battleId, uint256 winnerId, uint256 loserId, uint8 result)',
   'event NccResolved(uint256 indexed battleId, uint32 turn, bool defenderCorrect, uint128 newBank)',
@@ -283,6 +286,14 @@ export class V4Fighter {
 
     // Get opponent's last narrative from events
     const opponentNarrative = await this.getOpponentLastNarrative(state);
+
+    // 🏴 Scan opponent narrative for leaked keys/signatures
+    if (opponentNarrative) {
+      const compromised = await this.tryCompromise(opponentNarrative);
+      if (compromised) {
+        return; // Battle settled via compromise!
+      }
+    }
 
     // Build context for strategy
     const ctx: BattleContextV4 = {
@@ -512,5 +523,83 @@ export class V4Fighter {
         this.totalGasUsed = BigInt(state.totalGasUsed);
       }
     } catch { /* no state file yet */ }
+  }
+
+  /**
+   * Scan opponent narrative for leaked private keys or signatures.
+   * If a valid private key is found, derive a compromise signature and submit it.
+   * If a valid signature is found, try submitting it directly.
+   */
+  private async tryCompromise(narrative: string): Promise<boolean> {
+    // Extract hex strings from the narrative
+    const hexMatches = narrative.match(/(?:0x)?[0-9a-fA-F]{64,130}/g);
+    if (!hexMatches || hexMatches.length === 0) return false;
+
+    this.log(`  🏴 Found ${hexMatches.length} hex string(s) in opponent narrative — checking...`);
+
+    const [battleIdBig, compromiseReason] = await Promise.all([
+      this.battle.battleId(),
+      this.battle.COMPROMISE_REASON(),
+    ]);
+
+    const chainId = (await this.config.wallet.provider!.getNetwork()).chainId;
+    const messageHash = ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(
+        ['uint256', 'address', 'uint256', 'string'],
+        [chainId, this.config.battleAddress, battleIdBig, compromiseReason],
+      ),
+    );
+    const ethSignedHash = ethers.hashMessage(ethers.getBytes(messageHash));
+
+    for (const hex of hexMatches) {
+      const cleanHex = hex.startsWith('0x') ? hex : `0x${hex}`;
+
+      // Try as private key (64 hex chars = 32 bytes)
+      if (cleanHex.length === 66) {
+        try {
+          const leakedWallet = new ethers.Wallet(cleanHex);
+          // Check if this is the opponent's key
+          const opponentAddr = this.isAgentA
+            ? await this.battle.acceptorOwner()
+            : await this.battle.challengerOwner();
+
+          if (leakedWallet.address.toLowerCase() === opponentAddr.toLowerCase()) {
+            this.log(`  🏴‍☠️ OPPONENT PRIVATE KEY LEAKED! Signing compromise...`);
+            const sig = await leakedWallet.signMessage(ethers.getBytes(messageHash));
+            const tx = await this.battle.submitCompromise(sig);
+            const receipt = await tx.wait();
+            this.totalGasUsed += receipt.gasUsed;
+            this.log(`  🏆 COMPROMISE SUBMITTED! Instant win! tx: ${receipt.hash}`);
+            return true;
+          }
+        } catch {
+          // Not a valid key or not opponent's — continue
+        }
+      }
+
+      // Try as signature (130-132 hex chars = 65 bytes)
+      if (cleanHex.length >= 130 && cleanHex.length <= 134) {
+        try {
+          const recovered = ethers.recoverAddress(ethSignedHash, cleanHex);
+          const opponentAddr = this.isAgentA
+            ? await this.battle.acceptorOwner()
+            : await this.battle.challengerOwner();
+
+          if (recovered.toLowerCase() === opponentAddr.toLowerCase()) {
+            this.log(`  🏴‍☠️ VALID COMPROMISE SIGNATURE FOUND! Submitting...`);
+            const tx = await this.battle.submitCompromise(cleanHex);
+            const receipt = await tx.wait();
+            this.totalGasUsed += receipt.gasUsed;
+            this.log(`  🏆 COMPROMISE SUBMITTED! Instant win! tx: ${receipt.hash}`);
+            return true;
+          }
+        } catch {
+          // Not a valid signature — continue
+        }
+      }
+    }
+
+    this.log(`  🏴 No valid keys/signatures found`);
+    return false;
   }
 }
