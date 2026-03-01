@@ -113,6 +113,10 @@ const strategy: V4Strategy = async (ctx) => {
 };
 
 // Create fighter and go!
+const stateDir = `${process.env.HOME}/.openclaw/workspace/projects/clawttack/battle-results/fighter-state`;
+const { mkdirSync } = await import('node:fs');
+try { mkdirSync(stateDir, { recursive: true }); } catch {}
+
 const fighter = new V4Fighter({
   provider,
   wallet,
@@ -120,6 +124,7 @@ const fighter = new V4Fighter({
   agentId: AGENT_ID,
   strategy,
   preloadedWordList: wordList,
+  statePath: `${stateDir}/${BATTLE}-${wallet.address.slice(0, 10)}.json`,
   pollIntervalMs: 2000,
   verbose: true,
 });

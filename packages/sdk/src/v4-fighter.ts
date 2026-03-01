@@ -65,6 +65,8 @@ export interface V4FighterConfig {
   wordDictionaryAddress?: string;
   /** Pre-loaded word list (avoids on-chain loading) */
   preloadedWordList?: string[];
+  /** Path to persist NCC state (survives restarts) */
+  statePath?: string;
   /** Poll interval in ms (default: 4000 = 2 Base blocks) */
   pollIntervalMs?: number;
   /** Max time to wait for the battle to finish (default: 60 min) */
@@ -143,6 +145,9 @@ export class V4Fighter {
     this.isAgentA = myAddress.toLowerCase() === challengerOwner.toLowerCase();
     this.firstMoverA = await this.battle.firstMoverA();
     this.log(`🎮 Fighting as Agent ${this.isAgentA ? 'A (Challenger)' : 'B (Acceptor)'} | First mover: ${this.firstMoverA ? 'A' : 'B'}`);
+
+    // Restore NCC state from previous run (crash recovery)
+    this.loadState();
 
     // Resolve word dictionary and load word list
     if (this.config.preloadedWordList) {
@@ -299,6 +304,7 @@ export class V4Fighter {
 
     // Store our NCC salt + intendedIdx for next reveal
     this.myPreviousNcc = { salt, intendedIdx };
+    this.saveState();
   }
 
   private buildNccAttack(
@@ -411,5 +417,35 @@ export class V4Fighter {
 
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /** Save NCC state to disk for crash recovery */
+  private saveState(): void {
+    if (!this.config.statePath) return;
+    const state = {
+      myPreviousNcc: this.myPreviousNcc,
+      totalGasUsed: this.totalGasUsed.toString(),
+    };
+    try {
+      const fs = require('node:fs');
+      fs.writeFileSync(this.config.statePath, JSON.stringify(state));
+    } catch { /* best effort */ }
+  }
+
+  /** Load NCC state from disk after restart */
+  private loadState(): void {
+    if (!this.config.statePath) return;
+    try {
+      const fs = require('node:fs');
+      const raw = fs.readFileSync(this.config.statePath, 'utf-8');
+      const state = JSON.parse(raw);
+      if (state.myPreviousNcc) {
+        this.myPreviousNcc = state.myPreviousNcc;
+        this.log('📂 Restored NCC state from checkpoint');
+      }
+      if (state.totalGasUsed) {
+        this.totalGasUsed = BigInt(state.totalGasUsed);
+      }
+    } catch { /* no state file yet */ }
   }
 }
