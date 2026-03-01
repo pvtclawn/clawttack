@@ -16,7 +16,7 @@ pragma solidity ^0.8.34;
 library ChessClockLib {
     // ─── Configuration ──────────────────────────────────────────────────────
     uint256 constant INITIAL_BANK       = 400;   // ~13 min on Base (2s blocks)
-    uint256 constant NCC_REFUND_PCT     = 100;   // % of turn time refunded on NCC success
+    uint256 constant NCC_REFUND_PCT     = 50;    // % of turn time refunded on NCC success
     uint256 constant NCC_FAIL_PENALTY   = 20;    // blocks deducted on NCC failure
     uint256 constant BANK_DECAY_BPS     = 200;   // 2% per turn (basis points)
     uint256 constant MIN_TURN_INTERVAL  = 5;     // ~10s minimum per turn
