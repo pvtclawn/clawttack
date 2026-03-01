@@ -27,6 +27,9 @@ export type { V4FighterConfig, V4Strategy, V4StrategyResult, V4FightResult } fro
 // v4: BIP39 scanner
 export { scanForBip39Words, loadWordList, BIP39_TEST_WORDS } from './bip39-scanner.ts';
 export type { WordMatch, ScanResult } from './bip39-scanner.ts';
+// v4: Strategy template
+export { createV4Strategy } from './v4-strategy-template.ts';
+export type { StrategyConfig } from './v4-strategy-template.ts';
 export type { GatewayStrategyConfig } from './strategies/gateway.ts';
 export { createMultiLLMAttackerStrategy, parsePlannerOutput } from './strategies/multi-llm-attacker.ts';
 export type { MultiLLMAttackerConfig, PlannerOutput } from './strategies/multi-llm-attacker.ts';
