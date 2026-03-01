@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useBlockNumber } from 'wagmi'
 import {
   useBattleInfo,
@@ -159,17 +159,22 @@ function TurnCard({ turn, isLeft }: { turn: V3TurnEvent; isLeft: boolean }) {
     ? new Date(turn.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : null
 
+  // Compact bank delta indicator
+  const bankInfo = turn.bankA !== undefined && turn.bankB !== undefined
+    ? `${turn.bankA}/${turn.bankB}`
+    : null
+
   return (
     <div>
-      {turn.bankA !== undefined && turn.bankB !== undefined && (
-        <BankBar bankA={turn.bankA} bankB={turn.bankB} label={`After Turn ${turn.turnNumber}`} />
-      )}
       <div className={`flex ${isLeft ? 'justify-start' : 'justify-end'}`}>
         <div className={`max-w-[80%] rounded-xl p-4 ${bgClass}`}>
           <div className="mb-1 flex items-center gap-2 text-xs">
             <span>{isLeft ? '🗡️' : '🛡️'}</span>
             <span className={roleColor}>Agent #{turn.playerId.toString()}</span>
             <span className="text-[var(--muted)]">Turn {turn.turnNumber}</span>
+            {bankInfo && (
+              <span className="font-mono text-[10px] text-[var(--muted)]">⚡ {bankInfo}</span>
+            )}
             {timeStr && (
               <span className="ml-auto font-mono text-[10px] text-[var(--muted)]">⏰ {timeStr}</span>
             )}
@@ -210,6 +215,8 @@ function BattlePage() {
   const [visibleTurns, setVisibleTurns] = useState(0)
   const [isReplaying, setIsReplaying] = useState(false)
   const [replaySpeed, setReplaySpeed] = useState(1500) // ms between turns
+  const [autoScroll, setAutoScroll] = useState(true)
+  const turnsEndRef = useRef<HTMLDivElement>(null)
 
   // Auto-show all on load
   useEffect(() => {
@@ -228,6 +235,13 @@ function BattlePage() {
     const timer = setTimeout(() => setVisibleTurns(v => v + 1), replaySpeed)
     return () => clearTimeout(timer)
   }, [isReplaying, visibleTurns, turns, replaySpeed])
+
+  // Auto-scroll to latest turn
+  useEffect(() => {
+    if (autoScroll && turnsEndRef.current) {
+      turnsEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+  }, [visibleTurns, autoScroll])
 
   if (loadingInfo) {
     return (
@@ -255,8 +269,9 @@ function BattlePage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-10 -mx-4 bg-[var(--bg)]/95 px-4 pb-3 pt-2 backdrop-blur-sm border-b border-[var(--border)]">
+        <div className="flex items-center justify-between">
         <div>
           <Link to="/battles" className="text-xs text-[var(--muted)] hover:text-[var(--fg)]">
             ← Battles
@@ -314,6 +329,17 @@ function BattlePage() {
             Show All
           </button>
           <button
+            onClick={() => setAutoScroll(v => !v)}
+            className={`rounded-lg border px-3 py-2 text-sm ${
+              autoScroll
+                ? 'border-green-600 bg-green-900/30 text-green-400'
+                : 'border-[var(--border)] text-[var(--muted)] hover:bg-[var(--surface)]'
+            }`}
+            title={autoScroll ? 'Auto-scroll ON' : 'Auto-scroll OFF'}
+          >
+            {autoScroll ? '📌' : '📌'}
+          </button>
+          <button
             onClick={() => {
               const url = `${window.location.origin}/battle/${info.battleId.toString()}`
               const result = settlement ? RESULT_TYPES[settlement.resultType] : PHASE_NAMES[info.state]
@@ -329,10 +355,11 @@ function BattlePage() {
         </div>
       </div>
 
-      {/* Bank Status (v4) */}
+      {/* Bank Status in sticky header */}
       {info.bankA !== undefined && info.bankB !== undefined && (
         <BankBar bankA={info.bankA} bankB={info.bankB} label="Current Banks" />
       )}
+      </div>
 
       {/* Players */}
       <div className="grid grid-cols-2 gap-4">
@@ -418,6 +445,7 @@ function BattlePage() {
               </div>
             </div>
           )}
+          <div ref={turnsEndRef} />
         </div>
       )}
 

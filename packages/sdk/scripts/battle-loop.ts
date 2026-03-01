@@ -335,7 +335,8 @@ async function main() {
     }
 
     const bip39Candidates = scan.candidates.map((c) => ({ word: c.word, index: c.wordIndex }));
-    const { attack, salt, intendedIdx } = createNccAttack(narrative, bip39Candidates as any, 0);
+    const nccIntendedIdx = (Math.floor(rng() * 4)) as 0 | 1 | 2 | 3;
+    const { attack, salt, intendedIdx } = createNccAttack(narrative, bip39Candidates as any, nccIntendedIdx);
 
     // Defense uses deterministic PRNG for reproducible experiments.
     const opponentPrev = isAgentA ? prevNcc.B : prevNcc.A;
