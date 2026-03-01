@@ -1,0 +1,273 @@
+{
+  "battle": "0xCBB8f1990cF988fBD2292171Cf9fe75E655973c9",
+  "seed": 20260301,
+  "lastProcessedTurn": 21,
+  "lastSubmitBlock": 38284487,
+  "prevNcc": {
+    "A": {
+      "salt": "0x4ed47bbc38e0553a0ffd448ee07947c226ac9eebd13c25a71384b24f18873363",
+      "intendedIdx": 0,
+      "candidates": [
+        "abandon",
+        "absorb",
+        "able",
+        "across"
+      ]
+    },
+    "B": {
+      "salt": "0x5f33061e1461350ada917f841f9f331934cb521d35018ab9ac22b3efbf69e9dd",
+      "intendedIdx": 0,
+      "candidates": [
+        "abandon",
+        "absorb",
+        "able",
+        "across"
+      ]
+    }
+  },
+  "results": [
+    {
+      "turn": 0,
+      "agent": "A",
+      "gas": "836225",
+      "bankA": "400",
+      "bankB": "400",
+      "targetWord": "isolate",
+      "nccGuessCorrect": false,
+      "vopAttempts": 0,
+      "txHash": "0x4372b5eb36f9599bcb9edc46518551a2aae676ed810a4079d9e421036b802e21"
+    },
+    {
+      "turn": 1,
+      "agent": "B",
+      "gas": "1077234",
+      "bankA": "332",
+      "bankB": "400",
+      "targetWord": "cigar",
+      "nccGuessCorrect": false,
+      "vopAttempts": 1109,
+      "txHash": "0xe360480d184dbada4f83536caf0ec4d898da8968fca07bce03dd7c5692f59002"
+    },
+    {
+      "turn": 2,
+      "agent": "A",
+      "gas": "1639942",
+      "bankA": "326",
+      "bankB": "393",
+      "targetWord": "stairs",
+      "nccGuessCorrect": false,
+      "vopAttempts": 146,
+      "txHash": "0xf09c664ea29834786234ef2515707b8472077425188b1b1ee667812ae669ad48"
+    },
+    {
+      "turn": 3,
+      "agent": "B",
+      "gas": "1466431",
+      "bankA": "326",
+      "bankB": "393",
+      "targetWord": "win",
+      "nccGuessCorrect": false,
+      "vopAttempts": 566,
+      "txHash": "0xe095e34fa6ad423daaa9efbeba3173c37dc0cef91a7e5587898d8252478be444"
+    },
+    {
+      "turn": 4,
+      "agent": "A",
+      "gas": "1274087",
+      "bankA": "326",
+      "bankB": "303",
+      "targetWord": "order",
+      "nccGuessCorrect": false,
+      "vopAttempts": 387,
+      "txHash": "0x081b50998d1b6670af630edc1f406f06060cb7a90dfafd7f975c8b42e1da80dd"
+    },
+    {
+      "turn": 5,
+      "agent": "B",
+      "gas": "849513",
+      "bankA": "292",
+      "bankB": "303",
+      "targetWord": "remember",
+      "nccGuessCorrect": false,
+      "vopAttempts": 31,
+      "txHash": "0xab7c08cb3ab9ce0253f0bca07a06c8947b398fc38b8496281bf5cb2c8e08e6f0"
+    },
+    {
+      "turn": 6,
+      "agent": "A",
+      "gas": "857192",
+      "bankA": "292",
+      "bankB": "271",
+      "targetWord": "about",
+      "nccGuessCorrect": false,
+      "vopAttempts": 149,
+      "txHash": "0x2fe20adace97bb618b3cdf8c3d3cfe51a12d2a26eac1a2762fcf72a8a8742c5f"
+    },
+    {
+      "turn": 7,
+      "agent": "B",
+      "gas": "903924",
+      "bankA": "259",
+      "bankB": "271",
+      "targetWord": "rice",
+      "nccGuessCorrect": true,
+      "vopAttempts": 90,
+      "txHash": "0x3e5b4d30072191efa115130e9ab0b09804c093dd3156921e050e6127f479a67b"
+    },
+    {
+      "turn": 8,
+      "agent": "A",
+      "gas": "499387",
+      "bankA": "259",
+      "bankB": "238",
+      "targetWord": "barely",
+      "nccGuessCorrect": false,
+      "vopAttempts": 327,
+      "txHash": "0x42ca6754898f1079e655262e44ad5981fad40b1c145ca47050d925ba42b5fbd4"
+    },
+    {
+      "turn": 9,
+      "agent": "B",
+      "gas": "670282",
+      "bankA": "156",
+      "bankB": "238",
+      "targetWord": "chaos",
+      "nccGuessCorrect": false,
+      "vopAttempts": 387,
+      "txHash": "0x521b5f0d6e4dc25cf620d317b1875db5d97f1738d745c74705f4b307bae5b386"
+    },
+    {
+      "turn": 10,
+      "agent": "A",
+      "gas": "722148",
+      "bankA": "126",
+      "bankB": "234",
+      "targetWord": "explain",
+      "nccGuessCorrect": false,
+      "vopAttempts": 270,
+      "txHash": "0xa747d28e6a13060ec46a780202a33a393ec739c6275f880e2494945398b27d91"
+    },
+    {
+      "turn": 11,
+      "agent": "B",
+      "gas": "504872",
+      "bankA": "126",
+      "bankB": "234",
+      "targetWord": "debris",
+      "nccGuessCorrect": false,
+      "vopAttempts": 318,
+      "txHash": "0xf00e5097353f427ac4a02ef123aca7f0b1860f89a88a06e6dad88a39e5c31ddd"
+    },
+    {
+      "turn": 12,
+      "agent": "A",
+      "gas": "778367",
+      "bankA": "126",
+      "bankB": "200",
+      "targetWord": "acquire",
+      "nccGuessCorrect": true,
+      "vopAttempts": 408,
+      "txHash": "0x48bda36efa9b557bfdc61c102e3fe8ab9f26f22d772d3cf29782a04c823c22c4"
+    },
+    {
+      "turn": 13,
+      "agent": "B",
+      "gas": "1068537",
+      "bankA": "96",
+      "bankB": "169",
+      "targetWord": "opera",
+      "nccGuessCorrect": true,
+      "vopAttempts": 404,
+      "txHash": "0x59048e546f04ed83a023742b0d0393eb03dcaceee7465d8dceda76a0de6f84ee"
+    },
+    {
+      "turn": 14,
+      "agent": "A",
+      "gas": "1001898",
+      "bankA": "95",
+      "bankB": "169",
+      "targetWord": "high",
+      "nccGuessCorrect": false,
+      "vopAttempts": 221,
+      "txHash": "0x3c943b60f8d3b28b7e94ac19c347747e9953b85e39664cd6963731ff8fd8af32"
+    },
+    {
+      "turn": 15,
+      "agent": "B",
+      "gas": "1098415",
+      "bankA": "95",
+      "bankB": "169",
+      "targetWord": "lonely",
+      "nccGuessCorrect": false,
+      "vopAttempts": 111,
+      "txHash": "0xea6debbb486da4e6c59dbcff3bd386f261b3ff097201268948b6713ef9ae1532"
+    },
+    {
+      "turn": 16,
+      "agent": "A",
+      "gas": "1297563",
+      "bankA": "66",
+      "bankB": "166",
+      "targetWord": "minimum",
+      "nccGuessCorrect": true,
+      "vopAttempts": 1166,
+      "txHash": "0x54633b8b8a21867016fa7cc44e3bcf8e17f9bfe8a6b73a1e1fb1650ef934ad36"
+    },
+    {
+      "turn": 17,
+      "agent": "B",
+      "gas": "1168661",
+      "bankA": "66",
+      "bankB": "133",
+      "targetWord": "slim",
+      "nccGuessCorrect": true,
+      "vopAttempts": 353,
+      "txHash": "0x53b3514605d4e50e9ce6ca6e85fa461f4f0c8782c618ad4e4583e34d10231a4f"
+    },
+    {
+      "turn": 18,
+      "agent": "A",
+      "gas": "805478",
+      "bankA": "66",
+      "bankB": "133",
+      "targetWord": "gadget",
+      "nccGuessCorrect": true,
+      "vopAttempts": 311,
+      "txHash": "0xd36ba706a133345389a50e6f57dc3a6454672636952626da9b89a12b3b95f0a2"
+    },
+    {
+      "turn": 19,
+      "agent": "B",
+      "gas": "920642",
+      "bankA": "65",
+      "bankB": "133",
+      "targetWord": "enact",
+      "nccGuessCorrect": false,
+      "vopAttempts": 2760,
+      "txHash": "0x1b7b906089f12567117055ce24dcd77b256ea7b7fd6d4b34954604d64065add6"
+    },
+    {
+      "turn": 20,
+      "agent": "A",
+      "gas": "716993",
+      "bankA": "64",
+      "bankB": "131",
+      "targetWord": "marble",
+      "nccGuessCorrect": true,
+      "vopAttempts": 1128,
+      "txHash": "0x381c2385eec863eca51ad53fc2e342bd625375943340875a6ae05d8819192383"
+    },
+    {
+      "turn": 21,
+      "agent": "B",
+      "gas": "491675",
+      "bankA": "64",
+      "bankB": "131",
+      "targetWord": "above",
+      "nccGuessCorrect": true,
+      "vopAttempts": 125,
+      "txHash": "0x44c8edf34bf289f84bb6e190994df5ad05cb8a140a51bcaf62a0d28396282158"
+    }
+  ],
+  "updatedAt": 1772337261544
+}

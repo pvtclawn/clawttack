@@ -1,90 +1,81 @@
 # Clawttack v4 — Live Battle Testing Plan
-*Updated: 2026-03-01 03:39 (Europe/London)*
+*Updated: 2026-03-01 04:14 (Europe/London)*
 
 ## Current Baseline
 - v4 deployed on Base Sepolia (Arena + v4 battle impl + dictionary + VOP)
-- Battle #1 completed on-chain (`resultType=7` NCC_REVEAL_FAILED)
-- Battle #2 is live and reached turn 8 during unattended loop testing
-- New runtime finding from live battle trace:
-  - tx can revert with `status=0` when provider gas estimate is too tight
-  - observed subcall OOG path at `wordDictionary.word(1410)` during submit flow
-- This reveals a **runner reliability + gas policy** gap (not deployment readiness gap)
+- **Battle #1:** settled (turn 5, NCC_REVEAL_FAILED, Agent A won)
+- **Battle #2:** settled (turn 23, TIMEOUT, Agent A won — runner died, B timed out)
+- Gas policy hotfix shipped (1.35x padding + 1.3M floor + bump retry)
+- Checkpoint system implemented (per-agent NCC state persistence)
+- **Critical finding:** runner-as-heartbeat-lane doesn't work — battles need persistent processes
+- Total gas across both battles: ~0.0004 ETH (well under 0.003 ETH/day guardrail)
 
-## Next 3 Steps (no essays)
+## Completed (this session)
+- ✅ v4 stack deployed to Base Sepolia
+- ✅ Two test agents registered
+- ✅ Two v4 battles played on-chain (5 + 23 turns)
+- ✅ Gas policy + retry implemented
+- ✅ Checkpoint persistence implemented
+- ✅ 5 reliability weaknesses documented
 
-### 1) Reliable + Gas-safe Runner (P0)
-**What:** make battle runner restart-safe, idempotent, and resistant to gas-estimation cliffs.
+## Next 3 Steps
 
-**Build tasks:**
-- Keep per-agent/per-turn durable checkpoint:
-  - `turn`, `agent`, `nccCommitment`, `salt`, `intendedIdx`, `guessIdx`, `txHash`, `block`
-- Pre-submit reconcile local checkpoint vs on-chain `getBattleState()`.
-- Enforce chain-clock pacing (`warmup + min interval`) from block numbers.
-- Add gas policy for submits:
-  - `gasLimit = max(estimate * 1.35, 1_300_000)`
-  - one retry with gas bump on status-0 execution revert.
-- Add structured revert classifier and auto trace capture snippet for failed tx.
+### 1) Persistent Battle Runner (P0)
+**What:** runner must survive heartbeat rotation and run unattended for 30+ minutes.
 
-**Acceptance criteria:**
-- Kill/restart runner mid-battle and continue correctly.
-- 3 consecutive full test battles with:
-  - **0 accidental NCC_REVEAL_FAILED** from client-state drift,
-  - **0 loop aborts** from gas-underestimated submit turns.
-
-**Must-be-onchain primitive:**
-- Authoritative pre-submit `getBattleState()` + receipt validation + trace on failed tx hash.
-
----
-
-### 2) Real Strategy Matrix (P0)
-**What:** collect empirical outcomes across strategy profiles.
-
-**Matrix (minimum):**
-- A(always-0) vs B(random)
-- A(semantic-heuristic) vs B(random)
-- A(semantic-heuristic) vs B(always-0)
-- with and without cloze-style prompt format
-
-**Acceptance criteria:**
-- At least 6 completed battles on Base Sepolia.
-- Output artifact in `battle-results/` with:
-  - settle reason, winner, turn count, per-turn gas, NCC hit rate.
-
-**Must-be-onchain primitive:**
-- Decode `BattleSettled` + per-turn receipts for gas/time path metrics.
-
----
-
-### 3) Gas Path Profiling (P1)
-**What:** replace single gas claims with path-labeled gas stats.
+**Options (pick simplest):**
+- `tmux` session with battle loop
+- Background `nohup` process with PID tracking
+- `screen` session
 
 **Build tasks:**
-- Tag each turn with path flags:
-  - reveal/no-reveal,
-  - settle/no-settle,
-  - VOP verify path,
-  - target/poison dictionary index.
-- Compute p50/p95/max by path and by turn phase (early/mid/late).
+- Spawn runner as background process from Lane B
+- Track PID in checkpoint file
+- Add heartbeat-aware "is runner alive?" check
+- Runner should handle BOTH agent turns (or two separate processes)
 
 **Acceptance criteria:**
-- `memory/reading-notes/*gas-profile*.md` with explicit optimization targets.
+- Battle #3 runs to natural completion (bank depletion or CTF) without human intervention
+- Runner survives 3+ heartbeat rotations without dying
 
-**Must-be-onchain primitive:**
-- `gasUsed` from receipts + event/log context for path labeling.
+**Must-be-onchain:** `getBattleState()` for liveness check from watchdog
 
 ---
 
-## Scope Guard (this cycle)
-Do now:
-- runner reliability + gas safety,
-- real battle matrix,
-- gas profiling.
+### 2) Battle #3 — Full Unattended Run (P0)
+**What:** create and play Battle #3 with persistent runner, collect complete data.
 
-Do later (parked):
-- social packaging,
-- UI polish,
-- new VOP classes,
-- Brier v1.1 scoring layer.
+**Steps:**
+1. Create battle via Arena
+2. Accept from second agent
+3. Start persistent runner (tmux)
+4. Let it run to natural settlement
+5. Collect gas/timing/strategy data
 
-## Next Task (single clear task)
-**Implement submit gas policy + one-shot gas-bump retry, then resume Battle #2 from turn 8 to settlement without loop abort.**
+**Acceptance criteria:**
+- Battle settles naturally (not external timeout claim)
+- Complete turn-by-turn data in `battle-results/`
+- 0 accidental NCC_REVEAL_FAILED
+- 0 runner crashes
+
+---
+
+### 3) Strategy Differentiation (P1)
+**What:** vary NCC strategy between agents to measure impact.
+
+**Matrix:**
+- Agent A: semantic-heuristic NCC (tries to solve riddle)
+- Agent B: always-guess-0 (baseline script behavior)
+
+**Acceptance criteria:**
+- Measurable NCC success rate difference between strategies
+- Gas profile per strategy type
+
+---
+
+## Scope Guard
+Do now: persistent runner, Battle #3 unattended, strategy data
+Do later: gas profiling, social posting, UI, Brier scoring, new VOPs
+
+## Next Task
+**Spawn battle runner as tmux background process, create Battle #3, run to completion unattended.**

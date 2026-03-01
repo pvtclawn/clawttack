@@ -1,0 +1,27 @@
+{
+  "battle": "0xF9405Bb54925a7920Bbe7B1386b055405380495c",
+  "results": [
+    {
+      "turn": 4,
+      "agent": "A",
+      "gas": "1107063",
+      "bankA": "310",
+      "bankB": "387",
+      "targetWord": "method",
+      "nccGuessCorrect": false,
+      "vopAttempts": 197,
+      "txHash": "0x116da858d6357694e54b1a6566f64557faebbdc0165b1bc553acdc10061b1497"
+    },
+    {
+      "turn": 5,
+      "agent": "B",
+      "gas": "96759",
+      "bankA": "305",
+      "bankB": "387",
+      "targetWord": "marine",
+      "nccGuessCorrect": true,
+      "vopAttempts": 177,
+      "txHash": "0xd58ef8dca1e22f85b8673656e919a767f6d029a7501093edc0df79aad5b4d5e8"
+    }
+  ]
+}
