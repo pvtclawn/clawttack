@@ -18,6 +18,7 @@ import { ethers } from 'ethers';
 import { createNccAttack, createNccDefense, createNccReveal } from '../src/ncc-helper.ts';
 import { scanForBip39Words } from '../src/bip39-scanner.ts';
 import { solveHashPreimage } from '../src/vop-solver.ts';
+import { generateNarrative, defendNcc } from './llm-strategy.ts';
 
 const DEFAULT_RPC = 'https://sepolia.base.org';
 const DEFAULT_DICT = '0x081838531Bb3377ba4766eE9D0D32eE2bb0A341f';
@@ -319,7 +320,25 @@ async function main() {
 
     // Narrative varies by strategy
     let narrative: string;
-    if (strategy === 'aggressive') {
+    // Track opponent's last narrative for LLM context
+    const opponentLastNarrative = checkpoint.opponentLastNarrative ?? null;
+
+    if (strategy === 'llm') {
+      // REAL LLM: Generate narrative via Gemini
+      const agentName = isAgentA ? 'PrivateClawn' : 'PrivateClawnJr';
+      // Pre-generate BIP39 candidates for the LLM to include
+      const baseCandidates = BIP39.filter(w => w !== targetWord && w !== poisonWord).slice(0, 4);
+      narrative = await generateNarrative({
+        targetWord,
+        poisonWord,
+        opponentNarrative: opponentLastNarrative,
+        candidates: baseCandidates.map((w, i) => ({ word: w, index: i })),
+        turnNumber: Number(turn),
+        agentName,
+        isFirstTurn: Number(turn) === 0,
+      });
+      console.log(`  🤖 LLM narrative: "${narrative.slice(0, 80)}..."`);
+    } else if (strategy === 'aggressive') {
       // Longer narrative with more BIP39 words — higher NCC attack surface (must stay ≤256 bytes)
       narrative = `On this ${targetWord} we abandon old limits and gain ability to absorb abstract truth, able to act across every boundary about cosmic wisdom. The erosion reveals hidden abandon paths toward ability and abstract gains.`;
     } else if (strategy === 'defensive') {
@@ -330,8 +349,25 @@ async function main() {
     }
 
     const scan = scanForBip39Words(narrative, BIP39, [targetWord]);
+    // If not enough candidates, pad with known BIP39 words
     if (!scan.candidates || scan.candidates.length < 4) {
-      throw new Error('Not enough BIP39 candidates in narrative');
+      const missing = 4 - (scan.candidates?.length ?? 0);
+      const padding = BIP39.filter(w => 
+        w !== targetWord && 
+        (!poisonWord || w !== poisonWord) && 
+        !narrative.toLowerCase().includes(w)
+      ).slice(0, missing);
+      narrative += ' ' + padding.join(' ');
+      // Re-scan after padding
+      const rescan = scanForBip39Words(narrative, BIP39, [targetWord]);
+      if (!rescan.candidates || rescan.candidates.length < 4) {
+        // Last resort: use template fallback
+        narrative = `On this ${targetWord} we abandon old limits and gain ability to absorb abstract truth, able to act across every boundary about cosmic wisdom.`;
+        const fallbackScan = scanForBip39Words(narrative, BIP39, [targetWord]);
+        scan.candidates = fallbackScan.candidates;
+      } else {
+        scan.candidates = rescan.candidates;
+      }
     }
 
     const bip39Candidates = scan.candidates.map((c) => ({ word: c.word, index: c.wordIndex }));
@@ -344,7 +380,17 @@ async function main() {
     let guessIdx: 0 | 1 | 2 | 3 = 0;
     let nccGuessCorrect = false;
     if (opponentPrev) {
-      if (strategy === 'blind-script') {
+      if (strategy === 'llm') {
+        // REAL LLM: Read opponent's narrative and comprehend to pick NCC answer
+        if (opponentLastNarrative) {
+          const oppCandidates = (opponentPrev.candidates ?? []).map((w: string, i: number) => ({ word: w, index: i }));
+          if (oppCandidates.length >= 4) {
+            guessIdx = await defendNcc(opponentLastNarrative, oppCandidates);
+            nccGuessCorrect = guessIdx === opponentPrev.intendedIdx;
+            console.log(`  🧠 LLM defense: picked ${guessIdx} (${oppCandidates[guessIdx]?.word}), correct=${nccGuessCorrect}`);
+          }
+        }
+      } else if (strategy === 'blind-script') {
         // TRUE SCRIPT: random guess from {0,1,2,3} — NO access to opponent's intendedIdx
         // This simulates a real separate-process script that cannot read NCC commitment
         guessIdx = (Math.floor(rng() * 4)) as 0 | 1 | 2 | 3;
@@ -433,13 +479,14 @@ async function main() {
     }
 
     checkpoint.prevNcc = prevNcc;
+    checkpoint.opponentLastNarrative = narrative; // Save for opponent's LLM context
     checkpoint.results = toSerialized(results);
     checkpoint.lastProcessedTurn = Number(turn);
     checkpoint.lastSubmitBlock = blockNumber;
     checkpoint.updatedAt = Date.now();
     saveCheckpoint(checkpointPath, checkpoint);
 
-    await new Promise((r) => setTimeout(r, 12000));
+    await new Promise((r) => setTimeout(r, 4000)); // 4s between turns (Base Sepolia = 2s blocks)
   }
 
   console.log('\n' + '='.repeat(60));
