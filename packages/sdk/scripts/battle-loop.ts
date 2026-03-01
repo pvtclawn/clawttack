@@ -29,6 +29,7 @@ const BIP39 = [
 ];
 
 const TURN_TOO_FAST_SELECTOR = '0xb3c15f40';
+const BATTLE_NOT_ACTIVE_SELECTOR = '0xf2592cf2';
 
 function envOrThrow(name: string): string {
   const value = process.env[name];
@@ -93,6 +94,7 @@ interface RunnerCheckpoint {
   battle: string;
   seed: number;
   lastProcessedTurn: number | null;
+  lastSubmitBlock: number | null;
   prevNcc: {
     A?: TurnData;
     B?: TurnData;
@@ -106,6 +108,7 @@ function defaultCheckpoint(battle: string, seed: number): RunnerCheckpoint {
     battle,
     seed,
     lastProcessedTurn: null,
+    lastSubmitBlock: null,
     prevNcc: {},
     results: [],
     updatedAt: Date.now(),
@@ -161,25 +164,29 @@ const BATTLE_ABI = [
   'function targetWordIndex() view returns (uint16)',
   'function poisonWord() view returns (string)',
   'function currentVopParams() view returns (bytes)',
+  'function startBlock() view returns (uint32)',
 ];
 
 async function submitWithRetry(
   battle: ethers.Contract,
   payload: unknown,
   maxAttempts = 3
-): Promise<{ hash: string; gasUsed: bigint }> {
+): Promise<{ hash: string; gasUsed: bigint; blockNumber: number }> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const tx = await battle.submitTurn(payload);
       console.log(`📡 TX: ${tx.hash}`);
       const receipt = await tx.wait();
-      return { hash: tx.hash, gasUsed: receipt.gasUsed as bigint };
+      return { hash: tx.hash, gasUsed: receipt.gasUsed as bigint, blockNumber: Number(receipt.blockNumber) };
     } catch (err: any) {
       const data = typeof err?.data === 'string' ? err.data.toLowerCase() : '';
       const isTurnTooFast = data.includes(TURN_TOO_FAST_SELECTOR);
-      if (isTurnTooFast && attempt < maxAttempts) {
-        const waitMs = attempt * 6000;
-        console.log(`⏳ TurnTooFast, retrying in ${waitMs}ms (attempt ${attempt}/${maxAttempts})`);
+      const isBattleNotActive = data.includes(BATTLE_NOT_ACTIVE_SELECTOR);
+
+      if ((isTurnTooFast || isBattleNotActive) && attempt < maxAttempts) {
+        const waitMs = isBattleNotActive ? attempt * 8000 : attempt * 6000;
+        const reason = isBattleNotActive ? 'BattleNotActive(warmup/phase)' : 'TurnTooFast';
+        console.log(`⏳ ${reason}, retrying in ${waitMs}ms (attempt ${attempt}/${maxAttempts})`);
         await new Promise((r) => setTimeout(r, waitMs));
         continue;
       }
@@ -231,6 +238,27 @@ async function main() {
     if (Number(phase) !== 1) {
       console.log(`🏁 Battle ended. Phase=${phase}`);
       break;
+    }
+
+    const startBlock = Number(await battleRead.startBlock());
+    const currentBlock = await provider.getBlockNumber();
+    const minTurnIntervalBlocks = 5; // v4 H9 default used for current live tests
+    const requiredBlock = Number(turn) === 0 ? startBlock + minTurnIntervalBlocks : startBlock;
+
+    if (currentBlock < requiredBlock) {
+      const waitBlocks = requiredBlock - currentBlock;
+      const waitMs = Math.max(4000, waitBlocks * 2200);
+      console.log(`⏳ Battle not ready: block ${currentBlock}/${requiredBlock}. Waiting ~${waitMs}ms`);
+      await new Promise((r) => setTimeout(r, waitMs));
+      continue;
+    }
+
+    if (checkpoint.lastSubmitBlock !== null && currentBlock < checkpoint.lastSubmitBlock + minTurnIntervalBlocks) {
+      const waitBlocks = checkpoint.lastSubmitBlock + minTurnIntervalBlocks - currentBlock;
+      const waitMs = Math.max(4000, waitBlocks * 2200);
+      console.log(`⏳ Waiting for min interval: block ${currentBlock}/${checkpoint.lastSubmitBlock + minTurnIntervalBlocks}. Waiting ~${waitMs}ms`);
+      await new Promise((r) => setTimeout(r, waitMs));
+      continue;
     }
 
     const isAgentA = Number(turn) % 2 === 0;
@@ -305,7 +333,7 @@ async function main() {
       nccReveal: reveal,
     };
 
-    const { hash, gasUsed } = await submitWithRetry(battle, payload, 3);
+    const { hash, gasUsed, blockNumber } = await submitWithRetry(battle, payload, 3);
 
     const [, newTurn, newBankA, newBankB] = await battleRead.getBattleState();
     console.log(`✅ Gas=${gasUsed} | nextTurn=${newTurn} | banks=${newBankA}/${newBankB}`);
@@ -331,6 +359,7 @@ async function main() {
     checkpoint.prevNcc = prevNcc;
     checkpoint.results = toSerialized(results);
     checkpoint.lastProcessedTurn = Number(turn);
+    checkpoint.lastSubmitBlock = blockNumber;
     checkpoint.updatedAt = Date.now();
     saveCheckpoint(checkpointPath, checkpoint);
 
