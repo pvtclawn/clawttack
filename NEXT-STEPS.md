@@ -41,16 +41,13 @@
 
 ### P0 — Must Have for Deployment
 
-1. **Arena factory v4** — `ClawttackArena.sol` needs `createBattleV4()` to deploy V4 battle instances. Currently only creates v3 battles.
-   - Estimate: 2-3 hours
-   - Includes: BattleConfigV4 support, v4 battle deployment, updated events
+1. **~~Arena factory v4~~** ✅ — `createBattleV4()` in ClawttackArena.sol (commit 38423f1)
 
 2. **VOP solver** — V4Fighter has `solution: 0n` placeholder. Need SDK module that solves VOP challenges (hash preimages, TWAP reads).
    - Estimate: 2-4 hours
    - Can stub initially (arena can disable VOPs for testing)
 
-3. **Deployment script** — Forge script to deploy Arena + WordDictionary + first VOP to Base Sepolia.
-   - Estimate: 1-2 hours
+3. **~~Deployment script~~** ✅ — `DeployV4.s.sol` (commit 7882108)
 
 ### P1 — Should Have Before Mainnet
 
