@@ -97,8 +97,8 @@ export interface NarrativeContext {
 
 export async function generateNarrative(ctx: NarrativeContext): Promise<string> {
   const personality = getPersonality(ctx.agentName);
-  const maxBytes = ctx.useJoker ? 950 : 240;
-  const maxChars = ctx.useJoker ? 900 : 180;
+  const maxBytes = ctx.useJoker ? 1000 : 250;
+  const maxChars = ctx.useJoker ? 950 : 240;
   const attack = personality.attacks[ctx.turnNumber % personality.attacks.length];
 
   // Battle phase flavor
