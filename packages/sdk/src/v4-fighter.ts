@@ -165,6 +165,7 @@ export class V4Fighter {
     }
 
     let lastProcessedTurn = -1;
+    const startTime = Date.now();
 
     while (Date.now() < deadline) {
       const state = await this.getBattleState();
@@ -182,18 +183,27 @@ export class V4Fighter {
           lastProcessedTurn = state.currentTurn; // Only mark done on success
         } catch (err: any) {
           const errMsg = String(err?.shortMessage ?? err?.message ?? err);
-          if (errMsg.includes('TurnTooFast') || errMsg.includes('0xb3c15f40')) {
+          const errData = err?.data ?? err?.info?.error?.data ?? '';
+          if (errMsg.includes('TurnTooFast') || errMsg.includes('0xb3c15f40') || String(errData).includes('b3c15f40')) {
             this.log(`  ⏳ Turn too fast — waiting for next block...`);
             await this.sleep(4000); // Wait ~2 blocks
+          } else if (errMsg.includes('BattleNotActive') || errMsg.includes('0xf2592cf2') || String(errData).includes('f2592cf2')) {
+            this.log(`  ⏳ Battle not active yet — waiting for start block...`);
+            await this.sleep(4000);
+          } else if (errMsg.includes('reverted') && !errData) {
+            // Empty revert data — likely gas estimation issue, retry once
+            this.log(`  ⚠️ Empty revert — retrying in 4s...`);
+            await this.sleep(4000);
           } else {
-            this.log(`❌ Turn ${state.currentTurn} failed:`, errMsg.slice(0, 120));
+            this.log(`❌ Turn ${state.currentTurn} failed: ${errMsg} | data=${errData}`);
             lastProcessedTurn = state.currentTurn; // Skip this turn on other errors
           }
         }
       }
 
-      // Check for opponent timeout
-      if (!isMyTurn) {
+      // Check for opponent timeout (but only after giving them reasonable time)
+      // Don't spam timeout claims — wait at least 30s of opponent inactivity
+      if (!isMyTurn && (Date.now() - startTime > 60_000 || lastProcessedTurn >= 0)) {
         try {
           const tx = await this.battle.claimTimeoutWin();
           const receipt = await tx.wait();
@@ -401,10 +411,16 @@ export class V4Fighter {
   }
 
   private buildResult(state: BattleStateV4, reason: string): V4FightResult {
-    // Determine if we won by checking final bank states
-    const myBank = this.isAgentA ? state.bankA : state.bankB;
-    const oppBank = this.isAgentA ? state.bankB : state.bankA;
-    const won = myBank > oppBank ? true : myBank < oppBank ? false : null;
+    // For timeout claims, the claimer always wins
+    let won: boolean | null;
+    if (reason === 'timeout_claimed') {
+      won = true;
+    } else {
+      // Determine by final bank states
+      const myBank = this.isAgentA ? state.bankA : state.bankB;
+      const oppBank = this.isAgentA ? state.bankB : state.bankA;
+      won = myBank > oppBank ? true : myBank < oppBank ? false : null;
+    }
 
     return {
       battleAddress: this.config.battleAddress,
