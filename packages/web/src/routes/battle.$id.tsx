@@ -125,85 +125,8 @@ function BankBar({
   )
 }
 
-function TurnTimerBar({
-  deadlineBlock,
-  baseTimeoutBlocks,
-  currentTurn,
-  whoseTurnName,
-  isChallenger,
-  pending,
-}: {
-  deadlineBlock: bigint
-  baseTimeoutBlocks: number
-  currentTurn: number
-  whoseTurnName: string
-  isChallenger: boolean
-  pending: boolean
-}) {
-  const { data: blockNumber } = useBlockNumber({ watch: true })
-  
-  const currentBlock = blockNumber ?? 0n
-  const blocksLeft = Math.max(0, Number(deadlineBlock - currentBlock))
-  const secondsLeft = blocksLeft * 2
-
-  const turnTimeoutBlocks = useMemo(() => {
-    let timeout = baseTimeoutBlocks >> Math.floor(currentTurn / 5)
-    return Math.max(1, timeout)
-  }, [baseTimeoutBlocks, currentTurn])
-
-  const turnTimeoutSeconds = turnTimeoutBlocks * 2
-
-  const pct = Math.max(0, Math.min(100, (secondsLeft / turnTimeoutSeconds) * 100))
-  const isCritical = secondsLeft < 10
-  const isUrgent = secondsLeft < 30
-
-  const mins = Math.floor(secondsLeft / 60)
-  const secs = Math.floor(secondsLeft % 60)
-  const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`
-
-  const barColor = isCritical
-    ? 'bg-red-500'
-    : isUrgent
-      ? 'bg-orange-500'
-      : pct > 60
-        ? 'bg-green-500'
-        : 'bg-yellow-500'
-
-  if (pending) {
-    return (
-      <div className="mx-4 my-2 flex items-center justify-center gap-3 rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)] p-2 text-xs text-[var(--muted)]">
-        <span className="animate-spin text-[10px]">⌛</span>
-        <span>Turn {currentTurn} submitted, awaiting confirmation...</span>
-      </div>
-    )
-  }
-
-  return (
-    <div className={`mx-4 my-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2 ${isCritical ? 'animate-pulse' : ''}`}>
-      <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-wider">
-        <span className="flex items-center gap-1.5">
-          <span className={isChallenger ? 'text-red-400' : 'text-blue-400'}>
-            {isChallenger ? '🗡️' : '🛡️'}
-          </span>
-          <span className="text-[var(--muted)]">Up Next:</span>
-          <span className="font-bold text-[var(--fg)]">{whoseTurnName}</span>
-          <span className="text-[var(--muted)]">· Turn {currentTurn}</span>
-        </span>
-        <span className={`font-mono font-bold tabular-nums ${
-          isCritical ? 'text-red-400' : isUrgent ? 'text-orange-400' : 'text-[var(--fg)]'
-        }`}>
-          ⏱ {timeStr}
-        </span>
-      </div>
-      <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--border)]">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  )
-}
+// TurnTimerBar removed — v4 uses chess clock (bank drain), not fixed timeouts.
+// The BankBar component with live drain prediction replaces this.
 
 function TurnCard({ turn, isLeft, agentAddress }: { turn: V3TurnEvent; isLeft: boolean; agentAddress?: string }) {
   const { data: targetWord } = useWord(turn.targetWord)
@@ -526,16 +449,6 @@ function BattlePage() {
       )}
 
       {/* Turns */}
-      {info.state === 1 && (
-        <TurnTimerBar
-          deadlineBlock={info.turnDeadlineBlock}
-          baseTimeoutBlocks={info.baseTimeoutBlocks}
-          currentTurn={info.currentTurn}
-          whoseTurnName={agentLabel(isChallengerTurn ? info.challengerOwner : info.acceptorOwner, isChallengerTurn ? info.challengerId : info.acceptorId)}
-          isChallenger={isChallengerTurn}
-          pending={isPending}
-        />
-      )}
 
       {loadingTurns ? (
         <div className="py-4 text-center text-[var(--muted)]">⏳ Loading turns...</div>
