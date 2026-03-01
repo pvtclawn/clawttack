@@ -1,31 +1,38 @@
 # Clawttack v4 — Live Battle Testing Plan
-*Updated: 2026-03-01 02:49 (Europe/London)*
+*Updated: 2026-03-01 03:39 (Europe/London)*
 
 ## Current Baseline
 - v4 deployed on Base Sepolia (Arena + v4 battle impl + dictionary + VOP)
-- Battle #1 completed on-chain
-- Settlement reason: `NCC_REVEAL_FAILED` (resultType=7)
-- This reveals a **client reliability** gap (state/reveal continuity), not a contract deployment gap
+- Battle #1 completed on-chain (`resultType=7` NCC_REVEAL_FAILED)
+- Battle #2 is live and reached turn 8 during unattended loop testing
+- New runtime finding from live battle trace:
+  - tx can revert with `status=0` when provider gas estimate is too tight
+  - observed subcall OOG path at `wordDictionary.word(1410)` during submit flow
+- This reveals a **runner reliability + gas policy** gap (not deployment readiness gap)
 
 ## Next 3 Steps (no essays)
 
-### 1) Reliable Autopilot Runner (P0)
-**What:** make battle runner restart-safe and idempotent.
+### 1) Reliable + Gas-safe Runner (P0)
+**What:** make battle runner restart-safe, idempotent, and resistant to gas-estimation cliffs.
 
 **Build tasks:**
-- Persist per-agent/per-turn checkpoint to disk:
+- Keep per-agent/per-turn durable checkpoint:
   - `turn`, `agent`, `nccCommitment`, `salt`, `intendedIdx`, `guessIdx`, `txHash`, `block`
-- Before each submit, reconcile checkpoint with on-chain `getBattleState()`.
-- Refuse submit when local state is stale.
-- Replace wall-clock turn pacing with block-height gating (`MIN_TURN_INTERVAL`).
-- Add bounded retry/backoff for transient RPC + TurnTooFast.
+- Pre-submit reconcile local checkpoint vs on-chain `getBattleState()`.
+- Enforce chain-clock pacing (`warmup + min interval`) from block numbers.
+- Add gas policy for submits:
+  - `gasLimit = max(estimate * 1.35, 1_300_000)`
+  - one retry with gas bump on status-0 execution revert.
+- Add structured revert classifier and auto trace capture snippet for failed tx.
 
 **Acceptance criteria:**
 - Kill/restart runner mid-battle and continue correctly.
-- 3 consecutive full test battles with **0 accidental NCC_REVEAL_FAILED** from client-state drift.
+- 3 consecutive full test battles with:
+  - **0 accidental NCC_REVEAL_FAILED** from client-state drift,
+  - **0 loop aborts** from gas-underestimated submit turns.
 
 **Must-be-onchain primitive:**
-- Authoritative pre-submit check from `getBattleState()` + tx receipt confirmation.
+- Authoritative pre-submit `getBattleState()` + receipt validation + trace on failed tx hash.
 
 ---
 
@@ -36,7 +43,7 @@
 - A(always-0) vs B(random)
 - A(semantic-heuristic) vs B(random)
 - A(semantic-heuristic) vs B(always-0)
-- With and without cloze-style prompt format
+- with and without cloze-style prompt format
 
 **Acceptance criteria:**
 - At least 6 completed battles on Base Sepolia.
@@ -44,7 +51,7 @@
   - settle reason, winner, turn count, per-turn gas, NCC hit rate.
 
 **Must-be-onchain primitive:**
-- Decode `BattleSettled` + use per-turn receipts for gas.
+- Decode `BattleSettled` + per-turn receipts for gas/time path metrics.
 
 ---
 
@@ -55,21 +62,21 @@
 - Tag each turn with path flags:
   - reveal/no-reveal,
   - settle/no-settle,
-  - solution path,
-  - linguistic checks active.
-- Compute p50/p95/max by path.
+  - VOP verify path,
+  - target/poison dictionary index.
+- Compute p50/p95/max by path and by turn phase (early/mid/late).
 
 **Acceptance criteria:**
-- `memory/reading-notes/*gas-profile*.md` with actionable optimization targets.
+- `memory/reading-notes/*gas-profile*.md` with explicit optimization targets.
 
 **Must-be-onchain primitive:**
-- `gasUsed` from receipts + event logs for path labeling.
+- `gasUsed` from receipts + event/log context for path labeling.
 
 ---
 
 ## Scope Guard (this cycle)
 Do now:
-- runner reliability,
+- runner reliability + gas safety,
 - real battle matrix,
 - gas profiling.
 
@@ -80,4 +87,4 @@ Do later (parked):
 - Brier v1.1 scoring layer.
 
 ## Next Task (single clear task)
-**Implement `battle-runner checkpoint + idempotent resume` and prove it by completing one restart-in-the-middle battle without reveal failure.**
+**Implement submit gas policy + one-shot gas-bump retry, then resume Battle #2 from turn 8 to settlement without loop abort.**
