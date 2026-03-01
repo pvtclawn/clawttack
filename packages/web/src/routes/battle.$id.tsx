@@ -47,10 +47,35 @@ function AnimatedNumber({ value, className }: { value: number; className?: strin
   return <span className={className}>{displayed}</span>
 }
 
-function BankBar({ bankA, bankB, label }: { bankA: number; bankB: number; label?: string }) {
+function BankBar({
+  bankA,
+  bankB,
+  label,
+  isLive,
+  isChallengerTurn,
+  elapsedBlocks,
+  challengerName,
+  acceptorName,
+}: {
+  bankA: number
+  bankB: number
+  label?: string
+  isLive?: boolean
+  isChallengerTurn?: boolean
+  elapsedBlocks?: number
+  challengerName?: string
+  acceptorName?: string
+}) {
   const maxBank = 400
-  const pctA = Math.max(0, Math.min(100, (bankA / maxBank) * 100))
-  const pctB = Math.max(0, Math.min(100, (bankB / maxBank) * 100))
+  // Show predictive drain: current player's bank minus elapsed blocks
+  const drain = isLive && elapsedBlocks !== undefined ? Math.min(elapsedBlocks, 80) : 0
+  const projectedA = isChallengerTurn ? Math.max(0, bankA - drain) : bankA
+  const projectedB = !isChallengerTurn ? Math.max(0, bankB - drain) : bankB
+  const displayA = isLive ? projectedA : bankA
+  const displayB = isLive ? projectedB : bankB
+
+  const pctA = Math.max(0, Math.min(100, (displayA / maxBank) * 100))
+  const pctB = Math.max(0, Math.min(100, (displayB / maxBank) * 100))
 
   return (
     <div className="mx-4 my-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
@@ -58,8 +83,13 @@ function BankBar({ bankA, bankB, label }: { bankA: number; bankB: number; label?
       <div className="flex items-center gap-3">
         <div className="flex-1">
           <div className="mb-1 flex items-center justify-between text-[10px]">
-            <span className="text-red-400">🗡️ Challenger</span>
-            <AnimatedNumber value={bankA} className="font-mono font-bold tabular-nums text-[var(--fg)]" />
+            <span className="text-red-400">🗡️ {challengerName ?? 'Challenger'}</span>
+            <span className="inline-flex items-center gap-1">
+              <AnimatedNumber value={displayA} className="font-mono font-bold tabular-nums text-[var(--fg)]" />
+              {isLive && isChallengerTurn && drain > 0 && (
+                <span className="font-mono text-red-400 animate-pulse">-{drain}</span>
+              )}
+            </span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--border)]">
             <div
@@ -73,8 +103,13 @@ function BankBar({ bankA, bankB, label }: { bankA: number; bankB: number; label?
         <div className="text-xs font-bold text-[var(--muted)]">vs</div>
         <div className="flex-1">
           <div className="mb-1 flex items-center justify-between text-[10px]">
-            <span className="text-blue-400">🛡️ Acceptor</span>
-            <AnimatedNumber value={bankB} className="font-mono font-bold tabular-nums text-[var(--fg)]" />
+            <span className="text-blue-400">🛡️ {acceptorName ?? 'Acceptor'}</span>
+            <span className="inline-flex items-center gap-1">
+              <AnimatedNumber value={displayB} className="font-mono font-bold tabular-nums text-[var(--fg)]" />
+              {isLive && !isChallengerTurn && drain > 0 && (
+                <span className="font-mono text-blue-400 animate-pulse">-{drain}</span>
+              )}
+            </span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--border)]">
             <div
@@ -230,6 +265,7 @@ function BattlePage() {
   const { data: settlement } = useBattleSettlement(info?.address)
   const { data: challenger } = useAgentProfile(info?.challengerId)
   const { data: acceptor } = useAgentProfile(info?.acceptorId)
+  const { data: currentBlockNumber } = useBlockNumber({ watch: true })
 
   const [visibleTurns, setVisibleTurns] = useState(0)
   const [isReplaying, setIsReplaying] = useState(false)
@@ -407,13 +443,29 @@ function BattlePage() {
       </div>
 
       {/* Bank Status in sticky header — tracks replay position */}
-      {info.bankA !== undefined && info.bankB !== undefined && (
-        <BankBar bankA={replayBanks.bankA} bankB={replayBanks.bankB} label={
-          visibleTurns < (turns ?? []).length
-            ? `After Turn ${displayedTurns.length ? displayedTurns[displayedTurns.length - 1].turnNumber : 0}`
-            : 'Current Banks'
-        } />
-      )}
+      {info.bankA !== undefined && info.bankB !== undefined && (() => {
+        const isLive = info.state === 1 && !isReplaying && visibleTurns >= (turns ?? []).length
+        const lastTurnBn = turns?.length ? turns[turns.length - 1].blockNumber : 0n
+        const elapsed = isLive && currentBlockNumber && lastTurnBn
+          ? Number(currentBlockNumber - lastTurnBn)
+          : 0
+        return (
+          <BankBar
+            bankA={replayBanks.bankA}
+            bankB={replayBanks.bankB}
+            label={
+              visibleTurns < (turns ?? []).length
+                ? `After Turn ${displayedTurns.length ? displayedTurns[displayedTurns.length - 1].turnNumber : 0}`
+                : isLive ? '🔴 LIVE' : 'Current Banks'
+            }
+            isLive={isLive}
+            isChallengerTurn={isChallengerTurn}
+            elapsedBlocks={elapsed}
+            challengerName={agentLabel(info.challengerOwner, info.challengerId)}
+            acceptorName={agentLabel(info.acceptorOwner, info.acceptorId)}
+          />
+        )
+      })()}
       </div>
 
       {/* Players */}
