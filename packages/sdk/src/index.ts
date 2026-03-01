@@ -21,6 +21,9 @@ export {
 } from './ncc-helper.ts';
 export type { BIP39Word } from './ncc-helper.ts';
 export { createGatewayStrategy, createPentestAttackerStrategy, sanitizeDefenderResponse } from './strategies/gateway.ts';
+// v4: On-chain fighter
+export { V4Fighter } from './v4-fighter.ts';
+export type { V4FighterConfig, V4Strategy, V4StrategyResult, V4FightResult } from './v4-fighter.ts';
 export type { GatewayStrategyConfig } from './strategies/gateway.ts';
 export { createMultiLLMAttackerStrategy, parsePlannerOutput } from './strategies/multi-llm-attacker.ts';
 export type { MultiLLMAttackerConfig, PlannerOutput } from './strategies/multi-llm-attacker.ts';
