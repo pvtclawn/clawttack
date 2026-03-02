@@ -23,6 +23,16 @@ library ChessClockLib {
     uint256 constant MAX_TURN_TIMEOUT   = 80;    // ~2.5 min max per turn
     uint256 constant BPS                = 10000;
 
+    // ─── Brier Scoring (anti-unsolvable-blank incentive) ────────────────────
+    uint256 constant BRIER_MIN_SAMPLES  = 5;     // minimum Cloze attempts before penalty applies
+    uint256 constant BRIER_THRESHOLD    = 20;    // below 20% solve rate → penalty
+    uint256 constant BRIER_PENALTY      = 10;    // blocks deducted from attacker per unsolvable-blank violation
+
+    struct BrierStats {
+        uint16 clozeAttacksSent;    // how many Cloze blanks this agent created
+        uint16 clozeAttacksDefended; // how many of this agent's blanks were solved by opponent
+    }
+
     struct Clock {
         uint128 bankA;          // remaining blocks for agent A
         uint128 bankB;          // remaining blocks for agent B
@@ -60,6 +70,39 @@ library ChessClockLib {
         bool nccCorrect,
         bool isFirstTurn
     ) internal returns (uint128 bankAfter, bool bankDepleted) {
+        return _tick(self, isAgentA, nccCorrect, isFirstTurn, false, BrierStats(0, 0));
+    }
+
+    /**
+     * @notice Processes a turn's timing with Brier scoring for Cloze-enabled battles.
+     * @param self The clock storage.
+     * @param isAgentA True if the current mover is agent A.
+     * @param nccCorrect True if the agent passed the NCC challenge.
+     * @param isFirstTurn True if this is turn 0 (no NCC to resolve).
+     * @param brierEnabled True if Cloze+Brier is active for this battle.
+     * @param opponentBrier The OPPONENT's Brier stats (we penalize opponent if their blanks are unsolvable).
+     * @return bankAfter The agent's bank after all operations.
+     * @return bankDepleted True if agent's bank hit zero (caller should settle as loss).
+     */
+    function tickWithBrier(
+        Clock storage self,
+        bool isAgentA,
+        bool nccCorrect,
+        bool isFirstTurn,
+        bool brierEnabled,
+        BrierStats memory opponentBrier
+    ) internal returns (uint128 bankAfter, bool bankDepleted) {
+        return _tick(self, isAgentA, nccCorrect, isFirstTurn, brierEnabled, opponentBrier);
+    }
+
+    function _tick(
+        Clock storage self,
+        bool isAgentA,
+        bool nccCorrect,
+        bool isFirstTurn,
+        bool brierEnabled,
+        BrierStats memory opponentBrier
+    ) private returns (uint128 bankAfter, bool bankDepleted) {
         uint256 elapsed = block.number - self.lastTurnBlock;
         if (elapsed < MIN_TURN_INTERVAL) revert TurnTooFast();
 
@@ -105,7 +148,27 @@ library ChessClockLib {
             }
         }
 
-        // 4. Store
+        // 4. Brier penalty (penalizes opponent for creating unsolvable Cloze blanks)
+        // Applied to THIS agent's bank when the OPPONENT's blanks are historically unsolvable.
+        // Rationale: if opponent never creates solvable blanks, they're gaming the system.
+        // The penalty drains the OPPONENT's bank (not ours) — applied on opponent's next tick.
+        // Wait — we need to penalize the ATTACKER (opponent), not the defender (us).
+        // So we apply Brier penalty to the OPPONENT's bank directly here.
+        if (brierEnabled && !isFirstTurn && opponentBrier.clozeAttacksSent >= BRIER_MIN_SAMPLES) {
+            uint256 solveRate = (uint256(opponentBrier.clozeAttacksDefended) * 100) / uint256(opponentBrier.clozeAttacksSent);
+            if (solveRate < BRIER_THRESHOLD) {
+                // Opponent is creating unsolvable blanks — drain THEIR bank
+                uint256 oppBank = isAgentA ? self.bankB : self.bankA;
+                if (oppBank > BRIER_PENALTY) {
+                    _setBank(self, !isAgentA, uint128(oppBank - BRIER_PENALTY));
+                } else {
+                    _setBank(self, !isAgentA, 0);
+                    // Note: we don't settle here — opponent's depletion is checked on their next tick
+                }
+            }
+        }
+
+        // 5. Store
         bankAfter = uint128(bank);
         _setBank(self, isAgentA, bankAfter);
         self.lastTurnBlock = uint64(block.number);

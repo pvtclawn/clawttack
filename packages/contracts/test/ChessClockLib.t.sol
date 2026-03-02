@@ -260,6 +260,133 @@ contract ChessClockLibTest is Test {
 
         assertLe(bank, 400, "Refund must never push bank above INITIAL_BANK");
     }
+
+    // ─── Brier Scoring Tests ────────────────────────────────────────────────
+
+    /// @notice Brier penalty drains OPPONENT's bank when their solve rate is below threshold
+    function test_brier_penalty_drains_opponent() public {
+        // Turn 0 (A, first turn)
+        vm.roll(100);
+        harness.tick(true, true, true);
+
+        // Turn 1 (B)
+        vm.roll(120);
+        harness.tick(false, true, false);
+
+        // Snapshot B's bank before Brier tick
+        (,uint128 bankBBefore,) = harness.getClock();
+
+        // B created 6 blanks, defender (A) solved only 1 → 16.7% < 20% threshold
+        ChessClockLib.BrierStats memory badBStats = ChessClockLib.BrierStats({
+            clozeAttacksSent: 6,
+            clozeAttacksDefended: 1
+        });
+
+        vm.roll(140);
+        harness.tickWithBrier(true, true, false, true, badBStats);
+
+        (,uint128 bankBAfter,) = harness.getClock();
+        assertLt(bankBAfter, bankBBefore, "Brier penalty should drain opponent bank");
+    }
+
+    /// @notice Brier penalty does NOT apply when solve rate is above threshold
+    function test_brier_no_penalty_above_threshold() public {
+        vm.roll(100);
+        harness.tick(true, true, true);
+
+        vm.roll(120);
+        harness.tick(false, true, false);
+
+        (,uint128 bankBBefore,) = harness.getClock();
+
+        // 3/6 = 50% solve rate — above 20% threshold
+        ChessClockLib.BrierStats memory goodBStats = ChessClockLib.BrierStats({
+            clozeAttacksSent: 6,
+            clozeAttacksDefended: 3
+        });
+
+        vm.roll(140);
+        harness.tickWithBrier(true, true, false, true, goodBStats);
+
+        (,uint128 bankBAfter,) = harness.getClock();
+        assertEq(bankBAfter, bankBBefore, "No Brier penalty when solve rate above threshold");
+    }
+
+    /// @notice Brier penalty does NOT apply before minimum samples reached
+    function test_brier_no_penalty_insufficient_samples() public {
+        vm.roll(100);
+        harness.tick(true, true, true);
+
+        vm.roll(120);
+        harness.tick(false, true, false);
+
+        (,uint128 bankBBefore,) = harness.getClock();
+
+        // 0/4 = 0% but only 4 samples (below BRIER_MIN_SAMPLES=5)
+        ChessClockLib.BrierStats memory tooFew = ChessClockLib.BrierStats({
+            clozeAttacksSent: 4,
+            clozeAttacksDefended: 0
+        });
+
+        vm.roll(140);
+        harness.tickWithBrier(true, true, false, true, tooFew);
+
+        (,uint128 bankBAfter,) = harness.getClock();
+        assertEq(bankBAfter, bankBBefore, "No penalty below min samples");
+    }
+
+    /// @notice Brier penalty does NOT apply when brierEnabled=false (backward compat)
+    function test_brier_disabled_no_penalty() public {
+        vm.roll(100);
+        harness.tick(true, true, true);
+
+        vm.roll(120);
+        harness.tick(false, true, false);
+
+        (,uint128 bankBBefore,) = harness.getClock();
+
+        ChessClockLib.BrierStats memory badBStats = ChessClockLib.BrierStats({
+            clozeAttacksSent: 10,
+            clozeAttacksDefended: 0
+        });
+
+        vm.roll(140);
+        harness.tickWithBrier(true, true, false, false, badBStats);
+
+        (,uint128 bankBAfter,) = harness.getClock();
+        assertEq(bankBAfter, bankBBefore, "No penalty when Brier disabled");
+    }
+
+    /// @notice Brier penalty floors opponent bank at zero (no underflow)
+    function test_brier_penalty_floors_at_zero() public {
+        vm.roll(100);
+        harness.tick(true, true, true);
+
+        // Drain B's bank to near zero via many failed NCC ticks
+        uint256 bn = 120;
+        for (uint256 i = 0; i < 50; i++) {
+            bn += 10;
+            vm.roll(bn);
+            (uint128 bank, bool depleted) = harness.tick(false, false, false);
+            if (depleted) break;
+            if (bank <= 10) break;
+        }
+
+        (,uint128 bankBLow,) = harness.getClock();
+        if (bankBLow > 0 && bankBLow <= 10) {
+            ChessClockLib.BrierStats memory terrible = ChessClockLib.BrierStats({
+                clozeAttacksSent: 10,
+                clozeAttacksDefended: 0
+            });
+
+            bn += 10;
+            vm.roll(bn);
+            harness.tickWithBrier(true, true, false, true, terrible);
+
+            (,uint128 bankBFinal,) = harness.getClock();
+            assertEq(bankBFinal, 0, "Bank should floor at 0, not underflow");
+        }
+    }
 }
 
 /**
@@ -276,6 +403,16 @@ contract ChessClockLibHarness {
 
     function tick(bool isAgentA, bool nccCorrect, bool isFirstTurn) external returns (uint128, bool) {
         return clock.tick(isAgentA, nccCorrect, isFirstTurn);
+    }
+
+    function tickWithBrier(
+        bool isAgentA,
+        bool nccCorrect,
+        bool isFirstTurn,
+        bool brierEnabled,
+        ChessClockLib.BrierStats memory opponentBrier
+    ) external returns (uint128, bool) {
+        return clock.tickWithBrier(isAgentA, nccCorrect, isFirstTurn, brierEnabled, opponentBrier);
     }
 
     function canTimeout(bool isAgentA) external view returns (bool) {
