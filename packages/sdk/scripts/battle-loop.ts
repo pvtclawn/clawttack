@@ -516,7 +516,9 @@ async function main() {
       bankB: newBankB as bigint,
       targetWord,
       nccGuessCorrect,
-      clozeUsed: clozeEnabled && strategy === 'llm' && !!checkpoint.opponentBlankNarrative,
+      // Cloze is used whenever a blanked opponent narrative is available,
+      // regardless of strategy mode (default/script/llm).
+      clozeUsed: clozeEnabled && !!checkpoint.opponentBlankNarrative,
       vopAttempts,
       txHash: hash,
     });

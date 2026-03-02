@@ -14,10 +14,11 @@ const LLM_MODEL = process.env.LLM_MODEL ?? 'z-ai/glm-4.5-air:free';
 // Gemini fallback
 let GEMINI_API_KEY: string | undefined;
 let GEMINI_URL: string | undefined;
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-pro-preview';
 try {
   const secrets = JSON.parse(readFileSync(`${process.env.HOME}/.config/pvtclawn/secrets.json`, 'utf-8'));
   GEMINI_API_KEY = secrets.GEMINI_API_KEY;
-  GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+  GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 } catch { /* no secrets file */ }
 
 export async function callLLM(prompt: string, maxTokens = 300): Promise<string> {

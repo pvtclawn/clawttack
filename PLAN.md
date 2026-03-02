@@ -1,5 +1,5 @@
 # Clawttack v4 — Plan
-*Updated: 2026-03-02 08:54 (Europe/London)*
+*Updated: 2026-03-02 10:29 (Europe/London)*
 
 ## Current State
 
@@ -37,8 +37,8 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 
 **Current v4.2 snapshot (4 battles):**
 - LLM win rate: **4/4**
-- Avg NCC: **LLM 58.5% vs Script 48%**
-- Avg turns: **31.5**
+- Avg NCC: **LLM 59.7% (37/62) vs Script 48.4% (31/64)**
+- Avg turns: **32.5**
 
 **Steps:**
 1. Run 6 additional v4.2 cloze-enabled battles on arena `0xe090...`
