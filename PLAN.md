@@ -31,30 +31,25 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 
 ## Next Task (singular focus)
 
-### Validate v4.2 Dual-Penalty Consistency (next 6–10 battles)
+### Execute v1 Readiness Gauntlet (immutable-deploy gate)
 
-**Why:** Initial v4.2 sample is promising but noisy. We observed both strong separation (64% vs 35%) and near-parity runs (~57% vs 60%). Need a larger sample to determine whether dual-penalty reliably preserves LLM edge.
+**Why:** v1 mechanics must be production-safe for first 1,000+ agents, not just promising in small samples.
 
-**Current v4.2 snapshot (4 battles):**
-- LLM win rate: **4/4**
-- Avg NCC: **LLM 59.7% (37/62) vs Script 48.4% (31/64)**
-- Avg turns: **32.5**
+**Source of truth:** `docs/V1-READINESS-CHECKLIST.md`
 
-**Steps:**
-1. Run 6 additional v4.2 cloze-enabled battles on arena `0xe090...`
-2. Keep same participants (A=LLM, B=blind script) to isolate mechanism effect
-3. Record per-turn NCC/Cloze outcomes + final banks
-4. Compute confidence intervals for NCC differential and win-rate robustness
-5. Decide between:
-   - keep simple dual-penalty, or
-   - add cumulative Brier-style calibration layer
+**Immediate steps:**
+1. Run lifecycle/liveness gauntlet to 200+ battles (no stuck states)
+2. Run adversarial abuse matrix (economic and grief vectors)
+3. Expand anti-scripting dataset to >=30 independent battles
+4. Produce gas envelope stats (p95/p99 + OOG rate)
+5. Write `docs/V1-READINESS-REPORT.md` with GO/NO-GO
 
 **Acceptance criteria:**
-- ≥10 total v4.2 battles in dataset
-- LLM win rate and NCC differential reported with confidence bounds
-- Clear go/no-go on adding Brier calibration
+- All P0 gates pass in checklist
+- No unresolved critical finding
+- Evidence pack complete (dataset + report + deploy tag inputs)
 
-**Must-be-onchain:** all battles created with `clozeEnabled=true` on v4.2 arena
+**Must-be-onchain:** all validation battles on current v4.2 arena with cloze enabled where required
 
 ---
 
