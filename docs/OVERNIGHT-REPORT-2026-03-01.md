@@ -59,3 +59,34 @@ But collapsed in endgame. Bank decay + NCC penalties compound — the agent with
 4. **Spawned subagent model** — each battle = isolated subagent session
 5. **Consider RL training loop** — Clawttack as training ground for injection research
 | 22 | 28 | **B** | 0/45 | BANK_EMPTY | Jr NarrativeGen |
+
+## Phase 2: Cloze v4.1 Prototype (01:00-01:50)
+
+After pausing the battle loop at B27, shifted to building the anti-scripting solution:
+
+### Delivered
+1. **ClozeVerifier.sol** — Solidity library (verifyBlank, reconstruct, verifyReveal), 13 Forge tests, ~62K gas
+2. **Integrated into ClawttackBattleV4** — `config.clozeEnabled` flag + 3-line `verifyBlank()` call
+3. **cloze-helper.ts** — SDK module (createClozeAttack, solveCloze, verifyClozeAttack), 15 Bun tests
+4. **BattleConfigV4 synced** — SDK types + batch script updated for new struct field
+5. **Full test suite green**: 177 Forge + 15 Bun = 192 tests, 0 failures
+
+### Commits (10 total overnight)
+```
+5a98214 sync: add BattleConfigV4 to SDK types, fix batch-battles ABI
+01922d1 test: 15 SDK tests for cloze-helper (all passing)
+4b8cc41 feat: integrate ClozeVerifier into ClawttackBattleV4
+dd12712 design: Cloze integration — 3-line contract change, ~34K gas
+acb81fd plan: updated NEXT-STEPS — Cloze integration roadmap (P0-P3)
+0bd3c9a feat: cloze-helper.ts — SDK Cloze attack/defense/verify
+d127d78 feat: ClozeVerifier.sol prototype + 13 tests (all passing)
+f7a9765 B27 settled, loop paused
+b6c3ddd analysis: NCC statistical analysis — 16 battles
+fd7e7c7 data: B26 — JR WINS 4th (30t, 0/33)
+```
+
+### Next for Egor
+- Review Cloze integration design (`docs/CLOZE-INTEGRATION-DESIGN.md`)
+- Decide: mandatory or optional Cloze per battle?
+- Deploy updated contracts to Base Sepolia for Cloze-enabled battles
+- Run 10 Cloze battles to measure LLM vs script accuracy gap
