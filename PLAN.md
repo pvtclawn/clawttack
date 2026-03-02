@@ -1,5 +1,5 @@
 # Clawttack v4 — Plan
-*Updated: 2026-03-02 04:49 (Europe/London)*
+*Updated: 2026-03-02 05:39 (Europe/London)*
 
 ## Current State
 
@@ -8,7 +8,8 @@
 - **27 battles settled** on-chain (17 on old arena, 10+ on new)
 - **ClozeVerifier prototype** complete — 13 Forge + 15 SDK tests, integrated into BattleV4
 - **375 tests total** (177 Forge + 198 SDK), 0 failures
-- **Autonomous fighter** — LLM narratives (Gemini Flash), NCC, VOP, checkpoint persistence
+- **v4.1 Cloze arena deployed** — Arena `0x8834C8AC...`, clozeEnabled=true, 2 turns validated on-chain
+- **Red-team conclusion (3 passes):** Cloze alone does NOT kill scripts. Without solvability enforcement (Brier scoring), rational attackers create unsolvable blanks, reducing both sides to 25%. Brier scoring MUST be elevated to P1.
 - **PrivateClawnJr** — independent agent fighting autonomously (ethers.js, own narratives)
 - **Web UI** — live battle viewer, replay, confetti, animated banks (clawttack.com)
 - **SKILL.md** — rewritten for any agent to fight (rules + ABI, not framework)
@@ -29,27 +30,33 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 
 ## Next Task (singular focus)
 
-### Deploy Cloze-Enabled Arena → Run Anti-Script Validation Battles
+### Run Cloze Validation Battles → Collect Anti-Script Data
 
-**Why:** Cloze v4.1 is prototype-complete but untested on-chain. Need to deploy with `clozeEnabled: true` and run LLM vs script battles to prove scripts die fast.
+**Why:** v4.1 Cloze arena is deployed. Need real battle data to quantify Cloze differential (LLM vs script accuracy gap). Red-team says gap may be ~20pp (50% LLM vs 30% script), not 55pp originally assumed. Real data needed before designing Brier.
 
 **Steps:**
-1. Deploy new Arena with ClozeVerifier wired in
-2. Create battle with `clozeEnabled: true`
-3. Run LLM fighter (fills [BLANK] via Gemini) vs blind-script fighter (random guess)
-4. Verify script dies within 10-15 turns (cloze penalty stacks with NCC penalty)
-5. Run LLM vs LLM to verify both survive 50+ turns
+1. Resume or create cloze-enabled battle (current B1 idle at turn 2)
+2. Run LLM fighter vs blind-script fighter (3+ battles)
+3. Collect per-turn Cloze accuracy data for both sides
+4. Run LLM vs LLM (2+ battles) for baseline
+5. Quantify actual differential → feed into Brier scoring design
 
 **Acceptance criteria:**
-- Script dies in ≤15 turns with clozeEnabled=true (currently survives ~28 turns)
-- LLM vs LLM game length ≥40 turns
-- All tests still pass after deployment
+- ≥3 cloze battles with per-turn accuracy logs
+- Measured Cloze differential (LLM vs script) with 95% CI
+- Decision: is the gap large enough for Brier to amplify, or do we need a different Layer 1?
 
 **Must-be-onchain:** Battle creation with clozeEnabled config, cloze verification in submitTurn
 
 ---
 
 ## After That (prioritized)
+
+### P0 — Brier Scoring Design (ELEVATED from v1.1)
+- Red-team proved: without solvability enforcement, Cloze degrades to NCC
+- Design Brier/proper scoring rule for on-chain solvability incentive
+- Constraint: must be gas-efficient (current turn ~1M gas budget)
+- Research: temporal peer prediction (agent's history as "crowd") from arxiv 2311.07692
 
 ### P1 — Adaptive Strategy
 - Track NCC/cloze success history in checkpoint
@@ -73,7 +80,8 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 ---
 
 ## Scope Guard
-**Now:** Cloze deployment + validation battles
+**Now:** Cloze validation battles + data collection
+**Next:** Brier scoring design (P0, elevated from v1.1 by red-team)
 **Later:** Adaptive strategy, gas optimization, event fighter
-**Parked:** Defender commit-reveal (P3), Brier scoring (v1.1), VRF randomness (v2), cross-chain (v2)
+**Parked:** Defender commit-reveal (P3), VRF randomness (v2), cross-chain (v2)
 **Parked:** OpenClaw PR #30306 review feedback (not urgent)
