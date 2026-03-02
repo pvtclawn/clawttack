@@ -383,8 +383,10 @@ async function main() {
     const nccIntendedIdx = (Math.floor(rng() * 4)) as 0 | 1 | 2 | 3;
     const { attack, salt, intendedIdx } = createNccAttack(narrative, bip39Candidates as any, nccIntendedIdx);
 
-    // ── CLOZE: blank the NCC answer word in narrative ──
+    // ── CLOZE: prepare blanked view for opponent's defense (SDK-side only) ──
+    // The on-chain narrative contains the full word — cloze is an SDK concern
     let finalNarrative = narrative;
+    let clozeBlankNarrative: string | null = null;
     if (clozeEnabled) {
       const answerWord = scan.candidates[nccIntendedIdx]?.word;
       if (answerWord && narrative.toLowerCase().includes(answerWord.toLowerCase())) {
@@ -394,13 +396,11 @@ async function main() {
             answerWord,
             scan.candidates.map(c => c.word),
           );
-          finalNarrative = cloze.narrative;
-          console.log(`  🧩 Cloze: blanked "${answerWord}" → [BLANK] at offset ${cloze.blankOffset}`);
+          clozeBlankNarrative = cloze.narrative;
+          console.log(`  🧩 Cloze: will present "${answerWord}" → [BLANK] to opponent (SDK-side)`);
         } catch (e: any) {
-          console.log(`  ⚠️ Cloze attack failed (${e.message}), using original narrative`);
+          console.log(`  ⚠️ Cloze attack prep failed (${e.message}), no blank for opponent`);
         }
-      } else {
-        console.log(`  ⚠️ Cloze: answer word "${answerWord}" not in narrative, skipping blank`);
       }
     }
 
@@ -410,12 +410,14 @@ async function main() {
     let guessIdx: 0 | 1 | 2 | 3 = 0;
     let nccGuessCorrect = false;
     if (opponentPrev) {
-      if (clozeEnabled && opponentLastNarrative?.includes('[BLANK]') && strategy === 'llm') {
-        // CLOZE DEFENSE: use LLM to fill [BLANK]
+      if (clozeEnabled && strategy === 'llm') {
+        // CLOZE DEFENSE: use LLM to fill [BLANK] in opponent's narrative
+        // Use the blanked version from checkpoint if available
+        const blankedNarrative = checkpoint.opponentBlankNarrative ?? null;
         const oppCandidates = opponentPrev.candidates ?? [];
-        if (oppCandidates.length >= 4) {
+        if (blankedNarrative && oppCandidates.length >= 4) {
           const clozeResult = await solveCloze(
-            opponentLastNarrative,
+            blankedNarrative,
             oppCandidates.slice(0, 4),
             async (prompt: string) => {
               const { callLLM: llm } = await import('./llm-strategy.ts');
@@ -489,7 +491,7 @@ async function main() {
     }
 
     const payload = {
-      narrative: finalNarrative,
+      narrative,
       solution,
       customPoisonWord: agent === 'A' ? 'shadow' : 'castle',
       nccAttack: {
@@ -514,6 +516,7 @@ async function main() {
       bankB: newBankB as bigint,
       targetWord,
       nccGuessCorrect,
+      clozeUsed: clozeEnabled && strategy === 'llm' && !!checkpoint.opponentBlankNarrative,
       vopAttempts,
       txHash: hash,
     });
@@ -526,6 +529,7 @@ async function main() {
 
     checkpoint.prevNcc = prevNcc;
     checkpoint.opponentLastNarrative = narrative; // Save for opponent's LLM context
+    checkpoint.opponentBlankNarrative = clozeBlankNarrative; // SDK-side cloze blank for defense
     checkpoint.results = toSerialized(results);
     checkpoint.lastProcessedTurn = Number(turn);
     checkpoint.lastSubmitBlock = blockNumber;
@@ -540,6 +544,23 @@ async function main() {
   console.log('='.repeat(60));
   console.log(`Total turns played this run: ${results.length}`);
   console.log(`Total gas: ${results.reduce((s, r) => s + r.gas, 0n)}`);
+
+  // ── NCC / Cloze Accuracy Summary ──
+  const agentA = results.filter(r => r.agent === 'A');
+  const agentB = results.filter(r => r.agent === 'B');
+  const nccStats = (rs: typeof results, label: string) => {
+    const defended = rs.filter(r => r.turn >= 2); // turns 0-1 have no reveal to defend
+    const correct = defended.filter(r => r.nccGuessCorrect).length;
+    const total = defended.length;
+    const clozeDefended = defended.filter(r => r.clozeUsed);
+    const clozeCorrect = clozeDefended.filter(r => r.nccGuessCorrect).length;
+    console.log(`  ${label}: NCC defense ${correct}/${total} (${total ? Math.round(100*correct/total) : 0}%)`);
+    if (clozeDefended.length > 0) {
+      console.log(`    Cloze-assisted: ${clozeCorrect}/${clozeDefended.length} (${Math.round(100*clozeCorrect/clozeDefended.length)}%)`);
+    }
+  };
+  nccStats(agentA, 'Agent A');
+  nccStats(agentB, 'Agent B');
 
   const outPath = `${process.env.HOME}/.openclaw/workspace/projects/clawttack/battle-results/${battleAddress.toLowerCase()}.json`;
   ensureDirFor(outPath);
