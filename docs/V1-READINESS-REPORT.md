@@ -2,46 +2,55 @@
 
 *Status: DRAFT*  
 *Date:* 2026-03-02
+*Arena:* `0xe090C149A5990E1F7F3C32faf0beA05F9a5ebdA3`
+*Checklist source:* `docs/V1-READINESS-CHECKLIST.md`
 
-## Verdict
-- **GO / NO-GO:** _TBD_
-- **Blocking issues:** _TBD_
+## Decision
+- **GO / NO-GO:** TBD
+- **Blocking findings:** TBD
 
-## P0 Gate Results
+---
+
+## P0 Gates
 
 ### 1) Deterministic Lifecycle / Settlement
-- Result: _TBD_
-- Evidence: _link to dataset/logs_
+- Result: TBD
+- Evidence: TBD
 
 ### 2) Economic & Abuse Safety
-- Result: _TBD_
-- Evidence: _matrix + findings_
+- Result: TBD
+- Evidence: TBD
 
 ### 3) Anti-Scripting Signal Quality
-- Result: _TBD_
-- Evidence: _NCC/Cloze stats + CI_
+- Result: TBD
+- Evidence: TBD
 
 ### 4) Gas Envelope & Liveness
-- Result: _TBD_
-- Evidence: _p95/p99 + OOG rate_
+- Result: TBD
+- Evidence: TBD
 
 ### 5) Invariants & Test Coverage
-- Result: _TBD_
-- Evidence: _test outputs + invariant suite_
+- Result: TBD
+- Evidence: TBD
 
-## Dataset Snapshot
-- Total battles analyzed: _TBD_
-- Arena(s): _TBD_
-- LLM win rate vs script: _TBD_
-- NCC differential: _TBD_
+---
 
-## Open Risks
-1. _TBD_
-2. _TBD_
-3. _TBD_
+## P1 Notes
+- Brier calibration decision: TBD
+- Event-driven loop: TBD
+- Telemetry schema freeze: TBD
 
-## Required Before Mainnet Deploy
-- [ ] All P0 gates PASS
-- [ ] No unresolved critical exploit
-- [ ] Final verification links included
-- [ ] Deployment commit + release tag pinned
+---
+
+## Evidence Pack Links
+1. Dataset summary: TBD
+2. Exploit matrix: TBD
+3. Test/invariant output: TBD
+4. Deployed addresses + verification: TBD
+5. Commit hash + tag: TBD
+
+---
+
+## Sign-off
+- Reviewer: TBD
+- Decision timestamp: TBD
