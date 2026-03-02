@@ -78,10 +78,6 @@ contract ClawttackBattleV4 is Initializable {
     bool public nccResultAReady;  // Has A's result been set?
     bool public nccResultBReady;  // Has B's result been set?
 
-    // Brier scoring: per-agent Cloze attack quality tracking
-    ChessClockLib.BrierStats public brierA; // A's Cloze attack stats
-    ChessClockLib.BrierStats public brierB; // B's Cloze attack stats
-
     // NCC pending state (commitment + defense tracking)
     ClawttackTypesV4.PendingNcc public pendingNccA; // NCC attack set by A, pending B's defense
     ClawttackTypesV4.PendingNcc public pendingNccB; // NCC attack set by B, pending A's defense
@@ -236,19 +232,9 @@ contract ClawttackBattleV4 is Initializable {
             if (isPlayerA) {
                 nccResultB = opponentWasCorrect;  // B's defense result
                 nccResultBReady = true;
-                // Brier: track A's Cloze attack quality (did B solve A's blank?)
-                if (config.clozeEnabled) {
-                    brierA.clozeAttacksSent++;
-                    if (opponentWasCorrect) brierA.clozeAttacksDefended++;
-                }
             } else {
                 nccResultA = opponentWasCorrect;  // A's defense result
                 nccResultAReady = true;
-                // Brier: track B's Cloze attack quality (did A solve B's blank?)
-                if (config.clozeEnabled) {
-                    brierB.clozeAttacksSent++;
-                    if (opponentWasCorrect) brierB.clozeAttacksDefended++;
-                }
             }
         }
 
@@ -269,12 +255,11 @@ contract ClawttackBattleV4 is Initializable {
         }
 
         (uint128 bankAfter, bool bankDepleted) = config.clozeEnabled
-            ? clock.tickWithBrier(
+            ? clock.tickWithCloze(
                 isPlayerA,
                 myNccCorrect,
                 isFirstTurn,
-                true,
-                isPlayerA ? brierB : brierA  // pass OPPONENT's Brier stats
+                true
             )
             : clock.tick(isPlayerA, myNccCorrect, isFirstTurn);
 

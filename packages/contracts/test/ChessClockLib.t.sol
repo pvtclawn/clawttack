@@ -264,7 +264,7 @@ contract ChessClockLibTest is Test {
     // ─── Brier Scoring Tests ────────────────────────────────────────────────
 
     /// @notice Brier penalty drains OPPONENT's bank when their solve rate is below threshold
-    function test_brier_penalty_drains_opponent() public {
+    function test_cloze_dual_penalty_drains_attacker() public {
         // Turn 0 (A, first turn)
         vm.roll(100);
         harness.tick(true, true, true);
@@ -273,24 +273,19 @@ contract ChessClockLibTest is Test {
         vm.roll(120);
         harness.tick(false, true, false);
 
-        // Snapshot B's bank before Brier tick
+        // Snapshot B's bank before cloze dual-penalty tick
         (,uint128 bankBBefore,) = harness.getClock();
 
-        // B created 6 blanks, defender (A) solved only 1 → 16.7% < 20% threshold
-        ChessClockLib.BrierStats memory badBStats = ChessClockLib.BrierStats({
-            clozeAttacksSent: 6,
-            clozeAttacksDefended: 1
-        });
-
+        // A fails NCC (nccCorrect=false) with cloze enabled → attacker (B) also eats penalty
         vm.roll(140);
-        harness.tickWithBrier(true, true, false, true, badBStats);
+        harness.tickWithCloze(true, false, false, true);
 
         (,uint128 bankBAfter,) = harness.getClock();
-        assertLt(bankBAfter, bankBBefore, "Brier penalty should drain opponent bank");
+        assertLt(bankBAfter, bankBBefore, "Cloze dual penalty should drain attacker bank when defender fails");
     }
 
-    /// @notice Brier penalty does NOT apply when solve rate is above threshold
-    function test_brier_no_penalty_above_threshold() public {
+    /// @notice Cloze dual-penalty does NOT apply when defender succeeds
+    function test_cloze_no_attacker_penalty_on_success() public {
         vm.roll(100);
         harness.tick(true, true, true);
 
@@ -299,21 +294,16 @@ contract ChessClockLibTest is Test {
 
         (,uint128 bankBBefore,) = harness.getClock();
 
-        // 3/6 = 50% solve rate — above 20% threshold
-        ChessClockLib.BrierStats memory goodBStats = ChessClockLib.BrierStats({
-            clozeAttacksSent: 6,
-            clozeAttacksDefended: 3
-        });
-
+        // A succeeds NCC (nccCorrect=true) with cloze enabled → no attacker penalty
         vm.roll(140);
-        harness.tickWithBrier(true, true, false, true, goodBStats);
+        harness.tickWithCloze(true, true, false, true);
 
         (,uint128 bankBAfter,) = harness.getClock();
-        assertEq(bankBAfter, bankBBefore, "No Brier penalty when solve rate above threshold");
+        assertEq(bankBAfter, bankBBefore, "No attacker penalty when defender succeeds");
     }
 
-    /// @notice Brier penalty does NOT apply before minimum samples reached
-    function test_brier_no_penalty_insufficient_samples() public {
+    /// @notice Cloze dual-penalty does NOT apply when clozeEnabled=false (backward compat)
+    function test_cloze_disabled_no_attacker_penalty() public {
         vm.roll(100);
         harness.tick(true, true, true);
 
@@ -322,21 +312,16 @@ contract ChessClockLibTest is Test {
 
         (,uint128 bankBBefore,) = harness.getClock();
 
-        // 0/4 = 0% but only 4 samples (below BRIER_MIN_SAMPLES=5)
-        ChessClockLib.BrierStats memory tooFew = ChessClockLib.BrierStats({
-            clozeAttacksSent: 4,
-            clozeAttacksDefended: 0
-        });
-
+        // A fails NCC but cloze disabled → no attacker penalty
         vm.roll(140);
-        harness.tickWithBrier(true, true, false, true, tooFew);
+        harness.tickWithCloze(true, false, false, false);
 
         (,uint128 bankBAfter,) = harness.getClock();
-        assertEq(bankBAfter, bankBBefore, "No penalty below min samples");
+        assertEq(bankBAfter, bankBBefore, "No attacker penalty when cloze disabled");
     }
 
-    /// @notice Brier penalty does NOT apply when brierEnabled=false (backward compat)
-    function test_brier_disabled_no_penalty() public {
+    /// @notice Cloze dual-penalty does NOT apply on first turn
+    function test_cloze_no_penalty_first_turn() public {
         vm.roll(100);
         harness.tick(true, true, true);
 
@@ -345,20 +330,16 @@ contract ChessClockLibTest is Test {
 
         (,uint128 bankBBefore,) = harness.getClock();
 
-        ChessClockLib.BrierStats memory badBStats = ChessClockLib.BrierStats({
-            clozeAttacksSent: 10,
-            clozeAttacksDefended: 0
-        });
-
+        // First turn with cloze enabled → no penalty (no prior NCC to fail)
         vm.roll(140);
-        harness.tickWithBrier(true, true, false, false, badBStats);
+        harness.tickWithCloze(true, false, true, true);
 
         (,uint128 bankBAfter,) = harness.getClock();
-        assertEq(bankBAfter, bankBBefore, "No penalty when Brier disabled");
+        assertEq(bankBAfter, bankBBefore, "No attacker penalty on first turn");
     }
 
-    /// @notice Brier penalty floors opponent bank at zero (no underflow)
-    function test_brier_penalty_floors_at_zero() public {
+    /// @notice Cloze dual-penalty floors opponent bank at zero (no underflow)
+    function test_cloze_penalty_floors_at_zero() public {
         vm.roll(100);
         harness.tick(true, true, true);
 
@@ -374,14 +355,9 @@ contract ChessClockLibTest is Test {
 
         (,uint128 bankBLow,) = harness.getClock();
         if (bankBLow > 0 && bankBLow <= 10) {
-            ChessClockLib.BrierStats memory terrible = ChessClockLib.BrierStats({
-                clozeAttacksSent: 10,
-                clozeAttacksDefended: 0
-            });
-
             bn += 10;
             vm.roll(bn);
-            harness.tickWithBrier(true, true, false, true, terrible);
+            harness.tickWithCloze(true, false, false, true);
 
             (,uint128 bankBFinal,) = harness.getClock();
             assertEq(bankBFinal, 0, "Bank should floor at 0, not underflow");
@@ -405,14 +381,13 @@ contract ChessClockLibHarness {
         return clock.tick(isAgentA, nccCorrect, isFirstTurn);
     }
 
-    function tickWithBrier(
+    function tickWithCloze(
         bool isAgentA,
         bool nccCorrect,
         bool isFirstTurn,
-        bool brierEnabled,
-        ChessClockLib.BrierStats memory opponentBrier
+        bool clozeEnabled
     ) external returns (uint128, bool) {
-        return clock.tickWithBrier(isAgentA, nccCorrect, isFirstTurn, brierEnabled, opponentBrier);
+        return clock.tickWithCloze(isAgentA, nccCorrect, isFirstTurn, clozeEnabled);
     }
 
     function canTimeout(bool isAgentA) external view returns (bool) {
