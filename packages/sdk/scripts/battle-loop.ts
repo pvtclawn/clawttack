@@ -19,9 +19,10 @@ import { createNccAttack, createNccDefense, createNccReveal } from '../src/ncc-h
 import { scanForBip39Words } from '../src/bip39-scanner.ts';
 import { solveHashPreimage } from '../src/vop-solver.ts';
 import { generateNarrative, defendNcc } from './llm-strategy.ts';
+import { createClozeAttack, solveCloze } from '../src/cloze-helper.ts';
 
 const DEFAULT_RPC = 'https://sepolia.base.org';
-const DEFAULT_DICT = '0x081838531Bb3377ba4766eE9D0D32eE2bb0A341f';
+const DEFAULT_DICT = '0x1A73B5dc7e056426e20642C3866CD14Ac74E8bF3'; // v4.1 Cloze arena dict
 const MAIN_KEY_PATH = `${process.env.HOME}/.foundry/keystores/clawn`;
 const BIP39 = [
   'abandon', 'ability', 'able', 'about', 'above', 'absent', 'absorb', 'abstract',
@@ -181,6 +182,7 @@ const BATTLE_ABI = [
   'function currentVopParams() view returns (bytes)',
   'function startBlock() view returns (uint32)',
   'function firstMoverA() view returns (bool)',
+  'function config() view returns (uint256 stake, uint32 warmupBlocks, uint256 targetAgentId, uint8 maxJokers, bool clozeEnabled)',
 ];
 
 async function submitWithRetry(
@@ -273,8 +275,15 @@ async function main() {
     const [phase, turn, bankA, bankB] = await battleRead.getBattleState();
     const firstMoverA: boolean = await battleRead.firstMoverA();
 
+    // Detect cloze-enabled battle (once per loop start)
+    let clozeEnabled = false;
+    try {
+      const cfg = await battleRead.config();
+      clozeEnabled = cfg.clozeEnabled ?? false;
+    } catch { /* pre-cloze contract — ignore */ }
+
     console.log(`\n${'='.repeat(60)}`);
-    console.log(`📊 Turn ${turn} | Banks: A=${bankA} B=${bankB} | Phase: ${phase}`);
+    console.log(`📊 Turn ${turn} | Banks: A=${bankA} B=${bankB} | Phase: ${phase}${clozeEnabled ? ' | 🧩 CLOZE' : ''}`);
 
     if (Number(phase) !== 1) {
       console.log(`🏁 Battle ended. Phase=${phase}`);
@@ -374,13 +383,50 @@ async function main() {
     const nccIntendedIdx = (Math.floor(rng() * 4)) as 0 | 1 | 2 | 3;
     const { attack, salt, intendedIdx } = createNccAttack(narrative, bip39Candidates as any, nccIntendedIdx);
 
+    // ── CLOZE: blank the NCC answer word in narrative ──
+    let finalNarrative = narrative;
+    if (clozeEnabled) {
+      const answerWord = scan.candidates[nccIntendedIdx]?.word;
+      if (answerWord && narrative.toLowerCase().includes(answerWord.toLowerCase())) {
+        try {
+          const cloze = createClozeAttack(
+            narrative,
+            answerWord,
+            scan.candidates.map(c => c.word),
+          );
+          finalNarrative = cloze.narrative;
+          console.log(`  🧩 Cloze: blanked "${answerWord}" → [BLANK] at offset ${cloze.blankOffset}`);
+        } catch (e: any) {
+          console.log(`  ⚠️ Cloze attack failed (${e.message}), using original narrative`);
+        }
+      } else {
+        console.log(`  ⚠️ Cloze: answer word "${answerWord}" not in narrative, skipping blank`);
+      }
+    }
+
     // Defense uses deterministic PRNG for reproducible experiments.
     const opponentPrev = isAgentA ? prevNcc.B : prevNcc.A;
     // Defense strategy varies
     let guessIdx: 0 | 1 | 2 | 3 = 0;
     let nccGuessCorrect = false;
     if (opponentPrev) {
-      if (strategy === 'llm') {
+      if (clozeEnabled && opponentLastNarrative?.includes('[BLANK]') && strategy === 'llm') {
+        // CLOZE DEFENSE: use LLM to fill [BLANK]
+        const oppCandidates = opponentPrev.candidates ?? [];
+        if (oppCandidates.length >= 4) {
+          const clozeResult = await solveCloze(
+            opponentLastNarrative,
+            oppCandidates.slice(0, 4),
+            async (prompt: string) => {
+              const { callLLM: llm } = await import('./llm-strategy.ts');
+              return llm(prompt, 10);
+            },
+          );
+          guessIdx = clozeResult.guessIdx as 0 | 1 | 2 | 3;
+          nccGuessCorrect = guessIdx === opponentPrev.intendedIdx;
+          console.log(`  🧩 Cloze defense: picked ${guessIdx} (${oppCandidates[guessIdx]}), confidence=${clozeResult.confidence}, correct=${nccGuessCorrect}`);
+        }
+      } else if (strategy === 'llm') {
         // REAL LLM: Read opponent's narrative and comprehend to pick NCC answer
         if (opponentLastNarrative) {
           const oppCandidates = (opponentPrev.candidates ?? []).map((w: string, i: number) => ({ word: w, index: i }));
@@ -443,7 +489,7 @@ async function main() {
     }
 
     const payload = {
-      narrative,
+      narrative: finalNarrative,
       solution,
       customPoisonWord: agent === 'A' ? 'shadow' : 'castle',
       nccAttack: {
