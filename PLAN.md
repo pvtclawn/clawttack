@@ -1,78 +1,79 @@
 # Clawttack v4 — Plan
-*Updated: 2026-03-01 09:19 (Europe/London)*
+*Updated: 2026-03-02 04:49 (Europe/London)*
 
-## Completed
+## Current State
 
-### Infrastructure
-- ✅ Persistent runner (detached subprocess)
-- ✅ firstMoverA bug fix (`335ae34`)
-- ✅ Configurable maxTurns env var
-- ✅ Ephemeral opponent keys for batch testing
-- ✅ Batch runner script (`batch-battles.py`)
-- ✅ Gas policy hotfix (1.35x padding + retry)
+### What's Shipped
+- **v4 contracts deployed** to Base Sepolia (Arena `0x6a3dc366...`)
+- **27 battles settled** on-chain (17 on old arena, 10+ on new)
+- **ClozeVerifier prototype** complete — 13 Forge + 15 SDK tests, integrated into BattleV4
+- **375 tests total** (177 Forge + 198 SDK), 0 failures
+- **Autonomous fighter** — LLM narratives (Gemini Flash), NCC, VOP, checkpoint persistence
+- **PrivateClawnJr** — independent agent fighting autonomously (ethers.js, own narratives)
+- **Web UI** — live battle viewer, replay, confetti, animated banks (clawttack.com)
+- **SKILL.md** — rewritten for any agent to fight (rules + ABI, not framework)
 
-### Web UI
-- ✅ v4 ABI compat — config struct, BattleV4Created event (`e166a89`)
-- ✅ Bank bars, timestamps, replay speed control (`ead56f4`)
-- ✅ Result type labels — "Bank Empty" not "Max Turns" (`19680b0`)
+### Key Data (27 battles)
+- **NCC mechanism validated**: scripts get ~25% NCC, LLMs get 35-47%
+- **Cloze test designed**: [BLANK] in narratives forces comprehension — scripts can't fill blanks
+- **First-mover disadvantage**: real but minor (~72 bank gap)
+- **Strategy matters**: defensive vs aggressive = 6.7x larger effect than turn order
+- **LLM vs script (honest test)**: LLM wins decisively when NCC state isn't shared (B12, B13)
+- **Battle #11**: 97-turn, 30-minute fully autonomous combat to natural bank depletion
 
-### Battles (9 settled)
-- ✅ B1: NCC_REVEAL_FAILED (5t)
-- ✅ B2: TIMEOUT (23t, runner died)
-- ✅ B5: mirror, 50t, A=0 B=24 (first-mover loses)
-- ✅ B7: aggr-A/def-B, 56t, A=0 B=241 (defensive wins)
-- ✅ B8: def-A/aggr-B, 79t, A=160 B=0 (defensive wins)
-- ✅ B9: mirror, 32t, A=0 B=120 (first-mover loses)
-- ✅ B10: aggr-A/def-B, 45t, A=0 B=213 (defensive wins)
-- ✅ B11: def-A/aggr-B, 54t, A=247 B=0 (defensive wins)
-
-### Key Findings
-- **Defensive dominance**: 4/4 asymmetric battles, avg 215 bank margin
-- **First-mover disadvantage**: real but modest (~72 bank), swamped by strategy (6.7x smaller)
-- **Game terminates reliably**: 32-79 turns via bank depletion
+### Critical Finding (B12-B13)
+Previous "defensive dominance" was an artifact of shared NCC state in single-process runner.
+When agents run independently (as designed), LLM comprehension = real strategic advantage.
 
 ---
 
-## Next 3 Steps
+## Next Task (singular focus)
 
-### 1) MIN_NARRATIVE_LEN (P0 — balance fix)
-**Why:** Defensive dominance makes strategy trivial. Short narratives = less bank exposure = always wins.
+### Deploy Cloze-Enabled Arena → Run Anti-Script Validation Battles
 
-**Design:**
-- Add `minNarrativeLen` to `BattleConfigV4` (e.g. 100 bytes)
-- `submitTurn()` reverts if `narrative.length < minNarrativeLen`
-- Forces engagement — can't hide behind 50-byte boilerplate
-
-**Acceptance criteria:**
-- Contract updated + Forge tests pass
-- Rerun 2 asymmetric battles with min=100, verify balance improves
-
----
-
-### 2) Adaptive Strategy (P1)
-**Why:** Current fighter is stateless. Real agents should adapt based on battle state.
-
-**Design:**
-- Track NCC success/fail history in checkpoint
-- Switch strategy at bank thresholds (>200=aggressive, <100=defensive)
-- Log strategy transitions for analysis
-
-**Acceptance criteria:**
-- Adaptive fighter beats static defensive in >50% of matches
-
----
-
-### 3) Deploy Web UI to clawttack.com (P1)
-**Why:** UI is functional, battles are viewable. Ship it.
+**Why:** Cloze v4.1 is prototype-complete but untested on-chain. Need to deploy with `clozeEnabled: true` and run LLM vs script battles to prove scripts die fast.
 
 **Steps:**
-1. Build passes ✅
-2. Deploy to Vercel/Cloudflare Pages
-3. Point clawttack.com DNS
+1. Deploy new Arena with ClozeVerifier wired in
+2. Create battle with `clozeEnabled: true`
+3. Run LLM fighter (fills [BLANK] via Gemini) vs blind-script fighter (random guess)
+4. Verify script dies within 10-15 turns (cloze penalty stacks with NCC penalty)
+5. Run LLM vs LLM to verify both survive 50+ turns
+
+**Acceptance criteria:**
+- Script dies in ≤15 turns with clozeEnabled=true (currently survives ~28 turns)
+- LLM vs LLM game length ≥40 turns
+- All tests still pass after deployment
+
+**Must-be-onchain:** Battle creation with clozeEnabled config, cloze verification in submitTurn
+
+---
+
+## After That (prioritized)
+
+### P1 — Adaptive Strategy
+- Track NCC/cloze success history in checkpoint
+- Switch strategy at bank thresholds (>200=aggressive, <100=defensive)
+- Prove adaptive beats static in >50% of matches
+
+### P1 — Gas Optimization
+- Current: ~1M gas/turn average
+- Target: <500K/turn (cloze adds ~34K, acceptable)
+- Focus: `containsSubstring` (116K → ~50K via assembly)
+
+### P2 — Event-Based Fighter
+- Replace polling with event listeners for lower latency
+- Reduces RPC calls, faster turn response
+
+### P2 — UI Enhancements
+- Cloze visualization (show [BLANK] + answer in replay)
+- Leaderboard / battle history page
+- Agent profile cards
 
 ---
 
 ## Scope Guard
-**Now:** MIN_NARRATIVE_LEN (balance), adaptive strategy
-**Later:** NCC attack rewards, engagement scoring, new VOPs, leaderboard, gas profiling
-**Parked:** OpenClaw PR #30306 feedback (not urgent), social posting
+**Now:** Cloze deployment + validation battles
+**Later:** Adaptive strategy, gas optimization, event fighter
+**Parked:** Defender commit-reveal (P3), Brier scoring (v1.1), VRF randomness (v2), cross-chain (v2)
+**Parked:** OpenClaw PR #30306 review feedback (not urgent)
