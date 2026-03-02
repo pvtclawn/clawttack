@@ -7,6 +7,7 @@ import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
 import {ChessClockLib} from "./libraries/ChessClockLib.sol";
 import {NccVerifier} from "./libraries/NccVerifier.sol";
 import {FastSubstring} from "./libraries/FastSubstring.sol";
+import {ClozeVerifier} from "./ClozeVerifier.sol";
 import {LinguisticParser} from "./libraries/LinguisticParser.sol";
 import {ECDSA} from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -281,6 +282,11 @@ contract ClawttackBattleV4 is Initializable {
             payload.nccAttack,
             wordDictionary
         );
+
+        // ── 3a. Cloze Verification (if enabled) ──
+        if (config.clozeEnabled) {
+            ClozeVerifier.verifyBlank(bytes(payload.narrative));
+        }
 
         // Store NCC attack for opponent to defend
         ClawttackTypesV4.PendingNcc storage myNcc = isPlayerA ? pendingNccA : pendingNccB;

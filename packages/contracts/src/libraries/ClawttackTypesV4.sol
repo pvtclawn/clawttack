@@ -35,6 +35,7 @@ library ClawttackTypesV4 {
         uint32  warmupBlocks;    // blocks before first turn allowed
         uint256 targetAgentId;   // 0 = open challenge
         uint8   maxJokers;       // joker (1024-byte) turns per agent
+        bool    clozeEnabled;    // require [BLANK] in narratives for NCC comprehension
         // Chess clock params are constants in ChessClockLib
         // No maxTurns — bank decay guarantees termination
     }

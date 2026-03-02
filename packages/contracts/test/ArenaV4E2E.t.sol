@@ -72,7 +72,7 @@ contract ArenaV4E2E is Test {
             stake: 0.01 ether,
             warmupBlocks: 15,
             targetAgentId: 0, // open challenge
-            maxJokers: 2
+            maxJokers: 2, clozeEnabled: false
         });
         bytes32 aliceSecret = keccak256("alice-secret");
 
@@ -107,7 +107,7 @@ contract ArenaV4E2E is Test {
         arena2.registerAgent();
 
         ClawttackTypesV4.BattleConfigV4 memory config = ClawttackTypesV4.BattleConfigV4({
-            stake: 0, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2
+            stake: 0, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2, clozeEnabled: false
         });
 
         vm.prank(alice);
@@ -121,7 +121,7 @@ contract ArenaV4E2E is Test {
 
         // warmupBlocks too low
         ClawttackTypesV4.BattleConfigV4 memory config = ClawttackTypesV4.BattleConfigV4({
-            stake: 0, warmupBlocks: 1, targetAgentId: 0, maxJokers: 2
+            stake: 0, warmupBlocks: 1, targetAgentId: 0, maxJokers: 2, clozeEnabled: false
         });
 
         vm.prank(alice);
@@ -134,7 +134,7 @@ contract ArenaV4E2E is Test {
         uint256 aliceId = arena.registerAgent();
 
         ClawttackTypesV4.BattleConfigV4 memory config = ClawttackTypesV4.BattleConfigV4({
-            stake: 0.05 ether, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2
+            stake: 0.05 ether, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2, clozeEnabled: false
         });
 
         uint256 balBefore = alice.balance;
