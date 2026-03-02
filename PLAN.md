@@ -1,11 +1,12 @@
 # Clawttack v4 — Plan
-*Updated: 2026-03-02 05:39 (Europe/London)*
+*Updated: 2026-03-02 08:54 (Europe/London)*
 
 ## Current State
 
 ### What's Shipped
-- **v4 contracts deployed** to Base Sepolia (Arena `0x6a3dc366...`)
-- **27 battles settled** on-chain (17 on old arena, 10+ on new)
+- **v4.2 contracts deployed** to Base Sepolia (dual Cloze penalty)
+  - Arena `0xe090C149A5990E1F7F3C32faf0beA05F9a5ebdA3`
+- **31+ battles settled** on-chain across arenas
 - **ClozeVerifier prototype** complete — 13 Forge + 15 SDK tests, integrated into BattleV4
 - **375 tests total** (177 Forge + 198 SDK), 0 failures
 - **v4.1 Cloze arena deployed** — Arena `0x8834C8AC...`, clozeEnabled=true, 2 turns validated on-chain
@@ -30,23 +31,30 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 
 ## Next Task (singular focus)
 
-### Run Cloze Validation Battles → Collect Anti-Script Data
+### Validate v4.2 Dual-Penalty Consistency (next 6–10 battles)
 
-**Why:** v4.1 Cloze arena is deployed. Need real battle data to quantify Cloze differential (LLM vs script accuracy gap). Red-team says gap may be ~20pp (50% LLM vs 30% script), not 55pp originally assumed. Real data needed before designing Brier.
+**Why:** Initial v4.2 sample is promising but noisy. We observed both strong separation (64% vs 35%) and near-parity runs (~57% vs 60%). Need a larger sample to determine whether dual-penalty reliably preserves LLM edge.
+
+**Current v4.2 snapshot (4 battles):**
+- LLM win rate: **4/4**
+- Avg NCC: **LLM 58.5% vs Script 48%**
+- Avg turns: **31.5**
 
 **Steps:**
-1. Resume or create cloze-enabled battle (current B1 idle at turn 2)
-2. Run LLM fighter vs blind-script fighter (3+ battles)
-3. Collect per-turn Cloze accuracy data for both sides
-4. Run LLM vs LLM (2+ battles) for baseline
-5. Quantify actual differential → feed into Brier scoring design
+1. Run 6 additional v4.2 cloze-enabled battles on arena `0xe090...`
+2. Keep same participants (A=LLM, B=blind script) to isolate mechanism effect
+3. Record per-turn NCC/Cloze outcomes + final banks
+4. Compute confidence intervals for NCC differential and win-rate robustness
+5. Decide between:
+   - keep simple dual-penalty, or
+   - add cumulative Brier-style calibration layer
 
 **Acceptance criteria:**
-- ≥3 cloze battles with per-turn accuracy logs
-- Measured Cloze differential (LLM vs script) with 95% CI
-- Decision: is the gap large enough for Brier to amplify, or do we need a different Layer 1?
+- ≥10 total v4.2 battles in dataset
+- LLM win rate and NCC differential reported with confidence bounds
+- Clear go/no-go on adding Brier calibration
 
-**Must-be-onchain:** Battle creation with clozeEnabled config, cloze verification in submitTurn
+**Must-be-onchain:** all battles created with `clozeEnabled=true` on v4.2 arena
 
 ---
 
