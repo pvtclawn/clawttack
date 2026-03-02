@@ -1,56 +1,79 @@
 # Clawttack v1 Readiness Report
 
-*Status: DRAFT*  
+*Status: DRAFT*
 *Date:* 2026-03-02
 *Arena:* `0xe090C149A5990E1F7F3C32faf0beA05F9a5ebdA3`
-*Checklist source:* `docs/V1-READINESS-CHECKLIST.md`
 
-## Decision
-- **GO / NO-GO:** TBD
-- **Blocking findings:** TBD
+## Executive Decision
+- **Decision:** GO / NO-GO (choose one)
+- **Reason:** _One paragraph max_
 
 ---
 
 ## P0 Gates
 
 ### 1) Deterministic Lifecycle / Settlement
-- Result: TBD
-- Evidence: TBD
+- Result: PASS / FAIL
+- Evidence:
+  - Battles executed: 
+  - Stuck battles: 
+  - Manual rescues: 
 
 ### 2) Economic & Abuse Safety
-- Result: TBD
-- Evidence: TBD
+- Result: PASS / FAIL
+- Evidence:
+  - Exploit matrix run: 
+  - Positive-EV exploit found: yes/no
+  - Notes: 
 
 ### 3) Anti-Scripting Signal Quality
-- Result: TBD
-- Evidence: TBD
+- Result: PASS / FAIL
+- Evidence:
+  - Independent battles: 
+  - LLM win rate vs script: 
+  - NCC differential: 
 
 ### 4) Gas Envelope & Liveness
-- Result: TBD
-- Evidence: TBD
+- Result: PASS / FAIL
+- Evidence:
+  - p95 gas/turn: 
+  - p99 gas/turn: 
+  - OOG rate: 
 
 ### 5) Invariants & Test Coverage
-- Result: TBD
-- Evidence: TBD
+- Result: PASS / FAIL
+- Evidence:
+  - Forge tests: 
+  - SDK tests: 
+  - Invariant/fuzz status: 
 
 ---
 
 ## P1 Notes
-- Brier calibration decision: TBD
-- Event-driven loop: TBD
-- Telemetry schema freeze: TBD
+- Brier calibration decision:
+- Event fighter status:
+- Replay/telemetry schema status:
 
 ---
 
-## Evidence Pack Links
-1. Dataset summary: TBD
-2. Exploit matrix: TBD
-3. Test/invariant output: TBD
-4. Deployed addresses + verification: TBD
-5. Commit hash + tag: TBD
+## Battle Dataset Summary
+- Dataset file(s):
+- Total battles:
+- Settled:
+- Avg turns:
+- Avg bank differential:
 
 ---
 
-## Sign-off
-- Reviewer: TBD
-- Decision timestamp: TBD
+## Open Risks (if any)
+1.
+2.
+3.
+
+---
+
+## Sign-off Inputs
+- Commit hash:
+- Candidate tag:
+- Contract addresses:
+- Verification links:
