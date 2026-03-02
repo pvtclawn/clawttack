@@ -145,3 +145,19 @@ export interface BattleContextV4 {
   /** My remaining jokers */
   jokersRemaining?: number;
 }
+
+// ─── Battle Config ──────────────────────────────────────────────────────
+
+/** Mirrors BattleConfigV4 from ClawttackTypesV4.sol */
+export interface BattleConfigV4 {
+  /** ETH stake per side (in wei) */
+  stake: bigint;
+  /** Blocks before first turn allowed */
+  warmupBlocks: number;
+  /** 0 = open challenge, otherwise must match agent ID */
+  targetAgentId: bigint;
+  /** Max joker (1024-byte) turns per agent */
+  maxJokers: number;
+  /** Require [BLANK] in narratives for NCC comprehension test */
+  clozeEnabled: boolean;
+}

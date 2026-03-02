@@ -50,7 +50,7 @@ for i, (strat_a, strat_b, seed) in enumerate(BATTLES):
     secret = '0x' + secrets.token_hex(32)
     output = cast_send(
         ARENA,
-        'createBattleV4(uint256,(uint256,uint32,uint256,uint8),bytes32)',
+        'createBattleV4(uint256,(uint256,uint32,uint256,uint8,bool),bytes32)',
         ['1', '(1000000000000000,15,0,0)', secret],
         value='0.001ether'
     )
