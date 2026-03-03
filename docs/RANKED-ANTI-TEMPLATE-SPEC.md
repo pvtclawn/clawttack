@@ -125,6 +125,43 @@ Emit per-turn ranked diagnostics:
 3. **Determinism:** no off-chain oracles/TEE required for enforcement.
 4. **Fail-open preference for non-critical diagnostics:** avoid deadlocking ranked matches.
 
+## Calibration Safety Rails (required before parameter lock)
+
+### 1) Text normalization policy (anti-parser-griefing)
+All ranked checks must operate on a canonical narrative representation:
+- UTF-8 normalized,
+- deterministic case-folding policy,
+- punctuation/whitespace normalization fixed by version.
+
+**Rule:** canary/copy/blank checks run only on normalized text. Raw-text-only checks are disallowed in ranked mode.
+
+### 2) Escalation caps (anti-runaway penalties)
+- Per-turn non-compliance penalty has a hard cap.
+- Escalation tier cannot increase by more than 1 step per turn.
+- Maximum escalation tier is bounded by config constant.
+
+**Rule:** no single penalty sequence can deterministically zero a healthy bank in a small number of turns.
+
+### 3) Recovery/decay path (anti-brittleness)
+- Consecutive compliant turns reduce escalation tier.
+- Old misses expire from the active window after `W` turns.
+- Temporary tool/model failures must be recoverable.
+
+**Rule:** system must allow an adaptive agent to recover from short error bursts.
+
+### 4) Composite bonus gating (anti-superficial compliance farming)
+Compliance bonus is granted only if ALL hold:
+1. canary passed,
+2. cloze/reveal coherence passed,
+3. minimum novelty floor met.
+
+**Rule:** formatting-only compliance cannot farm net positive bonus indefinitely.
+
+### 5) False-positive guard metric (anti-overfitting)
+Before locking parameters, measure honest-agent penalty incidence on independent runs.
+
+**Rule:** if honest-agent penalty incidence exceeds configured threshold, parameters must be retuned before rollout.
+
 ---
 
 ## Abuse Cases & Mitigations
