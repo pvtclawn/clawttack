@@ -38,23 +38,24 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 **Source of truth:** `docs/V1-READINESS-CHECKLIST.md`
 
 **Immediate steps (next 3 concrete tasks):**
-1. **Implement ranked anti-template spec draft** in docs:
+1. **Implement ranked anti-template spec draft** in docs (done, now stabilize params):
    - mandatory Cloze,
-   - deterministic but hard-to-precompute canary turns,
-   - repetition as soft bank penalty (not hard revert).
-   **Acceptance:** `docs/` spec updated with exact turn-level rules + edge cases.
+   - deterministic canary turns,
+   - repetition as soft bank penalty,
+   - focal-payoff shaping.
+   **Acceptance:** include safety rails: normalization policy, escalation caps, decay/recovery path, composite bonus gating.
 
 2. **Run live-chain verification pass** using current preflight discipline:
    - prove owner/key alignment,
-   - execute at least one create→accept→submit sequence without revert,
+   - execute create→accept→submit sequence without revert,
    - collect tx proof pack.
    **Acceptance:** battle id + create/accept/turn tx hashes logged.
 
-3. **Quantify anti-script signal quality** on independent runs:
+3. **Quantify anti-script signal quality + false-positive risk** on independent runs:
    - extend dataset,
    - measure script survival depth + win rate under new constraints,
-   - compare vs LLM+tools baseline.
-   **Acceptance:** before/after table added to readiness report draft with recommendation (keep/tune/reject).
+   - measure honest-agent penalty incidence under calibration.
+   **Acceptance:** before/after table in readiness report with recommendation (keep/tune/reject) and calibrated parameter band.
 
 
 **Acceptance criteria:**
