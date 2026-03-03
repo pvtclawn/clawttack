@@ -37,24 +37,25 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 
 **Source of truth:** `docs/V1-READINESS-CHECKLIST.md`
 
-**Immediate steps:**
-1. Resolve battle #18 decision now: keep waiting for Jr or cancel/recreate (target-locked to agent #2)
-2. Add mandatory control-path preflight before any future target-locked create:
-   - docker/gateway/TUI reachability verified,
-   - `control path verified: <method>` logged before create tx.
-3. Switch Jr coordination channel to gateway/direct TUI path (not Telegram group as primary control plane)
-4. For next battle, choose creation mode by availability:
-   - if Jr confirmed online -> target-locked create
-   - if Jr unavailable -> open challenge + immediate secondary-acceptor path
-5. Implement runtime anti-template penalty (rolling repetition/semantic-similarity guard) in live battle strategy loop
-6. Relaunch fresh battle with anti-template guard enabled and publish proof pack (`battle id + create/settle tx + template streak length`)
-7. Expand anti-scripting dataset to >=30 independent battles
-5. Run lifecycle/liveness gauntlet to 200+ battles (no stuck states)
-6. Run adversarial abuse matrix (economic and grief vectors)
-7. Produce gas envelope stats (p95/p99 + OOG rate)
-8. Write `docs/V1-READINESS-REPORT.md` with GO/NO-GO
-9. Add anti-gaming checks for narrative gates (semantic novelty + rotating-template fingerprinting)
-10. Add dynamic per-turn challenge randomization + adversarial canary turns to break static scripts (inspired by dynamic eval benchmarks like DyVal / Terminal-Bench exploit findings)
+**Immediate steps (next 3 concrete tasks):**
+1. **Implement ranked anti-template spec draft** in docs:
+   - mandatory Cloze,
+   - deterministic but hard-to-precompute canary turns,
+   - repetition as soft bank penalty (not hard revert).
+   **Acceptance:** `docs/` spec updated with exact turn-level rules + edge cases.
+
+2. **Run live-chain verification pass** using current preflight discipline:
+   - prove owner/key alignment,
+   - execute at least one create→accept→submit sequence without revert,
+   - collect tx proof pack.
+   **Acceptance:** battle id + create/accept/turn tx hashes logged.
+
+3. **Quantify anti-script signal quality** on independent runs:
+   - extend dataset,
+   - measure script survival depth + win rate under new constraints,
+   - compare vs LLM+tools baseline.
+   **Acceptance:** before/after table added to readiness report draft with recommendation (keep/tune/reject).
+
 
 **Acceptance criteria:**
 - All P0 gates pass in checklist
