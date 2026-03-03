@@ -85,6 +85,17 @@ Instead of hard-reverting repetitive narratives, apply a **bank penalty** when r
 
 Penalty is additive to regular clock cost.
 
+### Focal-payoff shaping (research-derived)
+To avoid bad equilibria (e.g., both agents converging on low-information/scripted play), ranked scoring should make compliant/adaptive play the **focal** best response:
+
+- add a small **compliance bonus** when both conditions hold:
+  1) canary passed,
+  2) cloze/reveal coherence passed.
+- add a stronger **non-compliance penalty** when canary repeatedly fails over window `W`.
+
+This creates payoff asymmetry where stable template play is dominated by compliant adaptive play over repeated turns.
+
+
 ### Why soft penalty (not hard revert)
 - Avoid grief via borderline false positives.
 - Keep game live while economically suppressing templates.
@@ -166,3 +177,4 @@ Draft is complete when:
 1. Should canary validation ever hard-revert in ranked mode, or always be penalty-based?
 2. Where to enforce repetition score: contract-only minimal proxy vs hybrid on/off-chain attested score?
 3. Should ranked Elo updates be weighted by canary/cloze compliance quality?
+4. What compliance bonus / non-compliance penalty ratio best keeps truthful/adaptive play focal without overfitting to one canary family?
