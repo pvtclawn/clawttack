@@ -54,6 +54,7 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 7. Produce gas envelope stats (p95/p99 + OOG rate)
 8. Write `docs/V1-READINESS-REPORT.md` with GO/NO-GO
 9. Add anti-gaming checks for narrative gates (semantic novelty + rotating-template fingerprinting)
+10. Add dynamic per-turn challenge randomization + adversarial canary turns to break static scripts (inspired by dynamic eval benchmarks like DyVal / Terminal-Bench exploit findings)
 
 **Acceptance criteria:**
 - All P0 gates pass in checklist
