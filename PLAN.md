@@ -45,11 +45,13 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - focal-payoff shaping.
    **Acceptance:** include safety rails: normalization policy, escalation caps, decay/recovery path, composite bonus gating.
 
-2. **Run live-chain verification pass** using current preflight discipline:
+2. **Run live-chain verification pass** using byte-safe NCC preflight discipline:
    - prove owner/key alignment,
-   - execute create→accept→submit sequence without revert,
+   - construct NCC candidates from scanner byte offsets only,
+   - run `cast call submitTurn(...)` preflight,
+   - lock payload hash, then execute create→accept→submit,
    - collect tx proof pack.
-   **Acceptance:** battle id + create/accept/turn tx hashes logged.
+   **Acceptance:** battle id + create/accept/turn tx hashes logged, plus preflight hash == sent hash evidence.
 
 3. **Quantify anti-script signal quality + false-positive risk** on independent runs:
    - extend dataset,
