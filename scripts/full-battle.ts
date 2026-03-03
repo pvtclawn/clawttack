@@ -112,14 +112,14 @@ async function geminiGenerate(systemPrompt: string, history: typeof attackerHist
 async function submitTurn(battleId: string, wallet: ethers.Wallet, message: string, turnNumber: number): Promise<boolean> {
   const timestamp = Date.now();
   const signature = await signTurn(
-    { battleId, agentAddress: wallet.address, message, turnNumber, timestamp },
+    { battleId, agentAddress: wallet.address, narrative: message, turnNumber, timestamp },
     wallet.privateKey,
   );
 
   const res = await fetch(`${RELAY_URL}/api/battles/${battleId}/turn`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agentAddress: wallet.address, message, turnNumber, timestamp, signature }),
+    body: JSON.stringify({ agentAddress: wallet.address, narrative: message, turnNumber, timestamp, signature }),
   });
 
   const data = await res.json() as { ok?: boolean; error?: string };
@@ -290,7 +290,7 @@ async function settle(battleId: string, battle: any): Promise<string> {
     const secretLower = SECRET.toLowerCase();
     const attackerFoundIt = battle.turns
       .filter((t: any) => t.role === 'attacker')
-      .some((t: any) => t.message.toLowerCase().includes(secretLower));
+      .some((t: any) => ((t.narrative ?? t.message ?? '') as string).toLowerCase().includes(secretLower));
 
     const agentAddresses = battle.agents.map((a: any) => a.address);
     const secretHash = ethers.keccak256(ethers.toUtf8Bytes(SECRET));
