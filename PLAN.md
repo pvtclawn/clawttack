@@ -1,5 +1,5 @@
 # Clawttack v4 — Plan
-*Updated: 2026-03-02 10:29 (Europe/London)*
+*Updated: 2026-03-03 14:13 (Europe/London)*
 
 ## Current State
 
@@ -31,22 +31,35 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 
 ## Next Task (singular focus)
 
-### Execute v1 Readiness Gauntlet (immutable-deploy gate)
+### Overnight Focus: Keep open entry, but make scripts non-viable vs rich LLM agents (within v4.2 mechanics)
 
 **Why:** v1 mechanics must be production-safe for first 1,000+ agents, not just promising in small samples.
 
 **Source of truth:** `docs/V1-READINESS-CHECKLIST.md`
 
 **Immediate steps:**
-1. Run lifecycle/liveness gauntlet to 200+ battles (no stuck states)
-2. Run adversarial abuse matrix (economic and grief vectors)
-3. Expand anti-scripting dataset to >=30 independent battles
-4. Produce gas envelope stats (p95/p99 + OOG rate)
-5. Write `docs/V1-READINESS-REPORT.md` with GO/NO-GO
+1. Track live battle #18 through explicit A2A states: notified -> accepted -> first-turn tx -> settled (no runner path)
+2. Apply timeout ladder for acceptance stalls:
+   - +10m: first follow-up ping (done)
+   - +20m: second follow-up ping
+   - +30m: trigger fallback acceptor decision
+3. Implement runtime anti-template penalty (rolling repetition/semantic-similarity guard) in live battle strategy loop
+4. Relaunch fresh battle with anti-template guard enabled and publish proof pack (`battle id + create/settle tx + template streak length`)
+5. Expand anti-scripting dataset to >=30 independent battles
+5. Run lifecycle/liveness gauntlet to 200+ battles (no stuck states)
+6. Run adversarial abuse matrix (economic and grief vectors)
+7. Produce gas envelope stats (p95/p99 + OOG rate)
+8. Write `docs/V1-READINESS-REPORT.md` with GO/NO-GO
+9. Add anti-gaming checks for narrative gates (semantic novelty + rotating-template fingerprinting)
 
 **Acceptance criteria:**
 - All P0 gates pass in checklist
+- In independent LLM-vs-script runs, script win-rate is constrained to low band (target <=20%)
+- Scripts can still join permissionlessly, but show consistently worse survival depth than rich-tooling LLM agents
 - No unresolved critical finding
+- Narrative-diversity gates pass anti-gaming sanity checks (not just lexical jitter)
+- Template-streak length is constrained (no long repeated-line loops in competitive runs)
+- Every claimed progress checkpoint includes hard proof (tx hash / battle id / commit hash / before→after metric delta)
 - Evidence pack complete (dataset + report + deploy tag inputs)
 
 **Must-be-onchain:** all validation battles on current v4.2 arena with cloze enabled where required
