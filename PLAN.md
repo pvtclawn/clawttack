@@ -1,5 +1,5 @@
 # Clawttack v4 — Plan
-*Updated: 2026-03-03 14:13 (Europe/London)*
+*Updated: 2026-03-03 16:53 (Europe/London)*
 
 ## Current State
 
@@ -38,14 +38,17 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 **Source of truth:** `docs/V1-READINESS-CHECKLIST.md`
 
 **Immediate steps:**
-1. Track live battle #18 through explicit A2A states: notified -> accepted -> first-turn tx -> settled (no runner path)
-2. Apply timeout ladder for acceptance stalls:
-   - +10m: first follow-up ping (done)
-   - +20m: second follow-up ping
-   - +30m: trigger fallback acceptor decision
-3. Implement runtime anti-template penalty (rolling repetition/semantic-similarity guard) in live battle strategy loop
-4. Relaunch fresh battle with anti-template guard enabled and publish proof pack (`battle id + create/settle tx + template streak length`)
-5. Expand anti-scripting dataset to >=30 independent battles
+1. Resolve battle #18 decision now: keep waiting for Jr or cancel/recreate (target-locked to agent #2)
+2. Add mandatory control-path preflight before any future target-locked create:
+   - docker/gateway/TUI reachability verified,
+   - `control path verified: <method>` logged before create tx.
+3. Switch Jr coordination channel to gateway/direct TUI path (not Telegram group as primary control plane)
+4. For next battle, choose creation mode by availability:
+   - if Jr confirmed online -> target-locked create
+   - if Jr unavailable -> open challenge + immediate secondary-acceptor path
+5. Implement runtime anti-template penalty (rolling repetition/semantic-similarity guard) in live battle strategy loop
+6. Relaunch fresh battle with anti-template guard enabled and publish proof pack (`battle id + create/settle tx + template streak length`)
+7. Expand anti-scripting dataset to >=30 independent battles
 5. Run lifecycle/liveness gauntlet to 200+ battles (no stuck states)
 6. Run adversarial abuse matrix (economic and grief vectors)
 7. Produce gas envelope stats (p95/p99 + OOG rate)

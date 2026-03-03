@@ -1,0 +1,93 @@
+{
+  "battle": "0xe08c06B166000eE23f108AcB7730ca8B32F87733",
+  "seed": 5002,
+  "lastProcessedTurn": 4,
+  "lastSubmitBlock": 38351209,
+  "prevNcc": {
+    "B": {
+      "salt": "0xf85ec321b55375c154b3d7c20d838224c2f96363c6592d9bfc4330e4f297c910",
+      "intendedIdx": 3,
+      "candidates": [
+        "abandon",
+        "absorb",
+        "able",
+        "across"
+      ]
+    },
+    "A": {
+      "salt": "0x25cdc365ea5708815a8acab7e670b48fdcffd442d6ef71314c558aaa52eb067a",
+      "intendedIdx": 3,
+      "candidates": [
+        "abandon",
+        "absorb",
+        "able",
+        "across"
+      ]
+    }
+  },
+  "results": [
+    {
+      "turn": 0,
+      "agent": "B",
+      "gas": "1277761",
+      "bankA": "400",
+      "bankB": "400",
+      "targetWord": "keen",
+      "nccGuessCorrect": false,
+      "clozeUsed": false,
+      "vopAttempts": 0,
+      "txHash": "0x44380dc792a17b872b9d24a776bfd27121fadfecdb7b25d0c9f63551b1c1179a"
+    },
+    {
+      "turn": 1,
+      "agent": "A",
+      "gas": "1050659",
+      "bankA": "400",
+      "bankB": "368",
+      "targetWord": "roof",
+      "nccGuessCorrect": true,
+      "clozeUsed": true,
+      "vopAttempts": 567,
+      "txHash": "0x142cfba220196ddf154f65b83c3ba77dc445872fe9afc183134fd817c7af6ef2"
+    },
+    {
+      "turn": 2,
+      "agent": "B",
+      "gas": "571749",
+      "bankA": "389",
+      "bankB": "368",
+      "targetWord": "comic",
+      "nccGuessCorrect": true,
+      "clozeUsed": true,
+      "vopAttempts": 1546,
+      "txHash": "0x89c0fc92df8821336255f1e4ae99b49bbbbcc52a44c942451dc5f5198d963223"
+    },
+    {
+      "turn": 3,
+      "agent": "A",
+      "gas": "447451",
+      "bankA": "389",
+      "bankB": "357",
+      "targetWord": "beauty",
+      "nccGuessCorrect": false,
+      "clozeUsed": true,
+      "vopAttempts": 368,
+      "txHash": "0xda7691dc61ccd09b78218839850bab127bf7cfac66b5194ad2de77a8b3479665"
+    },
+    {
+      "turn": 4,
+      "agent": "B",
+      "gas": "862741",
+      "bankA": "377",
+      "bankB": "357",
+      "targetWord": "among",
+      "nccGuessCorrect": false,
+      "clozeUsed": true,
+      "vopAttempts": 606,
+      "txHash": "0xd1cdfd77fbae3fb1a369fbcabdd2de9fc4dadae9678e93267a07b27797aca9f1"
+    }
+  ],
+  "updatedAt": 1772470704985,
+  "opponentLastNarrative": "On this among we abandon old limits and gain ability to absorb abstract truth, able to act across every boundary about cosmic wisdom.",
+  "opponentBlankNarrative": "On this among we abandon old limits and gain ability to absorb abstract truth, able to act [BLANK] every boundary about cosmic wisdom."
+}
