@@ -58,8 +58,9 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - construct NCC candidates from scanner byte offsets only,
    - run `cast call submitTurn(...)` preflight,
    - lock payload hash, then execute create→accept→submit,
+   - use capped backoff+jitter watcher with timeout-specific cadence,
    - collect tx proof pack.
-   **Acceptance:** battle id + create/accept/turn tx hashes logged, plus preflight hash == sent hash evidence.
+   **Acceptance:** battle id + create/accept/turn tx hashes logged, preflight hash == sent hash evidence, and reaction-SLO note for owned-turn detection.
 
 3. **Quantify anti-script signal quality + false-positive risk** on independent runs:
    - extend dataset,
