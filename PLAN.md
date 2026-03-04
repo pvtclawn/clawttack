@@ -76,6 +76,13 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - include compromise/timeout path interactions in evaluation set.
    **Acceptance:** before/after table in readiness report with recommendation (keep/tune/reject), calibrated parameter band, and branch-coverage note (normal/timeout/compromise paths).
 
+4. **Implement resultType-specific hardening loop (2/4/7):**
+   - apply patch units from `docs/model/007-IMPLEMENTATION-DIFF-MAP-2-4-7.md`,
+   - start with reveal-resilience patch from `docs/model/009-PATCH-SKETCH-RESULTTYPE7-REVEAL-RESILIENCE.md`,
+   - execute forge suites in `docs/model/008-FORGE-TEST-MATRIX-2-4-7.md`,
+   - export post-patch incidence artifact and compare to baseline.
+   **Acceptance:** targeted resultType incidence decreases versus baseline without liveness regression.
+
 
 **Acceptance criteria:**
 - All P0 gates pass in checklist
@@ -126,8 +133,8 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 ---
 
 ## Scope Guard
-**Now:** Skill.md-only onboarding validation + on-chain-only thin UI path (remove JSON publish dependency)
-**Next:** Brier scoring design (P0, elevated from v1.1 by red-team)
-**Later:** Adaptive strategy, gas optimization, event fighter
+**Now:** ResultType hardening loop (2/4/7) with artifact-backed incidence deltas
+**Next:** Implement reveal-resilience runtime patch (resultType=7) + forge matrix
+**Later:** Brier scoring design, adaptive strategy, gas optimization, event fighter
 **Parked:** Defender commit-reveal (P3), VRF randomness (v2), cross-chain (v2)
 **Parked:** OpenClaw PR #30306 review feedback (not urgent)
