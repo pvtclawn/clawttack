@@ -13,6 +13,7 @@
 import { ethers } from 'ethers';
 import { exportBattleLog, verifyBattleLog } from '../packages/protocol/src/index.ts';
 import { buildSignedTurnPayload } from './lib/turn-payload.ts';
+import { formatProofBlock, type SettlementSource } from './lib/proof-block.ts';
 import type { RelayBattle } from '../packages/protocol/src/index.ts';
 import * as fs from 'fs';
 
@@ -409,21 +410,26 @@ async function main() {
   }
   publishLog(battleId);
 
+  let finalTxHash = settlement.txHash;
+  if (!finalTxHash && settlement.source === 'relay_settled') {
+    finalTxHash = await findRelaySettlementTxWithOneRetry(battleId) ?? '';
+  }
+
+  const proofSource: SettlementSource = settlement.source;
+  const proofBlock = formatProofBlock({
+    battleId,
+    settlementSource: proofSource,
+    txHash: finalTxHash || undefined,
+    pendingProof: !finalTxHash,
+  });
+
   console.log('');
   console.log('═══════════════════════════════════════════════════════');
   console.log('  ✅ PIPELINE COMPLETE');
   console.log('═══════════════════════════════════════════════════════');
-  console.log(`  Battle: ${battleId}`);
-  console.log(`  Settlement source: ${settlement.source}`);
-  if (settlement.txHash) {
-    console.log(`  Tx: https://sepolia.basescan.org/tx/${settlement.txHash}`);
-  } else if (settlement.source === 'relay_settled') {
-    const relayTx = await findRelaySettlementTxWithOneRetry(battleId);
-    if (relayTx) {
-      console.log(`  Relay Tx: https://sepolia.basescan.org/tx/${relayTx}`);
-    } else {
-      console.log('  Relay Tx: unresolved-proof alert (no battleId-bound tx after one retry)');
-    }
+  console.log(proofBlock);
+  if (finalTxHash) {
+    console.log(`- explorer: https://sepolia.basescan.org/tx/${finalTxHash}`);
   }
   console.log('');
 }
