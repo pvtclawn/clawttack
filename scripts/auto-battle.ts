@@ -54,24 +54,53 @@ async function main() {
     process.exit(1);
   }
 
-  // 3. Pick scenario randomly
-  const scenarios = ['full-battle.ts', 'spy-vs-spy-battle.ts'];
-  const script = scenarios[Math.floor(Math.random() * scenarios.length)]!;
-  console.log(`⚔️  Starting auto-battle (${script})...`);
-  const proc = Bun.spawn(['bun', `./scripts/${script}`], {
-    cwd: import.meta.dir + '/..',
-    stdout: 'inherit',
-    stderr: 'inherit',
-    env: { ...process.env },
-  });
+  // 3. Pick scenario randomly, with one-shot fallback to alternate scenario
+  const scenarios = ['full-battle.ts', 'spy-vs-spy-battle.ts'] as const;
+  const first = scenarios[Math.floor(Math.random() * scenarios.length)]!;
+  const second = scenarios.find((s) => s !== first)!;
 
-  const exitCode = await proc.exited;
-  if (exitCode === 0) {
+  const runScenario = async (script: string): Promise<number> => {
+    console.log(`⚔️  Starting auto-battle (${script})...`);
+    const proc = Bun.spawn(['bun', `./scripts/${script}`], {
+      cwd: import.meta.dir + '/..',
+      stdout: 'inherit',
+      stderr: 'inherit',
+      env: { ...process.env },
+    });
+    return await proc.exited;
+  };
+
+  const firstExit = await runScenario(first);
+  if (firstExit === 0) {
+    console.log(JSON.stringify({ status: 'success', scenario: first }));
     console.log('✅ Auto-battle complete');
-  } else {
-    console.error(`❌ Auto-battle failed (exit ${exitCode})`);
-    process.exit(2);
+    return;
   }
+
+  console.error(`⚠️  Primary scenario failed (${first}, exit ${firstExit}). Trying fallback ${second}...`);
+  const secondExit = await runScenario(second);
+
+  if (secondExit === 0) {
+    console.log(JSON.stringify({
+      status: 'degraded_success',
+      primaryScenario: first,
+      primaryExit: firstExit,
+      fallbackScenario: second,
+      fallbackExit: secondExit,
+    }));
+    console.log('✅ Auto-battle complete with fallback');
+    return;
+  }
+
+  console.error(JSON.stringify({
+    status: 'failed',
+    primaryScenario: first,
+    primaryExit: firstExit,
+    fallbackScenario: second,
+    fallbackExit: secondExit,
+  }));
+  console.error(`❌ Auto-battle failed (primary ${firstExit}, fallback ${secondExit})`);
+  process.exit(2);
 }
 
 main();
