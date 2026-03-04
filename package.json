@@ -19,7 +19,8 @@
     "battle:settle": "bun ./scripts/settle.ts",
     "battle:demo": "bun ./scripts/demo-battle.ts",
     "battle:ai": "bun ./scripts/ai-battle.ts",
-    "check:turn-payload": "bash ./scripts/check-turn-payloads.sh"
+    "check:turn-payload": "bash ./scripts/check-turn-payloads.sh",
+    "metrics:resulttype-baseline": "bun ./scripts/resulttype-baseline.ts"
   },
   "dependencies": {
     "@vercel/og": "^0.9.0",
