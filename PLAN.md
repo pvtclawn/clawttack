@@ -50,8 +50,9 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - capture state snapshot hash (turn/phase/target/poison),
    - issue short-lived preflight token only on successful simulation,
    - allow `submitTurn` only through token-validated gateway,
-   - include adversarial command coverage: concurrent preflight race + nested partial mutation + observability failure fallback.
-   **Acceptance:** no direct send path bypasses token check; mismatch/race paths covered by stateful invariant tests and structured logs.
+   - include adversarial command coverage: concurrent preflight race + nested partial mutation + observability failure fallback,
+   - instrument reaction-SLO with bias controls (chain timestamp `t_change`, first-hit `t_detect` lock, success+abort logging).
+   **Acceptance:** no direct send path bypasses token check; mismatch/race paths covered by stateful invariant tests and structured logs; SLO logs are emitted for both success and abort paths.
 
 2. **Run live-chain verification pass** using byte-safe NCC preflight discipline:
    - prove owner/key alignment,
