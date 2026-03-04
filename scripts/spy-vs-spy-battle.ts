@@ -58,10 +58,22 @@ async function submitTurn(battleId: string, wallet: ethers.Wallet, message: stri
     wallet.privateKey,
   );
 
+  const payload = Object.freeze({
+    agentAddress: wallet.address,
+    narrative: message,
+    turnNumber,
+    timestamp,
+    signature,
+  });
+
+  if (!payload.narrative) {
+    throw new Error('Turn payload missing narrative');
+  }
+
   const res = await fetch(`${RELAY_URL}/api/battles/${battleId}/turn`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agentAddress: wallet.address, message, turnNumber, timestamp, signature }),
+    body: JSON.stringify(payload),
   });
 
   const data = await res.json() as { ok?: boolean; error?: string };
