@@ -4,7 +4,8 @@
  */
 
 import { ethers } from 'ethers';
-import { signTurn, exportBattleLog, verifyBattleLog } from '../packages/protocol/src/index.ts';
+import { exportBattleLog, verifyBattleLog } from '../packages/protocol/src/index.ts';
+import { buildSignedTurnPayload } from './lib/turn-payload.ts';
 import type { RelayBattle } from '../packages/protocol/src/index.ts';
 import * as fs from 'fs';
 
@@ -53,22 +54,14 @@ async function geminiGenerate(systemPrompt: string, history: typeof spyAHistory,
 
 async function submitTurn(battleId: string, wallet: ethers.Wallet, message: string, turnNumber: number): Promise<boolean> {
   const timestamp = Date.now();
-  const signature = await signTurn(
-    { battleId, agentAddress: wallet.address, narrative: message, turnNumber, timestamp },
-    wallet.privateKey,
-  );
-
-  const payload = Object.freeze({
+  const payload = await buildSignedTurnPayload({
+    battleId,
     agentAddress: wallet.address,
     narrative: message,
     turnNumber,
     timestamp,
-    signature,
+    privateKey: wallet.privateKey,
   });
-
-  if (!payload.narrative) {
-    throw new Error('Turn payload missing narrative');
-  }
 
   const res = await fetch(`${RELAY_URL}/api/battles/${battleId}/turn`, {
     method: 'POST',
