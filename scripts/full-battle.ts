@@ -369,7 +369,13 @@ async function main() {
   }
 
   const { battleId, battle } = await runBattle();
-  const settlement = await settle(battleId, battle);
+  const relaySettles = process.env.AUTO_SETTLE === 'true';
+  const settlement = relaySettles
+    ? { txHash: '', source: 'relay_settled' as const, confirmations: 0 }
+    : await settle(battleId, battle);
+  if (relaySettles) {
+    console.log('  Settlement source: relay_settled (script settle skipped due to AUTO_SETTLE=true)');
+  }
   publishLog(battleId);
 
   console.log('');
