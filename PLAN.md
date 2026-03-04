@@ -45,6 +45,13 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - focal-payoff shaping.
    **Acceptance:** include safety rails: normalization policy, escalation caps, decay/recovery path, composite bonus gating.
 
+1a. **Integrate preflight-token submit gate into fighter runtime**:
+   - deep-freeze payload post-build,
+   - capture state snapshot hash (turn/phase/target/poison),
+   - issue short-lived preflight token only on successful simulation,
+   - allow `submitTurn` only through token-validated gateway.
+   **Acceptance:** no direct send path bypasses token check; mismatch paths covered by tests/logs.
+
 2. **Run live-chain verification pass** using byte-safe NCC preflight discipline:
    - prove owner/key alignment,
    - construct NCC candidates from scanner byte offsets only,
