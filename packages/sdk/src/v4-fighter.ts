@@ -140,6 +140,9 @@ export class V4Fighter {
   // Joker tracking
   private jokersRemaining: number = 0;
 
+  // Reaction-SLO tracking (per turn)
+  private ownedTurnDetectedAtMs = new Map<number, number>();
+
   constructor(config: V4FighterConfig) {
     this.config = config;
     this.battle = new ethers.Contract(config.battleAddress, BATTLE_ABI, config.wallet);
@@ -225,12 +228,25 @@ export class V4Fighter {
       // Is it my turn?
       const isMyTurn = this.isMyTurn(state.currentTurn);
       if (isMyTurn && state.currentTurn > lastProcessedTurn) {
+        if (!this.ownedTurnDetectedAtMs.has(state.currentTurn)) {
+          this.ownedTurnDetectedAtMs.set(state.currentTurn, Date.now());
+        }
         try {
           await this.playTurn(state);
           lastProcessedTurn = state.currentTurn; // Only mark done on success
         } catch (err: any) {
           const errMsg = String(err?.shortMessage ?? err?.message ?? err);
           const errData = err?.data ?? err?.info?.error?.data ?? '';
+          this.log(JSON.stringify({
+            kind: 'reaction_slo',
+            status: 'abort',
+            battleAddress: this.config.battleAddress,
+            turn: state.currentTurn,
+            t_detect_ms: this.ownedTurnDetectedAtMs.get(state.currentTurn) ?? null,
+            t_send_ms: null,
+            reason: errMsg,
+            reasonData: String(errData ?? ''),
+          }));
           if (errMsg.includes('TurnTooFast') || errMsg.includes('0xb3c15f40') || String(errData).includes('b3c15f40')) {
             this.log(`  ⏳ Turn too fast — waiting for next block...`);
             await this.sleep(4000); // Wait ~2 blocks
@@ -412,12 +428,31 @@ export class V4Fighter {
       throw new Error(reason);
     }
 
+    const tSendMs = Date.now();
+
     // Submit transaction
     const tx = await this.battle.submitTurn(lockedPayload);
     const receipt = await tx.wait();
     this.totalGasUsed += receipt.gasUsed;
 
     this.log(`  ✅ Submitted (gas: ${receipt.gasUsed}, tx: ${receipt.hash.slice(0, 14)}...)`);
+
+    const tDetectMs = this.ownedTurnDetectedAtMs.get(state.currentTurn) ?? null;
+    const tChangeSec = await this.getPreviousTurnChangeTimestampSec(state.currentTurn);
+    const tChangeMs = tChangeSec ? tChangeSec * 1000 : null;
+    this.log(JSON.stringify({
+      kind: 'reaction_slo',
+      status: 'success',
+      battleAddress: this.config.battleAddress,
+      turn: state.currentTurn,
+      txHash: receipt.hash,
+      t_change_sec: tChangeSec,
+      t_detect_ms: tDetectMs,
+      t_send_ms: tSendMs,
+      detection_latency_ms: tChangeMs && tDetectMs ? (tDetectMs - tChangeMs) : null,
+      decision_latency_ms: tDetectMs ? (tSendMs - tDetectMs) : null,
+      reaction_latency_ms: tChangeMs ? (tSendMs - tChangeMs) : null,
+    }));
 
     // Track narrative history for continuity
     this.narrativeHistory.push(strategyResult.narrative);
@@ -488,6 +523,26 @@ export class V4Fighter {
       intendedIdx,
     );
     return { nccAttack: fbAttack, salt: fbSalt, intendedIdx: fbIdx as 0 | 1 | 2 | 3 };
+  }
+
+  private async getPreviousTurnChangeTimestampSec(currentTurn: number): Promise<number | null> {
+    if (currentTurn === 0) return null;
+    try {
+      const filter = this.battle.filters.TurnSubmitted();
+      const events = await this.battle.queryFilter(filter, -300);
+      const prevTurn = currentTurn - 1;
+      for (let i = events.length - 1; i >= 0; i--) {
+        const ev = events[i] as ethers.EventLog;
+        const evTurn = Number(ev.args?.[2]);
+        if (evTurn === prevTurn) {
+          const block = await ev.getBlock();
+          return Number(block.timestamp);
+        }
+      }
+    } catch {
+      // best effort
+    }
+    return null;
   }
 
   private async getOpponentLastNarrative(state: BattleStateV4): Promise<string> {
