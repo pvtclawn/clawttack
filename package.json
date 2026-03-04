@@ -18,7 +18,8 @@
     "battle": "bun ./scripts/full-battle.ts",
     "battle:settle": "bun ./scripts/settle.ts",
     "battle:demo": "bun ./scripts/demo-battle.ts",
-    "battle:ai": "bun ./scripts/ai-battle.ts"
+    "battle:ai": "bun ./scripts/ai-battle.ts",
+    "check:turn-payload": "bash ./scripts/check-turn-payloads.sh"
   },
   "dependencies": {
     "@vercel/og": "^0.9.0",
