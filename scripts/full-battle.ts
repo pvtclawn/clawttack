@@ -15,6 +15,8 @@ import { signTurn, exportBattleLog, verifyBattleLog } from '../packages/protocol
 import type { RelayBattle } from '../packages/protocol/src/index.ts';
 import * as fs from 'fs';
 
+const RELAY_LOG_PATH = process.env.RELAY_LOG_PATH ?? '/tmp/claw-relay.log';
+
 const RELAY_URL = 'http://localhost:8787';
 const RPC_URL = 'https://sepolia.base.org';
 const REGISTRY_ADDR = '0xeee01a6846C896efb1a43442434F1A51BF87d3aA';
@@ -337,6 +339,23 @@ async function settle(battleId: string, battle: any): Promise<{ txHash: string; 
   }
 }
 
+function findRelaySettlementTx(battleId: string): string | null {
+  try {
+    const text = fs.readFileSync(RELAY_LOG_PATH, 'utf-8');
+    const lines = text.split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i] ?? '';
+      if (line.includes(`Settlement confirmed: ${battleId} → `)) {
+        const m = line.match(/→\s*(0x[a-fA-F0-9]{64})/);
+        if (m?.[1]) return m[1];
+      }
+    }
+  } catch {
+    // best-effort only
+  }
+  return null;
+}
+
 function publishLog(battleId: string) {
   console.log('');
   console.log('═══════════════════════════════════════════════════════');
@@ -386,6 +405,13 @@ async function main() {
   console.log(`  Settlement source: ${settlement.source}`);
   if (settlement.txHash) {
     console.log(`  Tx: https://sepolia.basescan.org/tx/${settlement.txHash}`);
+  } else if (settlement.source === 'relay_settled') {
+    const relayTx = findRelaySettlementTx(battleId);
+    if (relayTx) {
+      console.log(`  Relay Tx: https://sepolia.basescan.org/tx/${relayTx}`);
+    } else {
+      console.log('  Relay Tx: pending log match');
+    }
   }
   console.log('');
 }
