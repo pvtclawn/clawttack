@@ -376,7 +376,17 @@ export class V4Fighter {
     const preflight = await this.preflightTurnPayload(lockedPayload, state);
     const sendHash = this.canonicalPayloadHash(lockedPayload);
     if (sendHash !== preflight.payloadHash) {
-      throw new Error(`Payload hash drift detected pre-send (${preflight.payloadHash} != ${sendHash})`);
+      const reason = `PREFLIGHT_HASH_MISMATCH:${preflight.payloadHash}:${sendHash}`;
+      this.log(`  🛑 ${reason}`);
+      throw new Error(reason);
+    }
+
+    const now = Date.now();
+    const tokenTtlMs = 30_000;
+    if (now - preflight.createdAtMs > tokenTtlMs) {
+      const reason = `PREFLIGHT_TOKEN_EXPIRED:${now - preflight.createdAtMs}ms`;
+      this.log(`  🛑 ${reason}`);
+      throw new Error(reason);
     }
 
     // Submit transaction
@@ -550,6 +560,17 @@ export class V4Fighter {
 
     // Simulate exact call before paid submission
     await this.battle.submitTurn.staticCall(payload);
+
+    // Re-check battle snapshot immediately after preflight to detect drift
+    const liveState = await this.getBattleState();
+    const liveSnapshotHash = ethers.keccak256(
+      ethers.toUtf8Bytes(`${liveState.phase}:${liveState.currentTurn}:${liveState.sequenceHash}`),
+    ) as `0x${string}`;
+    if (liveSnapshotHash !== snapshotHash) {
+      const reason = `PREFLIGHT_SNAPSHOT_DRIFT:${snapshotHash}:${liveSnapshotHash}`;
+      this.log(`  🛑 ${reason}`);
+      throw new Error(reason);
+    }
 
     return {
       turn: state.currentTurn,
