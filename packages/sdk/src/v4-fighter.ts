@@ -143,6 +143,8 @@ export class V4Fighter {
   // Reaction-SLO tracking (per turn)
   private ownedTurnDetectedAtMs = new Map<number, number>();
   private lastPollAtMs = 0;
+  private maxObservedPollGapMs = 0;
+  private observedPollGapsMs: number[] = [];
   private lastFallbackDedupeKey: string | null = null;
 
   constructor(config: V4FighterConfig) {
@@ -289,13 +291,24 @@ export class V4Fighter {
       }
 
       // Fallback readiness evidence (only when not in owned-turn window)
-      this.lastPollAtMs = Date.now();
+      const nowPollMs = Date.now();
+      if (this.lastPollAtMs > 0) {
+        const gap = nowPollMs - this.lastPollAtMs;
+        this.maxObservedPollGapMs = Math.max(this.maxObservedPollGapMs, gap);
+        this.observedPollGapsMs.push(gap);
+        if (this.observedPollGapsMs.length > 500) this.observedPollGapsMs.shift();
+      }
+      this.lastPollAtMs = nowPollMs;
+
       if (!isMyTurn) {
         const intervalMs = 15 * 60 * 1000;
         const bucket = Math.floor(this.lastPollAtMs / intervalMs);
         const dedupeKey = `${this.config.battleAddress}:${snapshot}:${bucket}`;
         if (this.lastFallbackDedupeKey !== dedupeKey) {
           this.lastFallbackDedupeKey = dedupeKey;
+          const sorted = [...this.observedPollGapsMs].sort((a, b) => a - b);
+          const p95 = sorted.length ? sorted[Math.floor((sorted.length - 1) * 0.95)] : null;
+          const p99 = sorted.length ? sorted[Math.floor((sorted.length - 1) * 0.99)] : null;
           this.log(JSON.stringify({
             kind: 'reaction_slo',
             sloEvidenceType: 'watcher_readiness_fallback',
@@ -306,6 +319,10 @@ export class V4Fighter {
             pollingMode: unchangedPolls < 3 ? 'fast' : 'backoff',
             timeoutChecksActive: true,
             lastPollAtMs: this.lastPollAtMs,
+            headLagBlocks: null,
+            p95PollGapMs: p95,
+            p99PollGapMs: p99,
+            maxPollGapMs: this.maxObservedPollGapMs,
           }));
         }
       }
