@@ -356,6 +356,13 @@ function findRelaySettlementTx(battleId: string): string | null {
   return null;
 }
 
+async function findRelaySettlementTxWithOneRetry(battleId: string): Promise<string | null> {
+  const first = findRelaySettlementTx(battleId);
+  if (first) return first;
+  await new Promise((r) => setTimeout(r, 1500));
+  return findRelaySettlementTx(battleId);
+}
+
 function publishLog(battleId: string) {
   console.log('');
   console.log('═══════════════════════════════════════════════════════');
@@ -406,11 +413,11 @@ async function main() {
   if (settlement.txHash) {
     console.log(`  Tx: https://sepolia.basescan.org/tx/${settlement.txHash}`);
   } else if (settlement.source === 'relay_settled') {
-    const relayTx = findRelaySettlementTx(battleId);
+    const relayTx = await findRelaySettlementTxWithOneRetry(battleId);
     if (relayTx) {
       console.log(`  Relay Tx: https://sepolia.basescan.org/tx/${relayTx}`);
     } else {
-      console.log('  Relay Tx: pending log match');
+      console.log('  Relay Tx: unresolved-proof alert (no battleId-bound tx after one retry)');
     }
   }
   console.log('');
