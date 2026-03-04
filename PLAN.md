@@ -49,8 +49,9 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - deep-freeze payload post-build,
    - capture state snapshot hash (turn/phase/target/poison),
    - issue short-lived preflight token only on successful simulation,
-   - allow `submitTurn` only through token-validated gateway.
-   **Acceptance:** no direct send path bypasses token check; mismatch paths covered by tests/logs.
+   - allow `submitTurn` only through token-validated gateway,
+   - include adversarial command coverage: concurrent preflight race + nested partial mutation + observability failure fallback.
+   **Acceptance:** no direct send path bypasses token check; mismatch/race paths covered by stateful invariant tests and structured logs.
 
 2. **Run live-chain verification pass** using byte-safe NCC preflight discipline:
    - prove owner/key alignment,
