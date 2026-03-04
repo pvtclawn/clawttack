@@ -194,8 +194,19 @@ export class V4Fighter {
     let lastProcessedTurn = -1;
     const startTime = Date.now();
 
+    // Backoff+jitter watcher state
+    let unchangedPolls = 0;
+    let lastSnapshot = '';
+
     while (Date.now() < deadline) {
       const state = await this.getBattleState();
+      const snapshot = `${state.phase}:${state.currentTurn}:${state.sequenceHash}`;
+      if (snapshot === lastSnapshot) {
+        unchangedPolls++;
+      } else {
+        unchangedPolls = 0;
+        lastSnapshot = snapshot;
+      }
 
       // Battle ended?
       if (state.phase === BattlePhase.Settled) {
@@ -259,7 +270,19 @@ export class V4Fighter {
         }
       }
 
-      await this.sleep(pollMs);
+      // Adaptive polling with capped exponential backoff + jitter.
+      // Keep timeout checks responsive by reducing delay as battle approaches deadline.
+      const backoffExp = Math.max(0, Math.min(3, unchangedPolls - 2));
+      const baseDelay = unchangedPolls < 3 ? pollMs : Math.min(30_000, pollMs * (2 ** backoffExp));
+
+      const msLeft = deadline - Date.now();
+      const timeoutAwareCap = msLeft < 120_000 ? 8_000 : 30_000;
+      const cappedDelay = Math.min(baseDelay, timeoutAwareCap);
+
+      const jitter = 0.8 + (Math.random() * 0.4); // ±20%
+      const nextDelay = Math.max(1000, Math.floor(cappedDelay * jitter));
+
+      await this.sleep(nextDelay);
     }
 
     // Fighter deadline reached — try to claim timeout before exiting
