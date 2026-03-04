@@ -83,6 +83,13 @@ export interface V4FightResult {
   gasUsed: bigint;
 }
 
+interface PreflightToken {
+  turn: number;
+  payloadHash: `0x${string}`;
+  snapshotHash: `0x${string}`;
+  createdAtMs: number;
+}
+
 // ─── Minimal ABIs ───────────────────────────────────────────────────────
 
 const BATTLE_ABI = [
@@ -364,8 +371,16 @@ export class V4Fighter {
       nccReveal,
     };
 
+    // Preflight-lock gate: freeze + simulate + hash equality before paid send
+    const lockedPayload = this.deepFreezePayload(payload);
+    const preflight = await this.preflightTurnPayload(lockedPayload, state);
+    const sendHash = this.canonicalPayloadHash(lockedPayload);
+    if (sendHash !== preflight.payloadHash) {
+      throw new Error(`Payload hash drift detected pre-send (${preflight.payloadHash} != ${sendHash})`);
+    }
+
     // Submit transaction
-    const tx = await this.battle.submitTurn(payload);
+    const tx = await this.battle.submitTurn(lockedPayload);
     const receipt = await tx.wait();
     this.totalGasUsed += receipt.gasUsed;
 
@@ -498,6 +513,49 @@ export class V4Fighter {
       reason,
       totalTurns: state.currentTurn,
       gasUsed: this.totalGasUsed,
+    };
+  }
+
+  private canonicalPayloadHash(payload: TurnPayloadV4): `0x${string}` {
+    const stable = this.stableStringify(payload);
+    return ethers.keccak256(ethers.toUtf8Bytes(stable)) as `0x${string}`;
+  }
+
+  private stableStringify(value: unknown): string {
+    if (value === null || typeof value !== 'object') return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map(v => this.stableStringify(v)).join(',')}]`;
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj).sort();
+    return `{${keys.map(k => `${JSON.stringify(k)}:${this.stableStringify(obj[k])}`).join(',')}}`;
+  }
+
+  private deepFreezePayload(payload: TurnPayloadV4): TurnPayloadV4 {
+    // Clone to avoid freezing caller-owned objects
+    const cloned = structuredClone(payload) as TurnPayloadV4;
+    const freezeRec = (v: any): any => {
+      if (v && typeof v === 'object' && !Object.isFrozen(v)) {
+        for (const key of Object.keys(v)) freezeRec(v[key]);
+        Object.freeze(v);
+      }
+      return v;
+    };
+    return freezeRec(cloned);
+  }
+
+  private async preflightTurnPayload(payload: TurnPayloadV4, state: BattleStateV4): Promise<PreflightToken> {
+    const snapshotHash = ethers.keccak256(
+      ethers.toUtf8Bytes(`${state.phase}:${state.currentTurn}:${state.sequenceHash}`),
+    ) as `0x${string}`;
+    const payloadHash = this.canonicalPayloadHash(payload);
+
+    // Simulate exact call before paid submission
+    await this.battle.submitTurn.staticCall(payload);
+
+    return {
+      turn: state.currentTurn,
+      payloadHash,
+      snapshotHash,
+      createdAtMs: Date.now(),
     };
   }
 
