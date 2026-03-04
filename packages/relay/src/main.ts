@@ -13,7 +13,7 @@
 //   RPC_URL              — Base Sepolia RPC URL
 //   REGISTRY_ADDRESS     — ClawttackRegistry contract address
 //   BATTLE_LOG_DIR       — Directory to save battle logs
-//   WEB_PUBLIC_DIR       — Directory to copy logs for web serving
+//   WEB_PUBLIC_DIR       — Directory to copy logs for debug artifacts (non-UI by default)
 
 import { RelayServer } from './server.ts';
 import { startRelayServer } from './http.ts';
@@ -31,7 +31,7 @@ const AUTO_SETTLE = process.env['AUTO_SETTLE'] === 'true';
 // Default paths relative to project root
 const PROJECT_ROOT = new URL('../../..', import.meta.url).pathname.replace(/\/$/, '');
 const DEFAULT_BATTLE_LOG_DIR = `${PROJECT_ROOT}/data/battles`;
-const DEFAULT_WEB_PUBLIC_DIR = `${PROJECT_ROOT}/packages/web/public/battles`;
+const DEFAULT_WEB_PUBLIC_DIR = `${PROJECT_ROOT}/data/debug-battles`;
 
 // Scenario address mapping
 const SCENARIO_ADDRESSES: Record<string, string> = {
