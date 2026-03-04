@@ -7,6 +7,7 @@ cd "$ROOT"
 TARGETS=(
   "scripts/full-battle.ts"
   "scripts/spy-vs-spy-battle.ts"
+  "scripts/ai-battle.ts"
 )
 
 violations=0
