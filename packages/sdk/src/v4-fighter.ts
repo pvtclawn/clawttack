@@ -142,6 +142,8 @@ export class V4Fighter {
 
   // Reaction-SLO tracking (per turn)
   private ownedTurnDetectedAtMs = new Map<number, number>();
+  private lastPollAtMs = 0;
+  private lastFallbackDedupeKey: string | null = null;
 
   constructor(config: V4FighterConfig) {
     this.config = config;
@@ -283,6 +285,28 @@ export class V4Fighter {
           return this.buildResult(finalState, 'timeout_claimed');
         } catch {
           // Not timed out yet — normal
+        }
+      }
+
+      // Fallback readiness evidence (only when not in owned-turn window)
+      this.lastPollAtMs = Date.now();
+      if (!isMyTurn) {
+        const intervalMs = 15 * 60 * 1000;
+        const bucket = Math.floor(this.lastPollAtMs / intervalMs);
+        const dedupeKey = `${this.config.battleAddress}:${snapshot}:${bucket}`;
+        if (this.lastFallbackDedupeKey !== dedupeKey) {
+          this.lastFallbackDedupeKey = dedupeKey;
+          this.log(JSON.stringify({
+            kind: 'reaction_slo',
+            sloEvidenceType: 'watcher_readiness_fallback',
+            reason: 'NO_OWNED_TURN_WINDOW',
+            battleAddress: this.config.battleAddress,
+            waitDurationSec: Math.max(0, Math.floor((Date.now() - startTime) / 1000)),
+            latestSnapshot: snapshot,
+            pollingMode: unchangedPolls < 3 ? 'fast' : 'backoff',
+            timeoutChecksActive: true,
+            lastPollAtMs: this.lastPollAtMs,
+          }));
         }
       }
 
