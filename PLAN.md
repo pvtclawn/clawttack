@@ -59,7 +59,7 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - set runtime `WEB_PUBLIC_DIR` override in execution environment,
    - verify no new writes hit `packages/web/public/battles`,
    - ensure UI battle views remain chain-derived and unaffected by legacy files.
-   **Acceptance:** one fresh settled battle appears in on-chain UI flow with zero new `web/public/battles` artifacts; settlement status includes source label (`script_settled|relay_settled|already_settled_by_other_path`) emitted only after confirmation-depth threshold; if relay is settlement authority, bounded wait + single fallback settle attempt is allowed when no relay tx is observed; relay-settled summaries must map `battleId -> txHash` explicitly (no latest-tx heuristics) with dedupe key `battleId+txHash`.
+   **Acceptance:** one fresh settled battle appears in on-chain UI flow with zero new `web/public/battles` artifacts; settlement status includes source label (`script_settled|relay_settled|already_settled_by_other_path`) emitted only after confirmation-depth threshold; if relay is settlement authority, bounded wait + single fallback settle attempt is allowed when no relay tx is observed; relay-settled summaries must map `battleId -> txHash` explicitly (no latest-tx heuristics) with dedupe key `battleId+txHash`; fallback proof lookup must use deterministic UTF-8 `battleId` hashing against the fixed registry target, with max one retry before unresolved-proof alert.
 3. **Run live-chain verification pass** using byte-safe NCC preflight discipline:
    - prove owner/key alignment,
    - construct NCC candidates from scanner byte offsets only,
