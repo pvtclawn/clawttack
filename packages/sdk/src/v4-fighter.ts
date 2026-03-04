@@ -245,7 +245,7 @@ export class V4Fighter {
             kind: 'reaction_slo',
             status: 'abort',
             battleAddress: this.config.battleAddress,
-            turn: state.currentTurn,
+            turn: Number(state.currentTurn),
             t_detect_ms: this.ownedTurnDetectedAtMs.get(state.currentTurn) ?? null,
             t_send_ms: null,
             reason: errMsg,
@@ -485,7 +485,7 @@ export class V4Fighter {
       kind: 'reaction_slo',
       status: 'success',
       battleAddress: this.config.battleAddress,
-      turn: state.currentTurn,
+      turn: Number(state.currentTurn),
       txHash: receipt.hash,
       t_change_sec: tChangeSec,
       t_detect_ms: tDetectMs,
@@ -651,6 +651,7 @@ export class V4Fighter {
   }
 
   private stableStringify(value: unknown): string {
+    if (typeof value === 'bigint') return `{"__bigint__":"${value.toString()}"}`;
     if (value === null || typeof value !== 'object') return JSON.stringify(value);
     if (Array.isArray(value)) return `[${value.map(v => this.stableStringify(v)).join(',')}]`;
     const obj = value as Record<string, unknown>;
@@ -692,7 +693,7 @@ export class V4Fighter {
     }
 
     return {
-      turn: state.currentTurn,
+      turn: Number(state.currentTurn),
       payloadHash,
       snapshotHash,
       createdAtMs: Date.now(),
