@@ -53,7 +53,7 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - include adversarial command coverage: concurrent preflight race + nested partial mutation + observability failure fallback,
    - instrument reaction-SLO with bias controls (chain timestamp `t_change`, first-hit `t_detect` lock, success+abort logging),
    - add fallback evidence anti-abuse constraints (anti-spoof poll proof, interval dedupe, owned-turn pre-emit guard).
-   **Acceptance:** no direct send path bypasses token check; mismatch/race paths covered by stateful invariant tests and structured logs; SLO logs are emitted for both success and abort paths; fallback logs are deduped and suppressed immediately on owned-turn detection.
+   **Acceptance:** no direct send path bypasses token check; mismatch/race paths covered by stateful invariant tests and structured logs; SLO logs are emitted for both success and abort paths; fallback logs are deduped and suppressed immediately on owned-turn detection; watcher reliability includes head-lag signal and tail-delay metrics (p95/p99/max-gap), not average-only cadence.
 
 2. **Run live-chain verification pass** using byte-safe NCC preflight discipline:
    - prove owner/key alignment,
