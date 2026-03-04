@@ -63,8 +63,9 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 3. **Quantify anti-script signal quality + false-positive risk** on independent runs:
    - extend dataset,
    - measure script survival depth + win rate under new constraints,
-   - measure honest-agent penalty incidence under calibration.
-   **Acceptance:** before/after table in readiness report with recommendation (keep/tune/reject) and calibrated parameter band.
+   - measure honest-agent penalty incidence under calibration,
+   - include compromise/timeout path interactions in evaluation set.
+   **Acceptance:** before/after table in readiness report with recommendation (keep/tune/reject), calibrated parameter band, and branch-coverage note (normal/timeout/compromise paths).
 
 
 **Acceptance criteria:**
