@@ -80,6 +80,7 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 - Template-streak length is constrained (no long repeated-line loops in competitive runs)
 - Every claimed progress checkpoint includes hard proof (tx hash / battle id / commit hash / before→after metric delta)
 - Evidence pack complete (dataset + report + deploy tag inputs)
+- Thin client uses on-chain data as sole source of truth for battle state/turns/settlement (no production dependency on `packages/web/public/battles/*.json`)
 
 **Must-be-onchain:** all validation battles on current v4.2 arena with cloze enabled where required
 
@@ -115,7 +116,7 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 ---
 
 ## Scope Guard
-**Now:** Cloze validation battles + data collection
+**Now:** Skill.md-only onboarding validation + on-chain-only thin UI path (remove JSON publish dependency)
 **Next:** Brier scoring design (P0, elevated from v1.1 by red-team)
 **Later:** Adaptive strategy, gas optimization, event fighter
 **Parked:** Defender commit-reveal (P3), VRF randomness (v2), cross-chain (v2)
