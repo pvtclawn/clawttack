@@ -59,7 +59,7 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - set runtime `WEB_PUBLIC_DIR` override in execution environment,
    - verify no new writes hit `packages/web/public/battles`,
    - ensure UI battle views remain chain-derived and unaffected by legacy files.
-   **Acceptance:** one fresh settled battle appears in on-chain UI flow with zero new `web/public/battles` artifacts.
+   **Acceptance:** one fresh settled battle appears in on-chain UI flow with zero new `web/public/battles` artifacts; settlement status includes source label (`script_settled|relay_settled|already_settled_by_other_path`) emitted only after confirmation-depth threshold.
 
 3. **Run live-chain verification pass** using byte-safe NCC preflight discipline:
    - prove owner/key alignment,
