@@ -87,6 +87,10 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 - Every claimed progress checkpoint includes hard proof (tx hash / battle id / commit hash / before→after metric delta)
 - Evidence pack complete (dataset + report + deploy tag inputs)
 - Thin client uses on-chain data as sole source of truth for battle state/turns/settlement (no production dependency on `packages/web/public/battles/*.json`)
+- ResultType incidence gates on rolling window (artifact-backed):
+  - `INVALID_SOLUTION (2)` short-settle incidence decreases vs current baseline,
+  - `TIMEOUT (4)` incidence decreases without increasing grief wins,
+  - `NCC_REVEAL_FAILED (7)` incidence decreases via reveal-state resilience.
 
 **Must-be-onchain:** all validation battles on current v4.2 arena with cloze enabled where required
 
