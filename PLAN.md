@@ -54,7 +54,14 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - add fallback evidence anti-abuse constraints (anti-spoof poll proof, interval dedupe, owned-turn pre-emit guard).
    **Acceptance:** no direct send path bypasses token check; mismatch/race paths covered by stateful invariant tests and structured logs; SLO logs are emitted for both success and abort paths; fallback logs are deduped and suppressed immediately on owned-turn detection; watcher reliability includes head-lag signal and tail-delay metrics (p95/p99/max-gap), not average-only cadence; auto-battle run status distinguishes `success` vs `degraded_success` (fallback-only win) with per-scenario failure counters.
 
-2. **Run live-chain verification pass** using byte-safe NCC preflight discipline:
+2. **Complete relay/UI cutover away from web-public JSON path**:
+   - change relay `DEFAULT_WEB_PUBLIC_DIR` to non-web debug path under `data/`,
+   - set runtime `WEB_PUBLIC_DIR` override in execution environment,
+   - verify no new writes hit `packages/web/public/battles`,
+   - ensure UI battle views remain chain-derived and unaffected by legacy files.
+   **Acceptance:** one fresh settled battle appears in on-chain UI flow with zero new `web/public/battles` artifacts.
+
+3. **Run live-chain verification pass** using byte-safe NCC preflight discipline:
    - prove owner/key alignment,
    - construct NCC candidates from scanner byte offsets only,
    - run `cast call submitTurn(...)` preflight,
