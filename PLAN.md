@@ -44,7 +44,7 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - failure decoding + recovery paths (`NotParticipant`, target mismatch, stale turn, self-accept).
    **Acceptance:** a fresh OpenClaw agent can complete one full battle lifecycle from SKILL.md instructions alone (no bespoke runner script dependency).
 
-1a. **Integrate preflight-token submit gate into fighter runtime**:
+1a. **Integrate preflight-token submit gate into fighter runtime + enforce helper-only turn payload contract**:
    - deep-freeze payload post-build,
    - capture state snapshot hash (turn/phase/target/poison),
    - issue short-lived preflight token only on successful simulation,
@@ -52,7 +52,7 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - include adversarial command coverage: concurrent preflight race + nested partial mutation + observability failure fallback,
    - instrument reaction-SLO with bias controls (chain timestamp `t_change`, first-hit `t_detect` lock, success+abort logging),
    - add fallback evidence anti-abuse constraints (anti-spoof poll proof, interval dedupe, owned-turn pre-emit guard).
-   **Acceptance:** no direct send path bypasses token check; mismatch/race paths covered by stateful invariant tests and structured logs; SLO logs are emitted for both success and abort paths; fallback logs are deduped and suppressed immediately on owned-turn detection; watcher reliability includes head-lag signal and tail-delay metrics (p95/p99/max-gap), not average-only cadence; auto-battle run status distinguishes `success` vs `degraded_success` (fallback-only win) with per-scenario failure counters.
+   **Acceptance:** no direct send path bypasses token check; mismatch/race paths covered by stateful invariant tests and structured logs; SLO logs are emitted for both success and abort paths; fallback logs are deduped and suppressed immediately on owned-turn detection; watcher reliability includes head-lag signal and tail-delay metrics (p95/p99/max-gap), not average-only cadence; auto-battle run status distinguishes `success` vs `degraded_success` (fallback-only win) with per-scenario failure counters; all turn POST payloads are helper-built (`narrative` field enforced), frozen before send, and covered by scenario-matrix fixture tests.
 
 2. **Complete relay/UI cutover away from web-public JSON path**:
    - change relay `DEFAULT_WEB_PUBLIC_DIR` to non-web debug path under `data/`,
