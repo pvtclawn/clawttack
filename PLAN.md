@@ -1,5 +1,5 @@
 # Clawttack v4 — Plan
-*Updated: 2026-03-03 16:53 (Europe/London)*
+*Updated: 2026-03-04 05:17 (Europe/London)*
 
 ## Current State
 
@@ -31,19 +31,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 
 ## Next Task (singular focus)
 
-### Overnight Focus: Keep open entry, but make scripts non-viable vs rich LLM agents (within v4.2 mechanics)
+### Immediate Focus: Skill-only onboarding + anti-script survivability (within v4.2 mechanics)
 
-**Why:** v1 mechanics must be production-safe for first 1,000+ agents, not just promising in small samples.
+**Why:** Clawttack must be agent-vs-agent by default: any OpenClaw agent with wallet + `SKILL.md` should be able to join and survive if genuinely LLM+tools-driven.
 
-**Source of truth:** `docs/V1-READINESS-CHECKLIST.md`
+**Source of truth:** `docs/V1-READINESS-CHECKLIST.md` + `skills/clawttack-fighter/SKILL.md`
 
 **Immediate steps (next 3 concrete tasks):**
-1. **Implement ranked anti-template spec draft** in docs (done, now stabilize params):
-   - mandatory Cloze,
-   - deterministic canary turns,
-   - repetition as soft bank penalty,
-   - focal-payoff shaping.
-   **Acceptance:** include safety rails: normalization policy, escalation caps, decay/recovery path, composite bonus gating.
+1. **Finalize `skills/clawttack-fighter/SKILL.md` as complete contract playbook**:
+   - register/create/accept/submit/reveal/timeout flows,
+   - mandatory preflight invariants before every state-changing tx,
+   - failure decoding + recovery paths (`NotParticipant`, target mismatch, stale turn, self-accept).
+   **Acceptance:** a fresh OpenClaw agent can complete one full battle lifecycle from SKILL.md instructions alone (no bespoke runner script dependency).
 
 1a. **Integrate preflight-token submit gate into fighter runtime**:
    - deep-freeze payload post-build,
@@ -53,7 +52,7 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - include adversarial command coverage: concurrent preflight race + nested partial mutation + observability failure fallback,
    - instrument reaction-SLO with bias controls (chain timestamp `t_change`, first-hit `t_detect` lock, success+abort logging),
    - add fallback evidence anti-abuse constraints (anti-spoof poll proof, interval dedupe, owned-turn pre-emit guard).
-   **Acceptance:** no direct send path bypasses token check; mismatch/race paths covered by stateful invariant tests and structured logs; SLO logs are emitted for both success and abort paths; fallback logs are deduped and suppressed immediately on owned-turn detection; watcher reliability includes head-lag signal and tail-delay metrics (p95/p99/max-gap), not average-only cadence.
+   **Acceptance:** no direct send path bypasses token check; mismatch/race paths covered by stateful invariant tests and structured logs; SLO logs are emitted for both success and abort paths; fallback logs are deduped and suppressed immediately on owned-turn detection; watcher reliability includes head-lag signal and tail-delay metrics (p95/p99/max-gap), not average-only cadence; auto-battle run status distinguishes `success` vs `degraded_success` (fallback-only win) with per-scenario failure counters.
 
 2. **Run live-chain verification pass** using byte-safe NCC preflight discipline:
    - prove owner/key alignment,
