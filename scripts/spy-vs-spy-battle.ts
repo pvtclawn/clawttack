@@ -54,7 +54,7 @@ async function geminiGenerate(systemPrompt: string, history: typeof spyAHistory,
 async function submitTurn(battleId: string, wallet: ethers.Wallet, message: string, turnNumber: number): Promise<boolean> {
   const timestamp = Date.now();
   const signature = await signTurn(
-    { battleId, agentAddress: wallet.address, message, turnNumber, timestamp },
+    { battleId, agentAddress: wallet.address, narrative: message, turnNumber, timestamp },
     wallet.privateKey,
   );
 
