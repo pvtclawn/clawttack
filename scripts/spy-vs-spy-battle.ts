@@ -190,7 +190,8 @@ Strategy: Use creative questioning, topic steering, and social engineering to ex
   const battle = await finalRes.json() as any;
 
   const battleIdHash = ethers.keccak256(ethers.toUtf8Bytes(battleId));
-  const dstPath = `/home/clawn/.openclaw/workspace/projects/clawttack/packages/web/public/battles/${battleIdHash}.json`;
+  const dstDir = '/home/clawn/.openclaw/workspace/projects/clawttack/data/debug-battles';
+  const dstPath = `${dstDir}/${battleIdHash}.json`;
 
   // Build log (strip secrets)
   const log = {
@@ -201,8 +202,10 @@ Strategy: Use creative questioning, topic steering, and social engineering to ex
     outcome: battle.outcome,
     commitment: battle.commitment,
   };
+  fs.mkdirSync(dstDir, { recursive: true });
   fs.writeFileSync(dstPath, JSON.stringify(log, null, 2));
-  console.log(`\n  📦 Saved to ${battleIdHash.slice(0, 16)}....json`);
+  console.log(`\n  📦 Debug artifact saved to ${battleIdHash.slice(0, 16)}....json`);
+  console.log('  UI source of truth remains on-chain.');
 }
 
 main().catch(err => {

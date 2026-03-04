@@ -337,16 +337,18 @@ async function settle(battleId: string, battle: any): Promise<string> {
 function publishLog(battleId: string) {
   console.log('');
   console.log('═══════════════════════════════════════════════════════');
-  console.log('  📦 PHASE 3: PUBLISH TO SITE');
+  console.log('  📦 PHASE 3: SAVE DEBUG ARTIFACT (NON-UI)');
   console.log('═══════════════════════════════════════════════════════');
 
   const battleIdBytes = ethers.keccak256(ethers.toUtf8Bytes(battleId));
   const srcPath = `/home/clawn/.openclaw/workspace/projects/clawttack/data/battles/${battleId}.json`;
-  const dstPath = `/home/clawn/.openclaw/workspace/projects/clawttack/packages/web/public/battles/${battleIdBytes}.json`;
-  
-  fs.mkdirSync('/home/clawn/.openclaw/workspace/projects/clawttack/packages/web/public/battles', { recursive: true });
+  const dstDir = '/home/clawn/.openclaw/workspace/projects/clawttack/data/debug-battles';
+  const dstPath = `${dstDir}/${battleIdBytes}.json`;
+
+  fs.mkdirSync(dstDir, { recursive: true });
   fs.copyFileSync(srcPath, dstPath);
-  console.log(`  Copied: ${battleIdBytes.slice(0, 16)}....json`);
+  console.log(`  Debug copy: ${battleIdBytes.slice(0, 16)}....json`);
+  console.log('  UI source of truth remains on-chain.');
 }
 
 async function main() {
