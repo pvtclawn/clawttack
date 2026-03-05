@@ -27,6 +27,11 @@ Use before publishing any short/long submission draft.
 - [ ] Efficiency metrics included.
 - [ ] Comparability verdict included (`comparable` or `non_comparable`) with reason codes.
 
-## 6) Final sign-off
+## 6) Short-form quality gates (when short version is included)
+- [ ] Short block includes at least one direct proof pointer (commit/artifact/tx).
+- [ ] Short block includes explicit status token (`success|degraded_success|insufficient_evidence|non_comparable`).
+- [ ] Short mechanism lines contain no future-tense roadmap wording (`will`, `plan`, `soon`).
+
+## 7) Final sign-off
 - [ ] Re-ran pre-submit command bundle and reviewed output.
 - [ ] Draft passes all checklist items.

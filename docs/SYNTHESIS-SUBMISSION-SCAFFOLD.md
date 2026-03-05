@@ -76,6 +76,11 @@ Rule: headline eligibility must be derivable from this table.
 
 Problem → Mechanism → Proof → Result (4-8 lines max).
 
+Short-form guardrails (MANDATORY):
+- Include at least one **direct proof pointer** (commit hash / artifact path / tx hash).
+- Include explicit **status token**: `success|degraded_success|insufficient_evidence|non_comparable`.
+- Mechanism lines must avoid future-tense roadmap wording (`will`, `plan`, `soon`).
+
 ---
 
 ## 8) Long version
