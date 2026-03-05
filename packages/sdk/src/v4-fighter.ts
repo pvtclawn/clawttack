@@ -253,7 +253,10 @@ export class V4Fighter {
         if (retryState && Date.now() < retryState.nextAttemptAtMs) {
           // Backoff window active for this turn; skip submit attempt this poll cycle
         } else {
-          try {
+          const turnReady = await this.isTurnSubmissionReady(state.currentTurn);
+          if (!turnReady) {
+            // Block-aware readiness gate: avoid known TurnTooFast first-attempt waste
+          } else try {
             await this.playTurn(state);
             lastProcessedTurn = state.currentTurn; // Only mark done on success
             this.turnRetryState.delete(state.currentTurn);
@@ -643,6 +646,23 @@ export class V4Fighter {
       // best effort
     }
     return null;
+  }
+
+  private async isTurnSubmissionReady(currentTurn: number): Promise<boolean> {
+    if (currentTurn === 0) return true;
+
+    const prevTurnChangeSec = await this.getPreviousTurnChangeTimestampSec(currentTurn);
+    if (!prevTurnChangeSec) return true;
+
+    const minReadyMs = Number(process.env.TURN_READY_MIN_MS ?? 3200);
+    const elapsedMs = Date.now() - (prevTurnChangeSec * 1000);
+
+    if (elapsedMs < minReadyMs) {
+      this.log(`  ⏳ Turn ${currentTurn} not ready yet (${elapsedMs}ms < ${minReadyMs}ms) — hold submit`);
+      return false;
+    }
+
+    return true;
   }
 
   private async getOpponentLastNarrative(state: BattleStateV4): Promise<string> {
