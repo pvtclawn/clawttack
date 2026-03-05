@@ -154,6 +154,7 @@ export class V4Fighter {
   private maxObservedPollGapMs = 0;
   private observedPollGapsMs: number[] = [];
   private lastFallbackDedupeKey: string | null = null;
+  private turnRetryState = new Map<number, { attempts: number; nextAttemptAtMs: number }>();
 
   constructor(config: V4FighterConfig) {
     this.config = config;
@@ -228,6 +229,11 @@ export class V4Fighter {
         return this.buildResult(state, 'settled');
       }
 
+      // Prune stale retry state for old turns
+      for (const turn of this.turnRetryState.keys()) {
+        if (turn < state.currentTurn) this.turnRetryState.delete(turn);
+      }
+
       // Re-read firstMoverA once the battle is Active (it's set during acceptBattle)
       if (state.phase === BattlePhase.Active && state.currentTurn === 0 && lastProcessedTurn === -1) {
         const fresh = await this.battle.firstMoverA();
@@ -243,41 +249,46 @@ export class V4Fighter {
         if (!this.ownedTurnDetectedAtMs.has(state.currentTurn)) {
           this.ownedTurnDetectedAtMs.set(state.currentTurn, Date.now());
         }
-        try {
-          await this.playTurn(state);
-          lastProcessedTurn = state.currentTurn; // Only mark done on success
-        } catch (err: any) {
-          const errMsg = String(err?.shortMessage ?? err?.message ?? err);
-          const errData = err?.data ?? err?.info?.error?.data ?? '';
-          this.log(JSON.stringify({
-            kind: 'reaction_slo',
-            status: 'abort',
-            battleAddress: this.config.battleAddress,
-            turn: Number(state.currentTurn),
-            t_detect_ms: this.ownedTurnDetectedAtMs.get(state.currentTurn) ?? null,
-            t_send_ms: null,
-            reason: errMsg,
-            reasonData: String(errData ?? ''),
-          }));
-          if (errMsg.includes('TurnTooFast') || errMsg.includes('0xb3c15f40') || String(errData).includes('b3c15f40')) {
-            this.log(`  ⏳ Turn too fast — waiting for next block...`);
-            await this.sleep(4000); // Wait ~2 blocks
-          } else if (errMsg.includes('BattleNotActive') || errMsg.includes('0xf2592cf2') || String(errData).includes('f2592cf2')) {
-            this.log(`  ⏳ Battle not active yet — waiting for start block...`);
-            await this.sleep(4000);
-          } else if (errMsg.includes('reverted') && !errData) {
-            // Empty revert data — likely gas estimation issue, retry once
-            this.log(`  ⚠️ Empty revert — retrying in 4s...`);
-            await this.sleep(4000);
-          } else if (errMsg.includes('TargetWordMissing') || String(errData).includes('72bea98a') ||
-                     errMsg.includes('CandidateNotInNarrative') || String(errData).includes('71b895eb') ||
-                     errMsg.includes('InvalidPoisonWord') || String(errData).includes('3b3a5e43')) {
-            // Narrative validation failed — retry with a new narrative
-            this.log(`  🔄 Narrative rejected (${errMsg.includes('Target') ? 'target word missing' : errMsg.includes('Candidate') ? 'candidate not found' : 'poison word issue'}) — regenerating...`);
-            await this.sleep(2000);
-          } else {
-            this.log(`❌ Turn ${state.currentTurn} failed: ${errMsg} | data=${errData}`);
-            lastProcessedTurn = state.currentTurn; // Skip this turn on other errors
+        const retryState = this.turnRetryState.get(state.currentTurn);
+        if (retryState && Date.now() < retryState.nextAttemptAtMs) {
+          // Backoff window active for this turn; skip submit attempt this poll cycle
+        } else {
+          try {
+            await this.playTurn(state);
+            lastProcessedTurn = state.currentTurn; // Only mark done on success
+            this.turnRetryState.delete(state.currentTurn);
+          } catch (err: any) {
+            const errMsg = String(err?.shortMessage ?? err?.message ?? err);
+            const errData = err?.data ?? err?.info?.error?.data ?? '';
+            this.log(JSON.stringify({
+              kind: 'reaction_slo',
+              status: 'abort',
+              battleAddress: this.config.battleAddress,
+              turn: Number(state.currentTurn),
+              t_detect_ms: this.ownedTurnDetectedAtMs.get(state.currentTurn) ?? null,
+              t_send_ms: null,
+              reason: errMsg,
+              reasonData: String(errData ?? ''),
+            }));
+            if (errMsg.includes('TurnTooFast') || errMsg.includes('0xb3c15f40') || String(errData).includes('b3c15f40')) {
+              this.log('  ⏳ Turn too fast — scheduling bounded retry...');
+              this.scheduleRetry(state.currentTurn, 4000);
+            } else if (errMsg.includes('BattleNotActive') || errMsg.includes('0xf2592cf2') || String(errData).includes('f2592cf2')) {
+              this.log('  ⏳ Battle not active yet — scheduling retry...');
+              this.scheduleRetry(state.currentTurn, 4000);
+            } else if (errMsg.includes('reverted') && !errData) {
+              this.log('  ⚠️ Empty revert — scheduling retry...');
+              this.scheduleRetry(state.currentTurn, 4000);
+            } else if (errMsg.includes('TargetWordMissing') || String(errData).includes('72bea98a') ||
+                       errMsg.includes('CandidateNotInNarrative') || String(errData).includes('71b895eb') ||
+                       errMsg.includes('InvalidPoisonWord') || String(errData).includes('3b3a5e43')) {
+              this.log(`  🔄 Narrative rejected (${errMsg.includes('Target') ? 'target word missing' : errMsg.includes('Candidate') ? 'candidate not found' : 'poison word issue'}) — scheduling regenerate retry...`);
+              this.scheduleRetry(state.currentTurn, 2500);
+            } else {
+              this.log(`❌ Turn ${state.currentTurn} failed: ${errMsg} | data=${errData}`);
+              lastProcessedTurn = state.currentTurn; // Skip this turn on other errors
+              this.turnRetryState.delete(state.currentTurn);
+            }
           }
         }
       }
@@ -761,6 +772,15 @@ export class V4Fighter {
       msg.includes('already known') ||
       msg.includes('could not coalesce')
     );
+  }
+
+  private scheduleRetry(turn: number, baseDelayMs: number): void {
+    const prev = this.turnRetryState.get(turn) ?? { attempts: 0, nextAttemptAtMs: 0 };
+    const attempts = prev.attempts + 1;
+    const backoff = Math.min(30_000, baseDelayMs * (2 ** Math.min(4, attempts - 1)));
+    const jitter = 0.85 + Math.random() * 0.3;
+    const nextAttemptAtMs = Date.now() + Math.floor(backoff * jitter);
+    this.turnRetryState.set(turn, { attempts, nextAttemptAtMs });
   }
 
   private sleep(ms: number): Promise<void> {
