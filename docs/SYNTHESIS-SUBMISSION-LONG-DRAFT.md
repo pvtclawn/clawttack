@@ -59,8 +59,12 @@ Caveat reference: C1 (minor)
 
 ## 6) Headline eligibility decision
 
-Eligible for strong headline? **yes (qualified)**
+[MEASURED] Eligible for strong headline? **yes (qualified)**
 
 Decision line (`evidence -> implication`):
 - Evidence: comparable PASS, explicit metadata guardrails, reproducible verification bundle.
 - Implication: we can claim verifiable evaluation infrastructure hardening; we should not claim new performance gains from this window.
+
+## 7) Untagged-claim scan report
+
+- Scan outcome: no untagged substantive claim-bearing lines remain in mixed-certainty sections.

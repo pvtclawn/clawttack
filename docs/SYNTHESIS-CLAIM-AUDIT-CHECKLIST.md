@@ -32,6 +32,11 @@ Use before publishing any short/long submission draft.
 - [ ] Short block includes explicit status token (`success|degraded_success|insufficient_evidence|non_comparable`).
 - [ ] Short mechanism lines contain no future-tense roadmap wording (`will`, `plan`, `soon`).
 
-## 7) Final sign-off
+## 7) Long-form mixed-certainty tagging gates (when long version is included)
+- [ ] Mixed-certainty sections use inline `MEASURED|EXTERNAL` tags on claim-bearing lines.
+- [ ] Untagged-claim scan completed (no untagged substantive claim-bearing lines remain).
+- [ ] Every critical proof block includes `Caveat: none` or a caveat ID.
+
+## 8) Final sign-off
 - [ ] Re-ran pre-submit command bundle and reviewed output.
 - [ ] Draft passes all checklist items.
