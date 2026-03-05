@@ -81,3 +81,12 @@ Problem → Mechanism → Proof → Result (4-8 lines max).
 ## 8) Long version
 
 Expanded version with requirement-fit table, reproducibility steps, metrics, and caveats.
+
+---
+
+## 9) External-claim wording guard
+
+For any `EXTERNAL` claim, use qualified wording only:
+- `reported`, `suggests`, `hypothesis`, `preliminary`
+
+Never phrase external claims as confirmed local outcomes.
