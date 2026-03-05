@@ -12,6 +12,9 @@ type Artifact = {
   settled?: number;
 };
 
+const PLACEHOLDER_TOKENS = new Set(['n/a', 'na', 'unknown', 'tbd', 'none', '-']);
+const MAX_CAVEATS_FOR_IMPROVED = Number(process.env.MAX_CAVEATS_FOR_IMPROVED ?? 0);
+
 type CompareResult = {
   status: 'comparable' | 'non_comparable';
   reasonCodes: string[];
@@ -19,11 +22,33 @@ type CompareResult = {
     baselineSettled: number;
     candidateSettled: number;
     resultTypeDelta: Record<string, number>;
+    evidenceQualityStatus: string;
+    caveatCount: number;
+    headlineAllowed: boolean;
   };
 };
 
 function load(path: string): Artifact {
   return JSON.parse(readFileSync(path, 'utf-8')) as Artifact;
+}
+
+function isPlaceholder(value: string): boolean {
+  return PLACEHOLDER_TOKENS.has(value.trim().toLowerCase());
+}
+
+function hasPlaceholderMetadata(a: Artifact): boolean {
+  const cls = a.attacker_model?.class ?? '';
+  if (cls && isPlaceholder(cls)) return true;
+
+  for (const cap of a.attacker_model?.capabilities ?? []) {
+    if (isPlaceholder(cap)) return true;
+  }
+
+  for (const ab of a.assumption_breaks ?? []) {
+    if (isPlaceholder(ab)) return true;
+  }
+
+  return false;
 }
 
 function isComplete(a: Artifact): boolean {
@@ -40,6 +65,10 @@ function compare(baseline: Artifact, candidate: Artifact): CompareResult {
 
   if (!isComplete(baseline) || !isComplete(candidate)) {
     reasonCodes.push('METADATA_INCOMPLETE');
+  }
+
+  if (hasPlaceholderMetadata(baseline) || hasPlaceholderMetadata(candidate)) {
+    reasonCodes.push('METADATA_PLACEHOLDER');
   }
 
   if (baseline.attacker_model?.class !== candidate.attacker_model?.class) {
@@ -66,6 +95,10 @@ function compare(baseline: Artifact, candidate: Artifact): CompareResult {
     resultTypeDelta[k] = c - b;
   }
 
+  const evidenceQualityStatus = String(candidate.evidence_quality?.status ?? 'unknown');
+  const caveatCount = candidate.evidence_quality?.caveats?.length ?? 0;
+  const headlineAllowed = evidenceQualityStatus === 'success' && caveatCount <= MAX_CAVEATS_FOR_IMPROVED;
+
   return {
     status: 'comparable',
     reasonCodes,
@@ -73,6 +106,9 @@ function compare(baseline: Artifact, candidate: Artifact): CompareResult {
       baselineSettled: baseline.settled ?? 0,
       candidateSettled: candidate.settled ?? 0,
       resultTypeDelta,
+      evidenceQualityStatus,
+      caveatCount,
+      headlineAllowed,
     },
   };
 }
