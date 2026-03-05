@@ -110,6 +110,21 @@ async function main() {
     rpcUrl: RPC_URL,
     arena: ARENA_ADDRESS,
     params: { WINDOW_SIZE, CHUNK, MAX_SCAN_BLOCKS },
+    trust_assumption: {
+      onchain_verifiable: [
+        'BattleSettled log topics/data from Base Sepolia RPC',
+        'battle addresses resolved from Arena contract storage',
+      ],
+      operator_trusted: [
+        'single RPC endpoint availability/correctness',
+        'local script execution environment and clock',
+      ],
+      verifier: 'ethers JsonRpcProvider + contract calls + log scans',
+    },
+    evidence_quality: {
+      status: 'success',
+      caveats: [],
+    },
     range: [start, total],
     settled,
     shortSettledLe1,
