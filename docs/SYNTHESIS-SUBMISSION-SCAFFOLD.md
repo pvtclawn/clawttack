@@ -87,6 +87,13 @@ Short-form guardrails (MANDATORY):
 
 Expanded version with requirement-fit table, reproducibility steps, metrics, and caveats.
 
+Long-form hardening rules (MANDATORY):
+- Every outcome section must include:
+  1) at least one direct proof pointer, and
+  2) one objective `evidence -> implication` line.
+- Outcome sections must reference caveat row/class (or explicitly `Caveat: none`).
+- Section conclusions must avoid promotional language and remain evidence-anchored.
+
 ---
 
 ## 9) External-claim wording guard
