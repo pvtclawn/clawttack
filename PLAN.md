@@ -1,5 +1,5 @@
 # Clawttack v4 — Plan
-*Updated: 2026-03-04 05:17 (Europe/London)*
+*Updated: 2026-03-05 13:47 (Europe/London)*
 
 ## Current State
 
@@ -80,9 +80,88 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - apply patch units from `docs/model/007-IMPLEMENTATION-DIFF-MAP-2-4-7.md`,
    - start with reveal-resilience patch from `docs/model/009-PATCH-SKETCH-RESULTTYPE7-REVEAL-RESILIENCE.md`,
    - execute forge suites in `docs/model/008-FORGE-TEST-MATRIX-2-4-7.md`,
-   - export post-patch incidence artifact and compare to baseline.
-   **Acceptance:** targeted resultType incidence decreases versus baseline without liveness regression.
+   - export post-patch incidence artifact and compare to baseline,
+   - add block-aware submit readiness to reduce repeated `TurnTooFast` first-attempt aborts.
+   **Acceptance:** targeted resultType incidence decreases versus baseline without liveness regression; first-attempt `TurnTooFast` abort rate decreases in live comparison windows.
 
+
+### 13:47 roadmap refresh (A-lane)
+1. **Create submission claim-audit checklist artifact**
+   - include measured/external tags + proof-link checks + caveat-preservation checks.
+   **Acceptance metric:** checklist exists in repo and is used to validate one draft submission text.
+
+2. **Wire final pre-submit command bundle**
+   - single command sequence to refresh baseline/comparison artifacts and re-verify claim links.
+   **Acceptance metric:** command bundle runs end-to-end and emits pass/fail summary.
+
+3. **Draft Synthesis short+long submission text from current evidence**
+   - use claim-discipline constraints, include only locally verified metrics.
+   **Acceptance metric:** both drafts produced with measured/external annotations and no unbacked numeric claims.
+
+### 12:27 roadmap refresh (A-lane)
+1. **Harden anti-gaming validator semantics (not just non-empty checks)**
+   - reject placeholder tokens (`n/a`, `unknown`, empty-equivalent), enforce metric domain bounds.
+   **Acceptance metric:** validator fails on placeholder-padded artifacts and emits explicit reason codes.
+
+2. **Enforce caveat propagation into summary layer**
+   - summary output must include `evidence_quality.status` + caveat count and block positive headline above caveat threshold.
+   **Acceptance metric:** summary generator cannot emit "improved" when caveat policy is violated.
+
+3. **Run candidate-window comparison with comparability verdict**
+   - execute baseline vs fresh candidate artifact using comparator + validator stack.
+   **Acceptance metric:** publish one artifact-backed verdict (`comparable` or `non_comparable`) with machine-readable reasons.
+
+### 11:17 roadmap refresh (A-lane)
+1. **Implement `non_comparable` comparison guard in baseline-delta workflow**
+   - detect mismatches in attacker model / evidence quality / required metadata completeness.
+   **Acceptance metric:** comparison command emits machine-readable `non_comparable` status with reason codes and suppresses improvement headline.
+
+2. **Add reliability+efficiency dual-gate scorecard**
+   - include `time_to_first_valid_turn_sec` and `retry_overhead_gas_ratio` alongside existing reliability/resultType metrics.
+   **Acceptance metric:** keep/tune/revert decision requires both reliability and efficiency checks; single-axis pass cannot greenlight patch.
+
+3. **Run one fresh live post-patch verification window**
+   - collect sample using latest fighter patches and compare against #29-style baseline with matched context fields.
+   **Acceptance metric:** publish one artifact-backed delta note with comparability verdict (`comparable` or `non_comparable`).
+
+### 10:17 roadmap refresh (A-lane)
+1. **Enforce metadata completeness at artifact generation time**
+   - reject outputs with empty/default `trust_assumption`, `evidence_quality`, `attacker_model`, `assumption_breaks`.
+   **Acceptance metric:** baseline/comparison scripts exit non-zero on placeholder metadata and emit explicit validation error.
+
+2. **Add comparability gate for before/after deltas**
+   - block delta computation when attacker-model or evidence-quality class mismatches.
+   **Acceptance metric:** comparison report marks run `non_comparable` with machine-readable reason; no improvement headline generated.
+
+3. **Add operator-dependency checklist to trust metadata**
+   - mandatory fields for RPC reliability, local clock, and process integrity assumptions.
+   **Acceptance metric:** each verification artifact includes checklist entries; omissions require explicit waiver note.
+
+### 09:17 roadmap refresh (A-lane)
+1. **Implement trust-boundary schema in verification reports**
+   - add `trust_assumption` table (component → trust type → verifier/source).
+   **Acceptance metric:** every resultType hardening report contains explicit trust-boundary section; missing section fails report validation.
+
+2. **Add evidence-quality run status gating**
+   - classify runs as `success | degraded_success | insufficient_evidence` using telemetry completeness checks.
+   **Acceptance metric:** before/after delta claims are blocked unless both sides are `success` or explicitly downgraded with caveat.
+
+3. **Enforce contamination-resistant comparison windows**
+   - require matched metadata: arena/config class, turn-range bucket, intervention flags.
+   **Acceptance metric:** comparison job rejects unmatched windows and emits reasoned rejection output.
+
+### 08:17 roadmap refresh (A-lane)
+1. **Verify post-gate live delta on TurnTooFast**
+   - Run fresh battle sample and compute first-attempt abort incidence vs #29 baseline window.
+   **Acceptance metric:** first-attempt `TurnTooFast` abort rate reduced by >=30% in comparable turn window, with no drop in successful turn progression.
+
+2. **Upgrade reveal fallback from one-shot to bounded multi-attempt**
+   - Implement max 2–3 transient retries with snapshot revalidation + hard stop guards.
+   **Acceptance metric:** no unbounded retry loops; reveal submission failure incidence decreases in transient-RPC windows without increasing stale-turn errors.
+
+3. **Adopt composite verification scorecard for resultType hardening**
+   - Track abort incidence + gas/turn + reaction latency distribution + settled resultType mix.
+   **Acceptance metric:** every patch report includes before/after scorecard and explicit keep/tune/revert recommendation.
 
 **Acceptance criteria:**
 - All P0 gates pass in checklist
