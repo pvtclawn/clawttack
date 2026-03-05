@@ -20,11 +20,13 @@
     "battle:demo": "bun ./scripts/demo-battle.ts",
     "battle:ai": "bun ./scripts/ai-battle.ts",
     "check:turn-payload": "bash ./scripts/check-turn-payloads.sh",
-    "metrics:resulttype-baseline": "bun ./scripts/resulttype-baseline.ts"
+    "metrics:resulttype-baseline": "bun ./scripts/resulttype-baseline.ts",
+    "incur:clawttack": "bun ./scripts/clawttack-incur.ts"
   },
   "dependencies": {
     "@vercel/og": "^0.9.0",
     "@waku/sdk": "0.0.37-b7eabf5.0",
-    "ethers": "^6.16.0"
+    "ethers": "^6.16.0",
+    "incur": "^0.2.0"
   }
 }
