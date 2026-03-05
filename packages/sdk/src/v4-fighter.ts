@@ -504,7 +504,7 @@ export class V4Fighter {
 
     const tSendMs = Date.now();
 
-    // Submit transaction (one-shot fallback for transient send failures)
+    // Submit transaction (bounded fallback for transient reveal send failures)
     let tx: ethers.ContractTransactionResponse;
     let receipt: ethers.ContractTransactionReceipt;
     try {
@@ -516,18 +516,36 @@ export class V4Fighter {
       const canFallback = revealRequired && this.isTransientSendError(errMsg, errData);
       if (!canFallback) throw err;
 
-      this.log('  ♻️ Reveal send transient failure — one-shot fallback retry...');
-      await this.sleep(1500);
+      const maxFallbackAttempts = Number(process.env.REVEAL_FALLBACK_MAX_ATTEMPTS ?? 3);
+      let recovered = false;
+      let lastErr: unknown = err;
 
-      // Re-check reveal invariants before fallback send
-      const liveState = await this.getBattleState();
-      const expectedSourceTurn = liveState.currentTurn - 2;
-      if (!this.myPreviousNcc || this.myPreviousNcc.sourceTurn !== expectedSourceTurn) {
-        throw new Error('REVEAL_FALLBACK_ABORT_PRECHECK');
+      this.log(`  ♻️ Reveal send transient failure — bounded fallback (max ${maxFallbackAttempts})...`);
+      for (let attempt = 1; attempt <= maxFallbackAttempts; attempt++) {
+        await this.sleep(1000 + (attempt * 500));
+
+        // Re-check reveal invariants before each fallback send
+        const liveState = await this.getBattleState();
+        const expectedSourceTurn = liveState.currentTurn - 2;
+        if (!this.myPreviousNcc || this.myPreviousNcc.sourceTurn !== expectedSourceTurn) {
+          throw new Error('REVEAL_FALLBACK_ABORT_PRECHECK');
+        }
+
+        try {
+          tx = await this.battle.submitTurn(lockedPayload);
+          receipt = await tx.wait();
+          recovered = true;
+          break;
+        } catch (fallbackErr: any) {
+          const fbMsg = String(fallbackErr?.shortMessage ?? fallbackErr?.message ?? fallbackErr);
+          const fbData = String(fallbackErr?.data ?? fallbackErr?.info?.error?.data ?? '');
+          const stillTransient = this.isTransientSendError(fbMsg, fbData);
+          lastErr = fallbackErr;
+          if (!stillTransient) break;
+        }
       }
 
-      tx = await this.battle.submitTurn(lockedPayload);
-      receipt = await tx.wait();
+      if (!recovered) throw lastErr;
     }
 
     this.totalGasUsed += receipt.gasUsed;
