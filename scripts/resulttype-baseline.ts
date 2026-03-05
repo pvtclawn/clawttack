@@ -31,6 +31,18 @@ type BattleRow = {
   resultType: number | null;
 };
 
+function assertNonEmptyString(name: string, value: string) {
+  if (!value || !value.trim()) {
+    throw new Error(`metadata validation failed: ${name} is empty`);
+  }
+}
+
+function assertNonEmptyArray(name: string, value: unknown[]) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`metadata validation failed: ${name} is empty`);
+  }
+}
+
 async function findLatestSettledResultType(
   provider: ethers.JsonRpcProvider,
   battleAddress: string,
@@ -118,9 +130,22 @@ async function main() {
       operator_trusted: [
         'single RPC endpoint availability/correctness',
         'local script execution environment and clock',
+        'local process integrity (script runtime and filesystem)',
       ],
       verifier: 'ethers JsonRpcProvider + contract calls + log scans',
     },
+    attacker_model: {
+      class: 'adaptive',
+      capabilities: [
+        'timing pressure via turn cadence and liveness races',
+        'scripted deterministic play and replayable strategies',
+        'benefit from RPC instability side effects',
+      ],
+    },
+    assumption_breaks: [
+      'single-RPC view divergence from canonical chain state',
+      'local clock skew materially impacting timing analysis',
+    ],
     evidence_quality: {
       status: 'success',
       caveats: [],
@@ -131,6 +156,14 @@ async function main() {
     resultTypeCounts,
     rows,
   };
+
+  assertNonEmptyArray('trust_assumption.onchain_verifiable', out.trust_assumption.onchain_verifiable);
+  assertNonEmptyArray('trust_assumption.operator_trusted', out.trust_assumption.operator_trusted);
+  assertNonEmptyString('trust_assumption.verifier', out.trust_assumption.verifier);
+  assertNonEmptyString('attacker_model.class', out.attacker_model.class);
+  assertNonEmptyArray('attacker_model.capabilities', out.attacker_model.capabilities);
+  assertNonEmptyArray('assumption_breaks', out.assumption_breaks);
+  assertNonEmptyString('evidence_quality.status', out.evidence_quality.status);
 
   const outDir = join(process.cwd(), '..', '..', 'memory', 'metrics');
   mkdirSync(outDir, { recursive: true });
