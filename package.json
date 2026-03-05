@@ -22,7 +22,8 @@
     "check:turn-payload": "bash ./scripts/check-turn-payloads.sh",
     "metrics:resulttype-baseline": "bun ./scripts/resulttype-baseline.ts",
     "incur:clawttack": "bun ./scripts/clawttack-incur.ts",
-    "submission:handoff-check": "bun ./scripts/validate-submission-handoff.ts"
+    "submission:handoff-check": "bun ./scripts/validate-submission-handoff.ts",
+    "model:threshold-check": "bun ./scripts/check-model-thresholds.ts"
   },
   "dependencies": {
     "@vercel/og": "^0.9.0",
