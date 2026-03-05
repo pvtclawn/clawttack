@@ -90,6 +90,14 @@ interface PreflightToken {
   createdAtMs: number;
 }
 
+interface NccCheckpoint {
+  salt: `0x${string}`;
+  intendedIdx: 0 | 1 | 2 | 3;
+  sourceTurn: number;
+  sourceSequenceHash: `0x${string}`;
+  createdAtMs: number;
+}
+
 // ─── Minimal ABIs ───────────────────────────────────────────────────────
 
 const BATTLE_ABI = [
@@ -128,7 +136,7 @@ export class V4Fighter {
   private totalGasUsed: bigint = 0n;
 
   // NCC state tracking
-  private myPreviousNcc: { salt: `0x${string}`; intendedIdx: 0 | 1 | 2 | 3 } | null = null;
+  private myPreviousNcc: NccCheckpoint | null = null;
   private opponentLastNccAttack: NccAttack | null = null;
   private wordList: string[] | null = null;
 
@@ -424,10 +432,21 @@ export class V4Fighter {
     // Build NCC defense (answer opponent's riddle)
     const nccDefense = createNccDefense(strategyResult.nccGuessIdx ?? 0);
 
-    // Build NCC reveal (reveal our previous commitment)
-    const nccReveal = state.currentTurn >= 2 && this.myPreviousNcc
-      ? createNccReveal(this.myPreviousNcc.salt, this.myPreviousNcc.intendedIdx)
-      : { salt: ethers.ZeroHash as `0x${string}`, intendedIdx: 0 };
+    // Build NCC reveal (reveal our previous commitment) with strict preflight invariants
+    const revealRequired = state.currentTurn >= 2;
+    let nccReveal = { salt: ethers.ZeroHash as `0x${string}`, intendedIdx: 0 };
+    if (revealRequired) {
+      if (!this.myPreviousNcc) {
+        throw new Error('REVEAL_PRECHECK_MISSING_CHECKPOINT');
+      }
+      const expectedSourceTurn = state.currentTurn - 2;
+      if (this.myPreviousNcc.sourceTurn !== expectedSourceTurn) {
+        throw new Error(
+          `REVEAL_PRECHECK_TURN_MISMATCH:${this.myPreviousNcc.sourceTurn}:${expectedSourceTurn}`,
+        );
+      }
+      nccReveal = createNccReveal(this.myPreviousNcc.salt, this.myPreviousNcc.intendedIdx);
+    }
 
     // Build payload
     // Solve VOP challenge
@@ -471,9 +490,32 @@ export class V4Fighter {
 
     const tSendMs = Date.now();
 
-    // Submit transaction
-    const tx = await this.battle.submitTurn(lockedPayload);
-    const receipt = await tx.wait();
+    // Submit transaction (one-shot fallback for transient send failures)
+    let tx: ethers.ContractTransactionResponse;
+    let receipt: ethers.ContractTransactionReceipt;
+    try {
+      tx = await this.battle.submitTurn(lockedPayload);
+      receipt = await tx.wait();
+    } catch (err: any) {
+      const errMsg = String(err?.shortMessage ?? err?.message ?? err);
+      const errData = String(err?.data ?? err?.info?.error?.data ?? '');
+      const canFallback = revealRequired && this.isTransientSendError(errMsg, errData);
+      if (!canFallback) throw err;
+
+      this.log('  ♻️ Reveal send transient failure — one-shot fallback retry...');
+      await this.sleep(1500);
+
+      // Re-check reveal invariants before fallback send
+      const liveState = await this.getBattleState();
+      const expectedSourceTurn = liveState.currentTurn - 2;
+      if (!this.myPreviousNcc || this.myPreviousNcc.sourceTurn !== expectedSourceTurn) {
+        throw new Error('REVEAL_FALLBACK_ABORT_PRECHECK');
+      }
+
+      tx = await this.battle.submitTurn(lockedPayload);
+      receipt = await tx.wait();
+    }
+
     this.totalGasUsed += receipt.gasUsed;
 
     this.log(`  ✅ Submitted (gas: ${receipt.gasUsed}, tx: ${receipt.hash.slice(0, 14)}...)`);
@@ -506,8 +548,14 @@ export class V4Fighter {
       this.log(`  🃏 Joker used! Remaining: ${this.jokersRemaining}`);
     }
 
-    // Store our NCC salt + intendedIdx for next reveal
-    this.myPreviousNcc = { salt, intendedIdx };
+    // Store NCC checkpoint for next reveal
+    this.myPreviousNcc = {
+      salt,
+      intendedIdx,
+      sourceTurn: state.currentTurn,
+      sourceSequenceHash: state.sequenceHash,
+      createdAtMs: Date.now(),
+    };
     this.saveState();
   }
 
@@ -700,6 +748,21 @@ export class V4Fighter {
     };
   }
 
+  private isTransientSendError(errMsg: string, errData: string): boolean {
+    if (errData && errData !== '0x') return false;
+    const msg = errMsg.toLowerCase();
+    if (msg.includes('revert')) return false;
+    return (
+      msg.includes('timeout') ||
+      msg.includes('network') ||
+      msg.includes('nonce') ||
+      msg.includes('underpriced') ||
+      msg.includes('replacement') ||
+      msg.includes('already known') ||
+      msg.includes('could not coalesce')
+    );
+  }
+
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
@@ -725,8 +788,13 @@ export class V4Fighter {
       const raw = fs.readFileSync(this.config.statePath, 'utf-8');
       const state = JSON.parse(raw);
       if (state.myPreviousNcc) {
-        this.myPreviousNcc = state.myPreviousNcc;
-        this.log('📂 Restored NCC state from checkpoint');
+        const cp = state.myPreviousNcc;
+        if (typeof cp.sourceTurn === 'number') {
+          this.myPreviousNcc = cp;
+          this.log('📂 Restored NCC state from checkpoint');
+        } else {
+          this.log('📂 Ignoring legacy NCC checkpoint without sourceTurn metadata');
+        }
       }
       if (state.totalGasUsed) {
         this.totalGasUsed = BigInt(state.totalGasUsed);
