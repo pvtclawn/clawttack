@@ -65,17 +65,19 @@ Formalize acceptance logic for mechanism updates around failure classes `2/4/7` 
 ### S1 — Repeated-run stability
 **Condition:** accepting a model/mechanism claim for current config window.
 
-**Observable:**
+**Observables:**
 - `N` consecutive successful runs of pre-submit validation and comparator checks.
+- observed sample size versus declared minimum sample requirement.
 
 **Current threshold (draft):**
 - `N >= 2` consecutive runs.
+- observed sample size must meet or exceed declared minimum.
 
 **Accept criterion:**
-- At least 2 consecutive passes with no new reason codes.
+- At least 2 consecutive passes with no new reason codes, and sample-size check passes.
 
 **Reject criterion:**
-- Any run fails or emits non-empty reason codes.
+- Any run fails, emits non-empty reason codes, or sample-size check fails.
 
 ---
 
@@ -89,6 +91,9 @@ Because current window shows zero-delta stability behavior, thresholds are defin
    - Required: status `success`.
 3. **Caveat band:**
    - Required for strong headline: caveat count within allowed bound (current policy default: `0`).
+4. **MDE reasonability band (new):**
+   - Any claimed non-zero improvement must declare MDE.
+   - Reject if MDE is outside configured reasonability envelope for the metric class (placeholder policy: must be <= historically plausible effect range for recent windows).
 
 If any band fails, patch/report acceptance downgrades from strong claim to qualified/no-claim.
 
@@ -104,7 +109,13 @@ If expected outcomes are not observed, this model draft is invalid.
 
 ---
 
-## 5) Current limitations
+## 5) Narrative binding rule
+
+- Headline and summary language must be bound to status token:
+  - if `status != success` or `headlineAllowed == false`, uplift-style narrative is disallowed.
+- Any violation invalidates report-level acceptance regardless of other passes.
+
+## 6) Current limitations
 
 - Threshold values are still policy-level, not yet learned from large non-zero delta windows.
 - Efficiency metric remains coarse (command-level pass path) and should be refined with explicit cost/latency bands in next revision.
