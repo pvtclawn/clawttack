@@ -15,6 +15,11 @@ const declaredMinSample = Number(process.argv[3] ?? 1);
 const observedSample = Number(process.argv[4] ?? 1);
 const requestedEnvelopeVersion = process.argv[5] ?? 'v1';
 const artifactEnvelopeVersion = process.argv[6] ?? requestedEnvelopeVersion;
+const bootstrapMargin = Number(process.argv[7] ?? 0.15);
+const excludedWindows = Number(process.argv[8] ?? 0);
+const totalWindows = Number(process.argv[9] ?? Math.max(1, excludedWindows));
+const bootstrapMaxWindows = Number(process.argv[10] ?? 20);
+const observedSettledWindows = Number(process.argv[11] ?? totalWindows);
 
 // Comma-separated version policy lists (no silent fallback by default)
 const activeVersions = new Set((process.env.ACTIVE_ENVELOPE_VERSIONS ?? 'v1').split(',').map(v => v.trim()).filter(Boolean));
@@ -32,6 +37,8 @@ function getVersionStatus(version: string): 'active' | 'deprecated' | 'unsupport
 
 const requestedVersionStatus = getVersionStatus(requestedEnvelopeVersion);
 const artifactVersionStatus = getVersionStatus(artifactEnvelopeVersion);
+const exclusionRatio = totalWindows > 0 ? excludedWindows / totalWindows : 0;
+const bootstrapExpired = observedSettledWindows >= bootstrapMaxWindows;
 
 // T2 governance: version mismatch fail
 if (requestedEnvelopeVersion !== artifactEnvelopeVersion) {
@@ -41,6 +48,10 @@ if (requestedEnvelopeVersion !== artifactEnvelopeVersion) {
 // T2 governance: no silent fallback default
 if (requestedVersionStatus === 'unsupported') {
   failed.push('ENVELOPE_VERSION_UNAVAILABLE_NO_FALLBACK');
+}
+
+if (requestedEnvelopeVersion.startsWith('bootstrap') && bootstrapExpired) {
+  failed.push('BOOTSTRAP_ENVELOPE_EXPIRED');
 }
 
 // T1 comparability precondition
@@ -69,12 +80,21 @@ const out = {
     observedSample,
     requestedEnvelopeVersion,
     artifactEnvelopeVersion,
+    bootstrapMargin,
+    excludedWindows,
+    totalWindows,
+    bootstrapMaxWindows,
+    observedSettledWindows,
   },
   envelope: {
     requestedVersionStatus,
     artifactVersionStatus,
     activeVersions: [...activeVersions],
     deprecatedVersions: [...deprecatedVersions],
+    bootstrapExpired,
+  },
+  telemetry: {
+    exclusionRatio,
   },
 };
 
