@@ -27,6 +27,9 @@ const deprecatedVersions = new Set((process.env.DEPRECATED_ENVELOPE_VERSIONS ?? 
 const allowDeprecatedForClaims = (process.env.ALLOW_DEPRECATED_FOR_CLAIMS ?? 'false').toLowerCase() === 'true';
 const overrideUsed = (process.env.POLICY_OVERRIDE_USED ?? 'false').toLowerCase() === 'true';
 const overrideReason = process.env.POLICY_OVERRIDE_REASON ?? '';
+const overrideCount = Number(process.env.OVERRIDE_COUNT ?? 0);
+const overrideAlertThreshold = Number(process.env.OVERRIDE_ALERT_THRESHOLD ?? 3);
+const requireStructuredOverrideReason = (process.env.REQUIRE_STRUCTURED_OVERRIDE_REASON ?? 'true').toLowerCase() === 'true';
 
 const compare = JSON.parse(readFileSync(comparePath, 'utf-8')) as CompareOut;
 
@@ -59,6 +62,17 @@ if (requestedVersionStatus === 'deprecated' && !allowDeprecatedForClaims) {
 
 if (overrideUsed && !overrideReason.trim()) {
   failed.push('OVERRIDE_REASON_MISSING');
+}
+
+if (overrideUsed && requireStructuredOverrideReason) {
+  // Minimal structured format: <reference>: <intent>
+  if (!overrideReason.includes(':')) {
+    failed.push('OVERRIDE_REASON_UNSTRUCTURED');
+  }
+}
+
+if (overrideCount > overrideAlertThreshold) {
+  failed.push('OVERRIDE_ALERT_THRESHOLD_EXCEEDED');
 }
 
 if (requestedEnvelopeVersion.startsWith('bootstrap') && bootstrapExpired) {
@@ -99,6 +113,9 @@ const out = {
     allowDeprecatedForClaims,
     overrideUsed,
     overrideReason,
+    overrideCount,
+    overrideAlertThreshold,
+    requireStructuredOverrideReason,
   },
   envelope: {
     requestedVersionStatus,
