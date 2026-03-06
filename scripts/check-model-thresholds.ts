@@ -24,6 +24,7 @@ const observedSettledWindows = Number(process.argv[11] ?? totalWindows);
 // Comma-separated version policy lists (no silent fallback by default)
 const activeVersions = new Set((process.env.ACTIVE_ENVELOPE_VERSIONS ?? 'v1').split(',').map(v => v.trim()).filter(Boolean));
 const deprecatedVersions = new Set((process.env.DEPRECATED_ENVELOPE_VERSIONS ?? '').split(',').map(v => v.trim()).filter(Boolean));
+const allowDeprecatedForClaims = (process.env.ALLOW_DEPRECATED_FOR_CLAIMS ?? 'false').toLowerCase() === 'true';
 
 const compare = JSON.parse(readFileSync(comparePath, 'utf-8')) as CompareOut;
 
@@ -48,6 +49,10 @@ if (requestedEnvelopeVersion !== artifactEnvelopeVersion) {
 // T2 governance: no silent fallback default
 if (requestedVersionStatus === 'unsupported') {
   failed.push('ENVELOPE_VERSION_UNAVAILABLE_NO_FALLBACK');
+}
+
+if (requestedVersionStatus === 'deprecated' && !allowDeprecatedForClaims) {
+  failed.push('DEPRECATED_VERSION_FOR_CLAIMS_DISALLOWED');
 }
 
 if (requestedEnvelopeVersion.startsWith('bootstrap') && bootstrapExpired) {
@@ -85,6 +90,7 @@ const out = {
     totalWindows,
     bootstrapMaxWindows,
     observedSettledWindows,
+    allowDeprecatedForClaims,
   },
   envelope: {
     requestedVersionStatus,
