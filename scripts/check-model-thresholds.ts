@@ -25,6 +25,8 @@ const observedSettledWindows = Number(process.argv[11] ?? totalWindows);
 const activeVersions = new Set((process.env.ACTIVE_ENVELOPE_VERSIONS ?? 'v1').split(',').map(v => v.trim()).filter(Boolean));
 const deprecatedVersions = new Set((process.env.DEPRECATED_ENVELOPE_VERSIONS ?? '').split(',').map(v => v.trim()).filter(Boolean));
 const allowDeprecatedForClaims = (process.env.ALLOW_DEPRECATED_FOR_CLAIMS ?? 'false').toLowerCase() === 'true';
+const overrideUsed = (process.env.POLICY_OVERRIDE_USED ?? 'false').toLowerCase() === 'true';
+const overrideReason = process.env.POLICY_OVERRIDE_REASON ?? '';
 
 const compare = JSON.parse(readFileSync(comparePath, 'utf-8')) as CompareOut;
 
@@ -53,6 +55,10 @@ if (requestedVersionStatus === 'unsupported') {
 
 if (requestedVersionStatus === 'deprecated' && !allowDeprecatedForClaims) {
   failed.push('DEPRECATED_VERSION_FOR_CLAIMS_DISALLOWED');
+}
+
+if (overrideUsed && !overrideReason.trim()) {
+  failed.push('OVERRIDE_REASON_MISSING');
 }
 
 if (requestedEnvelopeVersion.startsWith('bootstrap') && bootstrapExpired) {
@@ -91,6 +97,8 @@ const out = {
     bootstrapMaxWindows,
     observedSettledWindows,
     allowDeprecatedForClaims,
+    overrideUsed,
+    overrideReason,
   },
   envelope: {
     requestedVersionStatus,
@@ -102,6 +110,14 @@ const out = {
   telemetry: {
     exclusionRatio,
   },
+  overrideEvent: overrideUsed
+    ? {
+        used: true,
+        reason: overrideReason,
+      }
+    : {
+        used: false,
+      },
 };
 
 console.log(JSON.stringify(out, null, 2));
