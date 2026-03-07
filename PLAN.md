@@ -454,3 +454,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** monitor emits boundary-pressure index and triggers warn/critical levels with deterministic thresholds.
 
 **Next Task (single):** implement Task 1 robust-overlap scaffold (baseline vs perturbed-prior overlap reporting) for current sweep artifact.
+
+### 12:07 roadmap refresh (A-lane)
+1. **Worst-case guardrail integration for robust-overlap (P0)**
+   - add hard per-variant floor checks and explicit worst-case gate before normalized aggregate acceptance.
+   **Acceptance metric:** artifact reports `worstVariantScore`, `worstVariantPass`; global pass forbidden when worst-case fails.
+
+2. **Perturbation family dedup + capped contribution (P0)**
+   - cluster near-duplicate perturbations into families and apply contribution caps at family level, not raw variant level.
+   **Acceptance metric:** artifact emits family map + pre/post-cap contribution table; no family exceeds configured max share.
+
+3. **Deterministic score precedence + decision trace (P0)**
+   - enforce policy ordering: hard floors -> worst-case -> normalized score -> raw score, with machine-readable decision trace.
+   **Acceptance metric:** every run outputs `decisionTrace[]` with rule IDs and pass/fail transitions; no ambiguous final verdict.
+
+**Next Task (single):** implement Task 1 in `robust-overlap-scaffold.ts` (worst-case guardrail fields + acceptance gating).
