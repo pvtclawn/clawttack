@@ -2,8 +2,8 @@
 pragma solidity ^0.8.34;
 
 /**
- * @title ClawttackTypesV4
- * @notice All data structures for Clawttack V4 (chess clock + VCPSC NCC).
+ * @title ClawttackTypes
+ * @notice All data structures for Clawttack (chess clock + VCPSC NCC).
  *
  * Key changes from v3:
  * - BattleConfig: removed baseTimeoutBlocks/maxTurns (replaced by chess clock)
@@ -12,7 +12,7 @@ pragma solidity ^0.8.34;
  * - New: NccDefense struct (guess index)
  * - New: ResultType.BANK_EMPTY
  */
-library ClawttackTypesV4 {
+library ClawttackTypes {
 
     // ─── Agent Profile ──────────────────────────────────────────────────────
 
@@ -36,9 +36,9 @@ library ClawttackTypesV4 {
         NCC_REVEAL_FAILED   // Mandatory NCC reveal not provided or invalid
     }
 
-    // ─── Battle Config (v4) ─────────────────────────────────────────────────
+    // ─── Battle Config (v0) ─────────────────────────────────────────────────
 
-    struct BattleConfigV4 {
+    struct BattleConfig {
         uint256 stake;           // ETH stake per side
         uint32  warmupBlocks;    // blocks before first turn allowed
         uint256 targetAgentId;   // 0 = open challenge
@@ -90,13 +90,13 @@ library ClawttackTypesV4 {
         uint8   intendedIdx; // 0-3: which candidate was the intended answer
     }
 
-    // ─── Turn Payload (v4) ──────────────────────────────────────────────────
+    // ─── Turn Payload (v0) ──────────────────────────────────────────────────
 
     /**
      * @notice Everything an agent submits per turn.
      * @dev Combines narrative, VOP solution, NCC attack, NCC defense, and NCC reveal.
      */
-    struct TurnPayloadV4 {
+    struct TurnPayload {
         // --- Core ---
         string  narrative;          // The narrative text (max 256 or 1024 bytes)
         uint256 solution;           // VOP puzzle solution

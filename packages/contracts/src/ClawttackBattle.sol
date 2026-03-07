@@ -2,7 +2,7 @@
 pragma solidity ^0.8.34;
 
 import {Initializable} from "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
-import {ClawttackTypesV4} from "./libraries/ClawttackTypesV4.sol";
+import {ClawttackTypes} from "./libraries/ClawttackTypes.sol";
 import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
 import {ChessClockLib} from "./libraries/ChessClockLib.sol";
 import {NccVerifier} from "./libraries/NccVerifier.sol";
@@ -17,8 +17,8 @@ import {IClawttackArenaView} from "./interfaces/IClawttackArenaView.sol";
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 /**
- * @title ClawttackBattleV4
- * @notice v4 battle contract with chess clock timing + NCC offset-verified commit-reveal.
+ * @title ClawttackBattle
+ * @notice v0 battle contract with chess clock timing + NCC offset-verified commit-reveal.
  * @dev Key changes from v3:
  *      - Timer decay replaced with chess clock (ChessClockLib)
  *      - NCC: 4-candidate VCPSC with offset verification (NccVerifier)
@@ -26,12 +26,12 @@ import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
  *      - ResultType.BANK_EMPTY added
  *      - Simulation-verified: 960K battles, 100% LLM vs script win rate
  */
-contract ClawttackBattleV4 is Initializable {
+contract ClawttackBattle is Initializable {
     using ChessClockLib for ChessClockLib.Clock;
 
     // ─── Constants ──────────────────────────────────────────────────────────
-    string public constant DOMAIN_TYPE_INIT = "CLAWTTACK_V4_INIT";
-    string public constant DOMAIN_TYPE_TURN = "CLAWTTACK_V4_TURN";
+    string public constant DOMAIN_TYPE_INIT = "CLAWTTACK_INIT";
+    string public constant DOMAIN_TYPE_TURN = "CLAWTTACK_TURN";
     string public constant COMPROMISE_REASON = "COMPROMISE";
 
     uint256 public constant MAX_NARRATIVE_LEN = 256;
@@ -50,8 +50,8 @@ contract ClawttackBattleV4 is Initializable {
     address public acceptorOwner;
     uint8 public jokersRemainingB;
 
-    ClawttackTypesV4.BattleConfigV4 public config;
-    ClawttackTypesV4.ResultType public state; // reusing ResultType.None as "Open"
+    ClawttackTypes.BattleConfig public config;
+    ClawttackTypes.ResultType public state; // reusing ResultType.None as "Open"
 
     uint256 public totalPot;
     bytes32 public sequenceHash;
@@ -79,8 +79,8 @@ contract ClawttackBattleV4 is Initializable {
     bool public nccResultBReady;  // Has B's result been set?
 
     // NCC pending state (commitment + defense tracking)
-    ClawttackTypesV4.PendingNcc public pendingNccA; // NCC attack set by A, pending B's defense
-    ClawttackTypesV4.PendingNcc public pendingNccB; // NCC attack set by B, pending A's defense
+    ClawttackTypes.PendingNcc public pendingNccA; // NCC attack set by A, pending B's defense
+    ClawttackTypes.PendingNcc public pendingNccB; // NCC attack set by B, pending A's defense
 
     // Battle lifecycle: Open(0) → Active(1) → Settled(2) | Cancelled(3)
     enum BattlePhase { Open, Active, Settled, Cancelled }
@@ -93,7 +93,7 @@ contract ClawttackBattleV4 is Initializable {
         uint256 indexed battleId,
         uint256 indexed winnerId,
         uint256 indexed loserId,
-        ClawttackTypesV4.ResultType resultType
+        ClawttackTypes.ResultType resultType
     );
     event TurnSubmitted(
         uint256 indexed battleId,
@@ -122,7 +122,7 @@ contract ClawttackBattleV4 is Initializable {
         uint256 _battleId,
         uint256 _challengerId,
         address _challengerOwner,
-        ClawttackTypesV4.BattleConfigV4 calldata _config,
+        ClawttackTypes.BattleConfig calldata _config,
         bytes32 _secretHash
     ) external initializer {
         arena = _arena;
@@ -188,7 +188,7 @@ contract ClawttackBattleV4 is Initializable {
 
     // ─── Submit Turn ────────────────────────────────────────────────────────
 
-    function submitTurn(ClawttackTypesV4.TurnPayloadV4 calldata payload) external {
+    function submitTurn(ClawttackTypes.TurnPayload calldata payload) external {
         if (phase != BattlePhase.Active) revert ClawttackErrors.BattleNotActive();
 
         bool isPlayerA = msg.sender == challengerOwner;
@@ -204,14 +204,14 @@ contract ClawttackBattleV4 is Initializable {
         if (currentTurn >= 2) {
             // Current agent reveals their NCC from 2 turns ago.
             // This determines whether the OPPONENT correctly answered.
-            ClawttackTypesV4.PendingNcc storage myPrevNcc = isPlayerA ? pendingNccA : pendingNccB;
+            ClawttackTypes.PendingNcc storage myPrevNcc = isPlayerA ? pendingNccA : pendingNccB;
 
             // Validate reveal — if invalid, attacker forfeits immediately
             if (payload.nccReveal.intendedIdx > 3) {
                 _settleBattle(
                     isPlayerA ? acceptorId : challengerId,
                     isPlayerA ? challengerId : acceptorId,
-                    ClawttackTypesV4.ResultType.NCC_REVEAL_FAILED
+                    ClawttackTypes.ResultType.NCC_REVEAL_FAILED
                 );
                 return;
             }
@@ -222,7 +222,7 @@ contract ClawttackBattleV4 is Initializable {
                 _settleBattle(
                     isPlayerA ? acceptorId : challengerId,
                     isPlayerA ? challengerId : acceptorId,
-                    ClawttackTypesV4.ResultType.NCC_REVEAL_FAILED
+                    ClawttackTypes.ResultType.NCC_REVEAL_FAILED
                 );
                 return;
             }
@@ -266,7 +266,7 @@ contract ClawttackBattleV4 is Initializable {
         if (bankDepleted) {
             uint256 winnerId = isPlayerA ? acceptorId : challengerId;
             uint256 loserId = isPlayerA ? challengerId : acceptorId;
-            _settleBattle(winnerId, loserId, ClawttackTypesV4.ResultType.BANK_EMPTY);
+            _settleBattle(winnerId, loserId, ClawttackTypes.ResultType.BANK_EMPTY);
             return;
         }
 
@@ -274,7 +274,7 @@ contract ClawttackBattleV4 is Initializable {
 
         // ── 2. NCC Defense (answer opponent's previous challenge) ──
         if (currentTurn >= 1) {
-            ClawttackTypesV4.PendingNcc storage oppNcc = isPlayerA ? pendingNccB : pendingNccA;
+            ClawttackTypes.PendingNcc storage oppNcc = isPlayerA ? pendingNccB : pendingNccA;
             if (oppNcc.commitment != bytes32(0)) {
                 NccVerifier.verifyDefense(payload.nccDefense);
                 oppNcc.defenderGuessIdx = payload.nccDefense.guessIdx;
@@ -313,7 +313,7 @@ contract ClawttackBattleV4 is Initializable {
         );
 
         // Store NCC attack for opponent to defend
-        ClawttackTypesV4.PendingNcc storage myNcc = isPlayerA ? pendingNccA : pendingNccB;
+        ClawttackTypes.PendingNcc storage myNcc = isPlayerA ? pendingNccA : pendingNccB;
         myNcc.commitment = payload.nccAttack.nccCommitment;
         myNcc.candidateWordIndices = payload.nccAttack.candidateWordIndices;
         myNcc.defenderGuessIdx = 0;
@@ -362,7 +362,7 @@ contract ClawttackBattleV4 is Initializable {
             _settleBattle(
                 isPlayerA ? acceptorId : challengerId,
                 isPlayerA ? challengerId : acceptorId,
-                ClawttackTypesV4.ResultType.INVALID_SOLUTION
+                ClawttackTypes.ResultType.INVALID_SOLUTION
             );
             return;
         }
@@ -423,7 +423,7 @@ contract ClawttackBattleV4 is Initializable {
         uint256 victimId = isPlayerA ? acceptorId : challengerId;
 
         emit FlagCaptured(battleId, attackerId, victimId);
-        _settleBattle(attackerId, victimId, ClawttackTypesV4.ResultType.FLAG_CAPTURED);
+        _settleBattle(attackerId, victimId, ClawttackTypes.ResultType.FLAG_CAPTURED);
     }
 
     function submitCompromise(bytes calldata signature) external {
@@ -444,7 +444,7 @@ contract ClawttackBattleV4 is Initializable {
         if (recovered != targetVictim) revert ClawttackErrors.InvalidCompromiseSignature();
 
         emit FlagCaptured(battleId, attackerId, victimId);
-        _settleBattle(attackerId, victimId, ClawttackTypesV4.ResultType.COMPROMISE);
+        _settleBattle(attackerId, victimId, ClawttackTypes.ResultType.COMPROMISE);
     }
 
     // ─── Timeout ────────────────────────────────────────────────────────────
@@ -461,7 +461,7 @@ contract ClawttackBattleV4 is Initializable {
         uint256 loserId = expectedA ? challengerId : acceptorId;
 
         emit TimeoutClaimed(battleId, winnerId);
-        _settleBattle(winnerId, loserId, ClawttackTypesV4.ResultType.TIMEOUT);
+        _settleBattle(winnerId, loserId, ClawttackTypes.ResultType.TIMEOUT);
     }
 
     // ─── Cancel ─────────────────────────────────────────────────────────────
@@ -499,7 +499,7 @@ contract ClawttackBattleV4 is Initializable {
     function _settleBattle(
         uint256 winnerId,
         uint256 loserId,
-        ClawttackTypesV4.ResultType result
+        ClawttackTypes.ResultType result
     ) internal {
         phase = BattlePhase.Settled;
 

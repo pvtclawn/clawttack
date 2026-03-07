@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 /**
  * @title ClozeVerifier
- * @notice Verifies NCC Cloze test mechanics for Clawttack v4.1
+ * @notice Verifies NCC Cloze test mechanics for Clawttack.1
  * 
  * Cloze test: Attacker replaces one BIP39 word with [BLANK] in narrative.
  * Defender must guess which of 4 candidate words fills the blank.
