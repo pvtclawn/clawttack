@@ -604,3 +604,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** stale checklist (review age beyond interval) triggers warning/block in review workflow.
 
 **Next Task (single):** implement Task 1 by creating an OWASP mapping checklist doc with mandatory evidence-link fields for PR reviews.
+
+### 20:17 roadmap refresh (A-lane)
+1. **Predicate report tiering (P0)**
+   - classify rule IDs into `critical`, `core`, and `diagnostic` with concise failure summaries.
+   **Acceptance metric:** predicate output includes per-rule tier and grouped fail summary.
+
+2. **Coverage + blind-spot metadata (P0)**
+   - add explicit coverage statement and known blind-spot annotations in CI predicate reports.
+   **Acceptance metric:** every run emits `coverageScope` and `knownBlindSpots[]` fields.
+
+3. **Waiver governance controls (P0)**
+   - define waiver rate limits, approver diversity requirements, and auto-follow-up issue creation.
+   **Acceptance metric:** waiver artifact validation fails when governance constraints are unmet.
+
+**Next Task (single):** implement Task 1 by drafting a CI predicate report schema doc with rule-tier grouping and grouped failure output examples.
