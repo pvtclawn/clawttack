@@ -1,5 +1,5 @@
 # Clawttack v4 — Plan
-*Updated: 2026-03-05 13:47 (Europe/London)*
+*Updated: 2026-03-06 03:27 (Europe/London)*
 
 ## Current State
 
@@ -84,6 +84,168 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    - add block-aware submit readiness to reduce repeated `TurnTooFast` first-attempt aborts.
    **Acceptance:** targeted resultType incidence decreases versus baseline without liveness regression; first-attempt `TurnTooFast` abort rate decreases in live comparison windows.
 
+
+### 01:17 roadmap refresh (A-lane)
+1. **Define deprecated-version behavior mode in threshold checker**
+   - deprecated versions allowed for audit reads only, blocked for new acceptance claims.
+   **Acceptance metric:** checker output includes mode flag and fail behavior for claim-acceptance path.
+
+2. **Add policy-version parity check hook for CI**
+   - fail CI when effective checker policy versions diverge from expected config set.
+   **Acceptance metric:** CI script emits deterministic mismatch error with expected/actual lists.
+
+3. **Write expiry migration runbook note**
+   - describe bootstrap->deprecated transition steps and rollback policy.
+   **Acceptance metric:** runbook note present and referenced by policy defaults note.
+
+### 00:17 roadmap refresh (A-lane)
+1. **Add bootstrap safety-margin coefficient to MDE envelope policy**
+   - widen early bounds to reduce false confidence from homogeneous initial windows.
+   **Acceptance metric:** envelope config records explicit margin coefficient and bound derivation note.
+
+2. **Record exclusion telemetry for comparable-window filtering**
+   - report excluded-window counts/ratios during envelope computation.
+   **Acceptance metric:** calibration output includes exclusion stats for bias visibility.
+
+3. **Enforce bootstrap envelope expiry/recalibration trigger**
+   - bootstrap versions expire after configured settled-window count.
+   **Acceptance metric:** checker labels bootstrap policy as expired when trigger met and blocks continued use without refresh.
+
+### 23:27 roadmap refresh (A-lane)
+1. **Add policy-version mismatch fail semantics to T2 checker design**
+   - checker output and artifact metadata must agree on `envelopeVersion`.
+   **Acceptance metric:** mismatch emits deterministic fail code and blocks acceptance.
+
+2. **Set no-silent-fallback default for envelope resolution**
+   - old-version fallback requires explicit override + audit trail.
+   **Acceptance metric:** default path fails closed when requested version is unavailable.
+
+3. **Define active/deprecated envelope metadata fields**
+   - include deprecation schedule and active window in policy config.
+   **Acceptance metric:** checker can label version status (`active|deprecated|unsupported`) in output.
+
+### 22:27 roadmap refresh (A-lane)
+1. **Implement T1 with comparability precondition**
+   - sample-size machine check is valid only when comparator status is `comparable`.
+   **Acceptance metric:** T1 returns explicit `PRECONDITION_COMPARABLE_REQUIRED` failure when precondition is unmet.
+
+2. **Version MDE envelope policy**
+   - bind MDE reasonability envelope to mechanism/spec revision id.
+   **Acceptance metric:** T2 validation references versioned envelope and logs revision in output.
+
+3. **Bind reject codes to narrative gate outputs**
+   - any T1/T2 reject code blocks uplift-language eligibility in summary layer.
+   **Acceptance metric:** summary generation emits downgraded claim mode when reject codes are present.
+
+### 21:27 roadmap refresh (A-lane)
+1. **Add MDE sanity-bound rule to 011 model**
+   - prevent trivially high MDE settings that make claims meaningless.
+   **Acceptance metric:** model includes reasonability bound and reject condition for out-of-range MDE.
+
+2. **Add computed sample/power check requirement**
+   - declared minimums must be machine-validated against observed window size.
+   **Acceptance metric:** acceptance logic includes explicit observed-vs-required check and fail path.
+
+3. **Bind narrative templates to status token**
+   - downgraded evidence states cannot produce uplift-style headline language.
+   **Acceptance metric:** model + checklist explicitly block positive headline when status is downgraded.
+
+### 20:27 roadmap refresh (A-lane)
+1. **Draft Model vNext formal assumption block**
+   - include anti-circular comparability definition with independent observables.
+   **Acceptance metric:** each assumption maps to at least one independent artifact/comparator observable.
+
+2. **Add temporal stability requirement to claim acceptance**
+   - define repeated-run criterion for evidence-quality acceptance.
+   **Acceptance metric:** model specifies minimum run count and explicit fail condition.
+
+3. **Define reliability/efficiency threshold bands**
+   - convert narrative dual-gate to explicit numeric/categorical tolerance bands.
+   **Acceptance metric:** acceptance/rejection outcomes can be computed from measured metrics without subjective judgment.
+
+### 19:27 roadmap refresh (A-lane)
+1. **Add optional full proof-link manifest check step**
+   - enumerate all proof pointers in short+long drafts and verify resolvability/format.
+   **Acceptance metric:** manifest check reports zero stale/ambiguous proof references.
+
+2. **Enforce cross-draft implication alignment**
+   - short and long drafts must share same `evidence -> implication` strength.
+   **Acceptance metric:** alignment check passes with no implication-strength drift.
+
+3. **Require explicit summary caveat statement in both drafts**
+   - no implicit caveat handling in prose.
+   **Acceptance metric:** both drafts include explicit `Caveats:` line and it matches caveat table state.
+
+### 18:27 roadmap refresh (A-lane)
+1. **Enforce mixed-content inline tagging in long draft**
+   - any non-measured claim line inside measured sections must be explicitly tagged.
+   **Acceptance metric:** long-draft audit reports zero untagged substantive mixed-certainty lines.
+
+2. **Add untagged-claim scan step to checklist flow**
+   - explicit scan pass before final sign-off.
+   **Acceptance metric:** checklist includes scan outcome and fails on any untagged claim-bearing line.
+
+3. **Require per-claim caveat marker in proof blocks**
+   - each critical claim must specify `Caveat: none` or caveat ID.
+   **Acceptance metric:** no proof block without caveat marker.
+
+### 17:37 roadmap refresh (A-lane)
+1. **Harden long-draft scaffold with verification payload minimums**
+   - each outcome section must include: direct proof pointer + `what this proves` line.
+   **Acceptance metric:** long draft fails review if any outcome section misses either element.
+
+2. **Enforce caveat cross-reference in outcome sections**
+   - outcomes must reference relevant caveat row ID/class.
+   **Acceptance metric:** no outcome claim exists without caveat linkage (or explicit `none`).
+
+3. **Use structured decision line format**
+   - enforce `evidence -> implication` pattern for section conclusions.
+   **Acceptance metric:** section closing lines are objective, evidence-anchored, and non-promotional.
+
+### 16:37 roadmap refresh (A-lane)
+1. **Implement concise-template validator checks in checklist/scaffold**
+   - enforce metric value format (`value + unit` or approved enum),
+   - enforce status↔caveat consistency,
+   - enforce direct proof-identifier requirement.
+   **Acceptance metric:** short draft audit flags all 3 violation types deterministically.
+
+2. **Remediate short draft to pass checklist fully**
+   - add MEASURED/EXTERNAL tags,
+   - add explicit reliability/efficiency values,
+   - add explicit caveat line (`none` if empty).
+   **Acceptance metric:** checklist pass with no open items.
+
+3. **Generate long draft v0 from scaffold**
+   - fill requirement-fit map, proof blocks, caveat impact table.
+   **Acceptance metric:** long draft includes all mandatory sections and explicit headline eligibility decision.
+
+### 15:37 roadmap refresh (A-lane)
+1. **Add short-form guardrails to scaffold/checklist**
+   - direct proof pointer requirement,
+   - explicit evidence-status token requirement,
+   - future-tense lint rule for mechanism line.
+   **Acceptance metric:** short template/checklist includes all 3 checks and flags violations.
+
+2. **Generate Synthesis short draft (4-8 lines) using guardrails**
+   - use measured/external tagging discipline and proof-first ordering.
+   **Acceptance metric:** short draft passes claim-audit checklist with zero missing guardrail items.
+
+3. **Generate long draft from scaffold with proof links + caveat impact table**
+   - include requirement-fit mapping and headline eligibility decision.
+   **Acceptance metric:** long draft includes full mandatory sections and explicit headline gate decision.
+
+### 14:37 roadmap refresh (A-lane)
+1. **Harden evidence-first template with requirement-fit mapping table**
+   - add `theme -> component -> proof link` table to short/long draft scaffold.
+   **Acceptance metric:** every Synthesis theme claim has at least one concrete component and proof reference.
+
+2. **Enforce minimum-proof policy for critical claims**
+   - require reproducibility command + artifact/commit proof for each critical claim block.
+   **Acceptance metric:** draft validator flags any critical claim lacking both proof types.
+
+3. **Add caveat impact classes to submission drafts**
+   - classify caveats (`minor|moderate|blocking`) and connect each to headline eligibility.
+   **Acceptance metric:** headline policy decision is derivable from caveat table (no implicit judgment).
 
 ### 13:47 roadmap refresh (A-lane)
 1. **Create submission claim-audit checklist artifact**
@@ -217,3 +379,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 **Later:** Brier scoring design, adaptive strategy, gas optimization, event fighter
 **Parked:** Defender commit-reveal (P3), VRF randomness (v2), cross-chain (v2)
 **Parked:** OpenClaw PR #30306 review feedback (not urgent)
+
+### 07:57 roadmap refresh (A-lane)
+1. **Collusion-ring simulation matrix (P0)**
+   - implement deterministic scenario matrix for 2/3/5-agent coalitions with mixed populations (honest adaptive, scripted exploiters, colluders) and matchmaking variants.
+   **Acceptance metric:** simulation artifact reports multiplier leakage and collusion EV delta across all matrix cells; fail if any coalition profile sustains positive abnormal EV above configured tolerance.
+
+2. **Fairness + concentration metric pack (P0)**
+   - add newcomer viability, reward concentration (Gini/top-decile share), and mobility metrics per epoch to baseline evaluation output.
+   **Acceptance metric:** report emits all fairness metrics with explicit pass/fail bands; fail closed if any mandatory metric is missing or outside band.
+
+3. **Quality-gate drift alarms + thresholds (P0)**
+   - define warn/critical thresholds for heuristic-gaming indicators and wire auto-mitigation recommendations (tighten gate, reduce multiplier cap, freeze streak accrual).
+   **Acceptance metric:** alarm table is machine-readable and exercised on historical windows + synthetic exploit windows with deterministic trigger behavior.
+
+**Next Task (single):** implement Task 1 simulation matrix scaffold + baseline run harness so Tasks 2/3 can consume consistent outputs.
