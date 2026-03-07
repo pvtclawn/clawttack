@@ -544,3 +544,33 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** transition without evidence is rejected; stale transition detector emits corrective action.
 
 **Next Task (single):** implement Task 1 by extending competitor template with severity-based max due-window rules and validation notes.
+
+### 16:57 roadmap refresh (A-lane)
+1. **Uncertainty debt formula spec + examples (P0)**
+   - define deterministic formula for `uncertaintyDebtScore` using severity weights and unresolved age buckets.
+   **Acceptance metric:** docs include formula + at least 3 worked examples producing reproducible scores.
+
+2. **Recovery-mode hysteresis policy (P0)**
+   - add minimum hold window and switch thresholds to prevent `backward`/`forward` mode flapping.
+   **Acceptance metric:** policy table includes switch conditions and a no-flap invariant over a bounded window.
+
+3. **Immutable unknown timeline + audit trail (P0)**
+   - require immutable `createdAt` and append-only due-date/status change log with reason codes.
+   **Acceptance metric:** record schema includes `timeline[]`; edits without reason code fail validation.
+
+**Next Task (single):** implement Task 1 in docs/research by adding explicit uncertainty-debt formula and worked examples.
+
+### 17:47 roadmap refresh (A-lane)
+1. **PR split-series metadata policy (P0)**
+   - require parent issue + dependency ordering for split PR stacks touching shared invariants.
+   **Acceptance metric:** PR template includes mandatory `parentIssue` and `dependsOn` fields when `split-series=true`.
+
+2. **Generated-artifact allowlist policy (P0)**
+   - define allowed generated files and justification tags to prevent noise-gate false positives.
+   **Acceptance metric:** CI check passes only when generated-file changes match allowlist + justification.
+
+3. **CI-assisted interface delta detector (P0)**
+   - add automated summary of ABI/event/signature deltas for reviewer confirmation.
+   **Acceptance metric:** PR check posts deterministic interface-delta report; missing declaration blocks merge.
+
+**Next Task (single):** implement Task 1 by drafting a PR hygiene policy doc + template fields for split-series metadata.
