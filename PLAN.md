@@ -499,3 +499,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** trust-state transitions are logged with reason codes; repeated flips over threshold emit `trustFlipAlert=true`.
 
 **Next Task (single):** implement Task 1 in `robust-overlap-scaffold.ts` (policy versioning + final verdict reason + gate-intent tags).
+
+### 14:37 roadmap refresh (A-lane)
+1. **Competitor evidence-template pack (P0)**
+   - create a fixed checklist template per competitor: trust model, failure model, replayability proof, and evidence links.
+   **Acceptance metric:** every evaluated competitor record contains all required fields + at least one reproducible evidence link per field.
+
+2. **Replayability hard-gate for Tier 2+ (P0)**
+   - enforce that Tier 2/3 ratings require independent replay steps and expected outcomes documented.
+   **Acceptance metric:** rubric engine blocks Tier>=2 assignment when replay steps are missing or non-reproducible.
+
+3. **Trajectory signal + anti-gaming spot-checks (P0)**
+   - add trajectory labels (improving/stable/regressing) and adversarial spot-check outcomes to avoid static checklist gaming.
+   **Acceptance metric:** output includes trajectory + spot-check status; confidence score decreases automatically on failed spot-checks.
+
+**Next Task (single):** implement Task 1 by adding a structured competitor-evidence template file under `docs/research/` and backfilling current known competitors.
