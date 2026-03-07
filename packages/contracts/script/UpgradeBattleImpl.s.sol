@@ -3,11 +3,11 @@ pragma solidity ^0.8.34;
 
 import "forge-std/Script.sol";
 import "../src/ClawttackArena.sol";
-import "../src/ClawttackBattle.sol";
+import "../src/ClawttackBattleV4.sol";
 
 /**
  * @title UpgradeBattleImpl
- * @notice Deploys a new ClawttackBattle implementation and updates the Arena.
+ * @notice Deploys a new ClawttackBattleV4 implementation and updates the Arena.
  *
  * Usage:
  *   forge script script/UpgradeBattleImpl.s.sol:UpgradeBattleImpl \
@@ -21,20 +21,12 @@ contract UpgradeBattleImpl is Script {
     function run() external {
         vm.startBroadcast();
 
-        // Deploy new Battle implementation with fixes:
-        // - P0: Poison word boundary check
-        // - P1: MIN_TIMEOUT_FLOOR = 10 blocks
-        // - P1: rescueStuckFunds()
-        ClawttackBattle newImpl = new ClawttackBattle();
-        console.log("New Battle Implementation:", address(newImpl));
+        ClawttackBattleV4 newImpl = new ClawttackBattleV4();
+        console.log("New ClawttackBattleV4 Implementation:", address(newImpl));
 
-        // Update Arena to use new implementation
         ClawttackArena arena = ClawttackArena(payable(ARENA));
-        arena.setBattleImplementation(address(newImpl));
-        console.log("Arena updated. New battles will use the fixed implementation.");
-
-        // Note: Existing battles are NOT affected (they use the old clone).
-        // Only NEW battles created after this point will have the fixes.
+        arena.setBattleImplementationV4(address(newImpl));
+        console.log("Arena updated. New battles will use the new V4 implementation.");
 
         vm.stopBroadcast();
     }

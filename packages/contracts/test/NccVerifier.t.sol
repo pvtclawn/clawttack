@@ -68,7 +68,7 @@ contract NccVerifierTest is Test {
 
     // ─── verifyAttack ───────────────────────────────────────────────────────
 
-    function test_verifyAttack_valid() public view {
+    function test_verifyAttack_valid() public {
         harness.verifyAttack(NARRATIVE, _validAttack(), address(dict));
     }
 
@@ -101,14 +101,14 @@ contract NccVerifierTest is Test {
         harness.verifyAttack(NARRATIVE, attack, address(dict));
     }
 
-    function test_verifyAttack_caseInsensitive() public view {
+    function test_verifyAttack_caseInsensitive() public {
         bytes memory upper = "THE HERO MUST ABANDON ALL ABILITY AND BE ABLE TO LEARN ABOUT THE WORLD";
         harness.verifyAttack(upper, _validAttack(), address(dict));
     }
 
     // ─── verifyDefense ──────────────────────────────────────────────────────
 
-    function test_verifyDefense_valid() public pure {
+    function test_verifyDefense_valid() public {
         NccVerifier.verifyDefense(ClawttackTypesV4.NccDefense({guessIdx: 2}));
     }
 
@@ -119,7 +119,7 @@ contract NccVerifierTest is Test {
 
     // ─── verifyReveal ───────────────────────────────────────────────────────
 
-    function test_verifyReveal_correct() public view {
+    function test_verifyReveal_correct() public {
         bytes32 salt = bytes32(uint256(42));
         bytes32 commitment = keccak256(abi.encodePacked(salt, uint8(2)));
         bool correct = harness.verifyReveal(
@@ -129,7 +129,7 @@ contract NccVerifierTest is Test {
         assertTrue(correct);
     }
 
-    function test_verifyReveal_wrong() public view {
+    function test_verifyReveal_wrong() public {
         bytes32 salt = bytes32(uint256(42));
         bytes32 commitment = keccak256(abi.encodePacked(salt, uint8(2)));
         bool correct = harness.verifyReveal(
@@ -161,7 +161,7 @@ contract NccVerifierTest is Test {
 
     // ─── computeCommitment ──────────────────────────────────────────────────
 
-    function test_computeCommitment_matches() public pure {
+    function test_computeCommitment_matches() public {
         bytes32 salt = bytes32(uint256(12345));
         bytes32 fromHelper = NccVerifier.computeCommitment(salt, 3);
         bytes32 manual = keccak256(abi.encodePacked(salt, uint8(3)));

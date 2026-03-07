@@ -4,11 +4,9 @@ pragma solidity ^0.8.34;
 import {Clones} from "openzeppelin-contracts/contracts/proxy/Clones.sol";
 import {Ownable2Step, Ownable} from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
-import {ClawttackTypes} from "./libraries/ClawttackTypes.sol";
 import {ClawttackTypesV4} from "./libraries/ClawttackTypesV4.sol";
 import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
 import {EloMath} from "./libraries/EloMath.sol";
-import {IClawttackBattle} from "./interfaces/IClawttackBattle.sol";
 import {IClawttackBattleV4} from "./interfaces/IClawttackBattleV4.sol";
 
 /**
@@ -44,7 +42,6 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
     // ─── Storage ─────────────────────────────────────────────────────────────
 
-    address public battleImplementation;
     address public battleImplementationV4;
 
     uint256 public agentRegistrationFee;
@@ -56,7 +53,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     uint256 public battlesCount;
     uint256 public agentsCount;
 
-    mapping(uint256 => ClawttackTypes.AgentProfile) public agents;
+    mapping(uint256 => ClawttackTypesV4.AgentProfile) public agents;
     mapping(uint256 => address) public battles;
 
     // ─── VOP Registry ──────────────────────────────────────────────
@@ -68,9 +65,6 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
     event AgentRegistered(uint256 indexed agentId, address indexed owner);
     event BattleCreated(
-        uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint32 baseTimeoutBlocks, uint8 maxTurns
-    );
-    event BattleV4Created(
         uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint256 targetAgentId
     );
     event RatingUpdated(uint256 indexed agentId, uint32 newRating);
@@ -92,11 +86,6 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     }
 
     // ─── External: Admin ─────────────────────────────────────────────────────
-
-    function setBattleImplementation(address _impl) external onlyOwner {
-        if (_impl == address(0)) revert ClawttackErrors.InvalidCall();
-        battleImplementation = _impl;
-    }
 
     function setBattleImplementationV4(address _impl) external onlyOwner {
         if (_impl == address(0)) revert ClawttackErrors.InvalidCall();
@@ -163,7 +152,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         protocolFees += msg.value;
         unchecked { agentId = ++agentsCount; }
 
-        agents[agentId] = ClawttackTypes.AgentProfile({
+        agents[agentId] = ClawttackTypesV4.AgentProfile({
             owner: msg.sender,
             eloRating: DEFAULT_ELO_RATING,
             totalWins: 0,
@@ -174,54 +163,10 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     }
 
     /**
-     * @notice Creates a new Battle by cloning the `battleImplementation` and injecting stakes.
-     * @dev Validates constraints and transfers stakes. Only registered agents can initiate battles.
-     * @param challengerId The registered ID of the initiating AI Agent.
-     * @param config The requested game parameters including stakes, timeouts, and targeted opponents.
-     * @return battleAddress The address of the deployed EIP-1167 ClawttackBattle clone.
-     */
-    function createBattle(uint256 challengerId, ClawttackTypes.BattleConfig calldata config, bytes32 secretHash)
-        external
-        payable
-        nonReentrant
-        returns (address battleAddress)
-    {
-        if (agents[challengerId].owner == address(0)) revert ClawttackErrors.NotParticipant();
-        if (agents[challengerId].owner != msg.sender) revert ClawttackErrors.NotAgentOwner();
-
-        if (config.baseTimeoutBlocks < MIN_TIMEOUT_BLOCKS || config.baseTimeoutBlocks > MAX_TIMEOUT_BLOCKS) {
-            revert ClawttackErrors.ConfigOutOfBounds();
-        }
-        if (config.maxTurns < MIN_TURNS || config.maxTurns > MAX_TURNS) revert ClawttackErrors.ConfigOutOfBounds();
-        if (config.maxJokers > MAX_JOKERS) revert ClawttackErrors.ConfigOutOfBounds();
-        if (config.warmupBlocks < MIN_WARMUP_BLOCKS || config.warmupBlocks > MAX_WARMUP_BLOCKS) revert ClawttackErrors.ConfigOutOfBounds();
-
-        if (msg.value != config.stake + battleCreationFee) revert ClawttackErrors.InsufficientValue();
-        protocolFees += battleCreationFee;
-
-        uint256 battleId;
-        unchecked { battleId = ++battlesCount; }
-
-        battleAddress = Clones.clone(battleImplementation);
-        battles[battleId] = battleAddress;
-
-        IClawttackBattle(battleAddress).initialize(address(this), battleId, challengerId, msg.sender, config, secretHash);
-
-        if (config.stake > 0) {
-            (bool success,) = battleAddress.call{value: config.stake}("");
-            if (!success) revert ClawttackErrors.TransferFailed();
-        }
-
-        emit BattleCreated(battleId, challengerId, config.stake, config.baseTimeoutBlocks, config.maxTurns);
-    }
-
-    // ─── v4 Battle Creation ─────────────────────────────────────────────────
-
-    /**
-     * @notice Creates a new v4 battle with chess clock timing.
-     * @dev Deploys an EIP-1167 clone of the v4 battle implementation.
+     * @notice Creates a new battle with chess-clock timing.
+     * @dev Deploys an EIP-1167 clone of the battle implementation.
      * @param challengerId The challenger's registered agent ID.
-     * @param config The v4 battle configuration (no maxTurns/timeoutBlocks — chess clock handles timing).
+     * @param config The battle configuration (chess clock handles timing — no maxTurns).
      * @param secretHash The challenger's secret hash for CTF verification.
      * @return battleAddress The address of the deployed battle clone.
      */
@@ -258,7 +203,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
             if (!success) revert ClawttackErrors.TransferFailed();
         }
 
-        emit BattleV4Created(battleId, challengerId, config.stake, config.targetAgentId);
+        emit BattleCreated(battleId, challengerId, config.stake, config.targetAgentId);
     }
 
     /**
