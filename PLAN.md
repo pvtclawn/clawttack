@@ -469,3 +469,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** every run outputs `decisionTrace[]` with rule IDs and pass/fail transitions; no ambiguous final verdict.
 
 **Next Task (single):** implement Task 1 in `robust-overlap-scaffold.ts` (worst-case guardrail fields + acceptance gating).
+
+### 12:57 roadmap refresh (A-lane)
+1. **Decision-trace precedence engine (P0)**
+   - implement deterministic rule-order evaluation in robust-overlap outputs: `hard_floors -> worst_case -> normalized -> raw`.
+   **Acceptance metric:** artifact emits ordered `decisionTrace[]`; final verdict must equal first failing hard rule (if any).
+
+2. **Variant trust-state classification (P0)**
+   - tag worst-case failures as `trusted_fail` or `suspect_fail` using detector-health and adversarial-pressure heuristics.
+   **Acceptance metric:** artifact includes `worstVariantTrustState` with rationale fields; policy gates differ by trust state and are test-covered.
+
+3. **Drift-coupled floor recalibration trigger (P0)**
+   - add trigger that marks worst-case floor for recalibration when boundary pass/fail churn exceeds threshold.
+   **Acceptance metric:** artifact emits `recalibrationTrigger` boolean + supporting churn metrics; trigger deterministically reproducible on replay.
+
+**Next Task (single):** implement Task 1 in `robust-overlap-scaffold.ts` by adding machine-readable `decisionTrace[]` with hard-stop precedence semantics.
