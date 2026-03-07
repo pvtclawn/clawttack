@@ -27,6 +27,17 @@ type PerturbationVariant = {
   retentionWeight: number
 }
 
+type DecisionTraceEntry = {
+  ruleId: 'hard_floor_baseline_overlap' | 'worst_case_variant_floor' | 'normalized_overlap_threshold' | 'raw_overlap_diagnostic'
+  order: number
+  pass: boolean
+  stopOnFail: boolean
+  value: number
+  threshold: number
+  comparator: '>=' | 'diagnostic'
+  reason: string
+}
+
 type RobustOverlapArtifact = {
   generatedAt: string
   status: 'scaffold'
@@ -49,11 +60,14 @@ type RobustOverlapArtifact = {
     id: string
     weightedOverlapScore: number
   }
+  decisionTrace: DecisionTraceEntry[]
   acceptance: {
     threshold: number
     worstVariantFloor: number
+    baselineHardFloor: number
     normalizedPass: boolean
     worstVariantPass: boolean
+    hardFloorPass: boolean
     pass: boolean
   }
   nextImplementationSteps: string[]
@@ -63,6 +77,7 @@ const SWEEP_PATH = process.env.SWEEP_ARTIFACT_PATH
   ?? join(process.cwd(), '..', '..', 'memory', 'metrics', `degraded-policy-sweep-scaffold-${new Date().toISOString().slice(0,10)}.json`)
 const OVERLAP_THRESHOLD = Number(process.env.ROBUST_OVERLAP_THRESHOLD ?? '0.08')
 const WORST_VARIANT_FLOOR = Number(process.env.ROBUST_WORST_VARIANT_FLOOR ?? '0.05')
+const BASELINE_HARD_FLOOR = Number(process.env.ROBUST_BASELINE_HARD_FLOOR ?? '0.05')
 
 const MODES: SabotageMode[] = ['none', 'false_flag_poisoning', 'telemetry_degradation']
 
@@ -140,6 +155,9 @@ function main() {
   if (!Number.isFinite(WORST_VARIANT_FLOOR) || WORST_VARIANT_FLOOR <= 0 || WORST_VARIANT_FLOOR >= 1) {
     throw new Error(`invalid ROBUST_WORST_VARIANT_FLOOR: ${WORST_VARIANT_FLOOR}`)
   }
+  if (!Number.isFinite(BASELINE_HARD_FLOOR) || BASELINE_HARD_FLOOR <= 0 || BASELINE_HARD_FLOOR >= 1) {
+    throw new Error(`invalid ROBUST_BASELINE_HARD_FLOOR: ${BASELINE_HARD_FLOOR}`)
+  }
 
   const sweep = loadSweep(SWEEP_PATH)
 
@@ -174,8 +192,54 @@ function main() {
     current.weightedOverlapScore < worst.weightedOverlapScore ? current : worst
   ))
 
+  const hardFloorPass = baselineOverlapRatio >= BASELINE_HARD_FLOOR
   const normalizedPass = robustnessAdjustedOverlapScore >= OVERLAP_THRESHOLD
   const worstVariantPass = worstVariant.weightedOverlapScore >= WORST_VARIANT_FLOOR
+
+  const decisionTrace: DecisionTraceEntry[] = [
+    {
+      ruleId: 'hard_floor_baseline_overlap',
+      order: 1,
+      pass: hardFloorPass,
+      stopOnFail: true,
+      value: Number(baselineOverlapRatio.toFixed(4)),
+      threshold: BASELINE_HARD_FLOOR,
+      comparator: '>=',
+      reason: 'Safety floor on baseline overlap before perturbation aggregation',
+    },
+    {
+      ruleId: 'worst_case_variant_floor',
+      order: 2,
+      pass: worstVariantPass,
+      stopOnFail: true,
+      value: worstVariant.weightedOverlapScore,
+      threshold: WORST_VARIANT_FLOOR,
+      comparator: '>=',
+      reason: 'Safety gate on weakest perturbation variant',
+    },
+    {
+      ruleId: 'normalized_overlap_threshold',
+      order: 3,
+      pass: normalizedPass,
+      stopOnFail: true,
+      value: robustnessAdjustedOverlapScore,
+      threshold: OVERLAP_THRESHOLD,
+      comparator: '>=',
+      reason: 'Performance/liveness aggregate after safety gates pass',
+    },
+    {
+      ruleId: 'raw_overlap_diagnostic',
+      order: 4,
+      pass: true,
+      stopOnFail: false,
+      value: Number(baselineOverlapRatio.toFixed(4)),
+      threshold: Number(baselineOverlapRatio.toFixed(4)),
+      comparator: 'diagnostic',
+      reason: 'Diagnostic-only raw baseline overlap signal',
+    },
+  ]
+
+  const firstHardFailure = decisionTrace.find((entry) => entry.stopOnFail && !entry.pass)
 
   const out: RobustOverlapArtifact = {
     generatedAt: new Date().toISOString(),
@@ -196,12 +260,15 @@ function main() {
       id: worstVariant.id,
       weightedOverlapScore: worstVariant.weightedOverlapScore,
     },
+    decisionTrace,
     acceptance: {
       threshold: OVERLAP_THRESHOLD,
       worstVariantFloor: WORST_VARIANT_FLOOR,
+      baselineHardFloor: BASELINE_HARD_FLOOR,
+      hardFloorPass,
       normalizedPass,
       worstVariantPass,
-      pass: normalizedPass && worstVariantPass,
+      pass: firstHardFailure === undefined,
     },
     nextImplementationSteps: [
       'Replace heuristic safe-cell criteria with simulation-engine metric gates',
