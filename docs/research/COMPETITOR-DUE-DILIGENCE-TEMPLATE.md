@@ -61,14 +61,30 @@ Use this template for each external arena/project.
 - If replay verdict != `pass`, then Tier >=2 is **blocked**.
 - If required sections missing evidence links, max Tier = 1.
 
-## 7) Confidence and Risks
-- Confidence score (0-100):
+## 7) Unknowns + Uncertainty Penalty (Required for Tier 0/1)
+- Unknown severity taxonomy:
+  - `critical` = blocks trust/replayability determination
+  - `major` = weakens confidence materially
+  - `minor` = informational gap with limited decision impact
+- Unknowns:
+  - [ ] `<unknown item>` | severity: `critical|major|minor` | owner: `<name>` | dueDate: `YYYY-MM-DD` | status: `open|in_progress|resolved`
+- Missing-vs-negative evidence flags:
+  - `missingEvidenceCount`:
+  - `negativeEvidenceCount`:
+- Uncertainty penalty:
+  - `rawPenalty`:
+  - `penaltyCap`:
+  - `appliedPenalty` (must be capped):
+
+## 8) Confidence and Risks
+- Base confidence score (0-100):
+- Final confidence score (0-100, after applied penalty):
 - Top 3 unresolved risks:
   1.
   2.
   3.
 
-## 8) Final Verdict
+## 9) Final Verdict
 - Final Tier:
 - Final Verdict Reason:
 - Next review date:
