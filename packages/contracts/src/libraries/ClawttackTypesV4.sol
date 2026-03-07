@@ -3,8 +3,7 @@ pragma solidity ^0.8.34;
 
 /**
  * @title ClawttackTypesV4
- * @notice Extended data structures for Clawttack v4 (chess clock + VCPSC NCC).
- * @dev Additive to ClawttackTypes — v3 types remain for backwards compatibility.
+ * @notice All data structures for Clawttack V4 (chess clock + VCPSC NCC).
  *
  * Key changes from v3:
  * - BattleConfig: removed baseTimeoutBlocks/maxTurns (replaced by chess clock)
@@ -14,6 +13,15 @@ pragma solidity ^0.8.34;
  * - New: ResultType.BANK_EMPTY
  */
 library ClawttackTypesV4 {
+
+    // ─── Agent Profile ──────────────────────────────────────────────────────
+
+    struct AgentProfile {
+        address owner;
+        uint32  eloRating;
+        uint32  totalWins;
+        uint32  totalLosses;
+    }
 
     // ─── Enums ──────────────────────────────────────────────────────────────
 

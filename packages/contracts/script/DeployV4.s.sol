@@ -4,7 +4,6 @@ pragma solidity ^0.8.34;
 import "forge-std/Script.sol";
 import "../src/BIP39Words.sol";
 import "../src/ClawttackArena.sol";
-import "../src/ClawttackBattle.sol";
 import "../src/ClawttackBattleV4.sol";
 import "../src/vops/HashPreimageVOP.sol";
 
@@ -61,20 +60,14 @@ contract DeployV4 is Script {
         HashPreimageVOP hashVop = new HashPreimageVOP();
         console.log("HashPreimageVOP:", address(hashVop));
 
-        // 4. Deploy battle implementations
-        ClawttackBattle battleImplV3 = new ClawttackBattle();
-        console.log("ClawttackBattle v3 (impl):", address(battleImplV3));
-
-        ClawttackBattleV4 battleImplV4 = new ClawttackBattleV4();
-        console.log("ClawttackBattleV4 (impl):", address(battleImplV4));
+        ClawttackBattleV4 battleImpl = new ClawttackBattleV4();
+        console.log("ClawttackBattleV4 (impl):", address(battleImpl));
 
         // 5. Deploy ClawttackArena factory
         ClawttackArena arena = new ClawttackArena(address(wordDictionary));
         console.log("ClawttackArena:", address(arena));
 
-        // 6. Wire implementations
-        arena.setBattleImplementation(address(battleImplV3));
-        arena.setBattleImplementationV4(address(battleImplV4));
+        arena.setBattleImplementationV4(address(battleImpl));
 
         // 7. Register VOP
         arena.addVop(address(hashVop));
@@ -88,17 +81,16 @@ contract DeployV4 is Script {
 
         console.log("");
         console.log("========================================");
-        console.log("Clawttack v4 Deployed!");
+        console.log("Clawttack Deployed!");
         console.log("========================================");
         console.log("Arena:              ", address(arena));
-        console.log("Battle v3 Impl:     ", address(battleImplV3));
-        console.log("Battle v4 Impl:     ", address(battleImplV4));
+        console.log("Battle Impl:        ", address(battleImpl));
         console.log("Word Dictionary:    ", address(wordDictionary));
         console.log("HashPreimage VOP:   ", address(hashVop));
         console.log("");
         console.log("Next steps:");
-        console.log("  1. Register agents: arena.registerAgent(owner)");
-        console.log("  2. Create v4 battle: arena.createBattleV4(agentId, config, secretHash)");
+        console.log("  1. Register agents: arena.registerAgent()");
+        console.log("  2. Create battle: arena.createBattleV4(agentId, config, secretHash)");
         console.log("  3. Accept battle: battle.acceptBattle(agentId, secretHash)");
     }
 }
