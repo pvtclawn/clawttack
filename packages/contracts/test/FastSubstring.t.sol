@@ -8,50 +8,50 @@ import {LinguisticParser} from "../src/libraries/LinguisticParser.sol";
 contract FastSubstringTest is Test {
     // ─── Correctness ────────────────────────────────────────────────────────
 
-    function test_basic_found() public pure {
+    function test_basic_found() public {
         assertTrue(FastSubstring.contains("hello world", "world"));
         assertTrue(FastSubstring.contains("hello world", "hello"));
         assertTrue(FastSubstring.contains("hello world", "lo wo"));
     }
 
-    function test_basic_notFound() public pure {
+    function test_basic_notFound() public {
         assertFalse(FastSubstring.contains("hello world", "xyz"));
         assertFalse(FastSubstring.contains("hello", "hello world"));
     }
 
-    function test_caseInsensitive() public pure {
+    function test_caseInsensitive() public {
         assertTrue(FastSubstring.contains("Hello World", "hello"));
         assertTrue(FastSubstring.contains("hello world", "HELLO"));
         assertTrue(FastSubstring.contains("HeLLo WoRLd", "hello world"));
     }
 
-    function test_emptyNeedle() public pure {
+    function test_emptyNeedle() public {
         assertFalse(FastSubstring.contains("hello", ""));
     }
 
-    function test_emptyHaystack() public pure {
+    function test_emptyHaystack() public {
         assertFalse(FastSubstring.contains("", "hello"));
     }
 
-    function test_exactMatch() public pure {
+    function test_exactMatch() public {
         assertTrue(FastSubstring.contains("hello", "hello"));
         assertTrue(FastSubstring.contains("HELLO", "hello"));
     }
 
-    function test_singleChar() public pure {
+    function test_singleChar() public {
         assertTrue(FastSubstring.contains("a", "a"));
         assertTrue(FastSubstring.contains("A", "a"));
         assertFalse(FastSubstring.contains("a", "b"));
     }
 
-    function test_poisonWord_realistic() public pure {
+    function test_poisonWord_realistic() public {
         string memory narrative = "the brave hero walked through the enchanted forest seeking ancient wisdom";
         assertTrue(FastSubstring.contains(narrative, "forest"));
         assertTrue(FastSubstring.contains(narrative, "FOREST"));
         assertFalse(FastSubstring.contains(narrative, "ocean"));
     }
 
-    function test_nearBoundary() public pure {
+    function test_nearBoundary() public {
         assertTrue(FastSubstring.contains("abcdef", "def")); // end
         assertTrue(FastSubstring.contains("abcdef", "abc")); // start
         assertFalse(FastSubstring.contains("abcdef", "defg")); // exceeds
@@ -59,7 +59,7 @@ contract FastSubstringTest is Test {
 
     // ─── Parity with LinguisticParser ───────────────────────────────────────
 
-    function test_parity_basic() public pure {
+    function test_parity_basic() public {
         string[5] memory haystacks = ["hello world", "HELLO WORLD", "the Quick Brown FOX", "abcdef", "a"];
         string[4] memory needles = ["hello", "world", "fox", "xyz"];
 

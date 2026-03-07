@@ -4,7 +4,7 @@ pragma solidity ^0.8.34;
 import {Test} from "forge-std/Test.sol";
 import {ChessClockLib} from "../src/libraries/ChessClockLib.sol";
 import {NccVerifier} from "../src/libraries/NccVerifier.sol";
-import {ClawttackTypesV4} from "../src/libraries/ClawttackTypesV4.sol";
+import {ClawttackTypes} from "../src/libraries/ClawttackTypes.sol";
 import {IWordDictionary} from "../src/interfaces/IWordDictionary.sol";
 
 contract MockDict is IWordDictionary {
@@ -17,11 +17,11 @@ contract MockDict is IWordDictionary {
 }
 
 /// @notice Harness that wires ChessClockLib + NccVerifier together for integration tests.
-contract V4IntegrationHarness {
+contract IntegrationHarness {
     using ChessClockLib for ChessClockLib.Clock;
     ChessClockLib.Clock public clock;
-    ClawttackTypesV4.PendingNcc public pendingNccA;
-    ClawttackTypesV4.PendingNcc public pendingNccB;
+    ClawttackTypes.PendingNcc public pendingNccA;
+    ClawttackTypes.PendingNcc public pendingNccB;
     bool public nccResultA;
     bool public nccResultB;
     bool public nccResultAReady;
@@ -42,15 +42,15 @@ contract V4IntegrationHarness {
     function doTurn(
         bool isAgentA,
         bytes memory narrative,
-        ClawttackTypesV4.NccAttack memory attack,
-        ClawttackTypesV4.NccDefense memory defense,
-        ClawttackTypesV4.NccReveal memory reveal
+        ClawttackTypes.NccAttack memory attack,
+        ClawttackTypes.NccDefense memory defense,
+        ClawttackTypes.NccReveal memory reveal
     ) external returns (uint128 bankAfter, bool bankDepleted, bool nccCorrect) {
         bool isFirstTurn = (turn == 0);
 
         // 1. Reveal previous NCC → determines OPPONENT's result
         if (turn >= 2) {
-            ClawttackTypesV4.PendingNcc storage myPrevNcc = isAgentA ? pendingNccA : pendingNccB;
+            ClawttackTypes.PendingNcc storage myPrevNcc = isAgentA ? pendingNccA : pendingNccB;
             bool opponentWasCorrect = NccVerifier.verifyReveal(
                 reveal, myPrevNcc.commitment, myPrevNcc.defenderGuessIdx
             );
@@ -80,7 +80,7 @@ contract V4IntegrationHarness {
 
         // 3. NCC defense (turn >= 1)
         if (turn >= 1) {
-            ClawttackTypesV4.PendingNcc storage oppNcc = isAgentA ? pendingNccB : pendingNccA;
+            ClawttackTypes.PendingNcc storage oppNcc = isAgentA ? pendingNccB : pendingNccA;
             if (oppNcc.commitment != bytes32(0)) {
                 NccVerifier.verifyDefense(defense);
                 oppNcc.defenderGuessIdx = defense.guessIdx;
@@ -90,7 +90,7 @@ contract V4IntegrationHarness {
 
         // 4. NCC attack
         NccVerifier.verifyAttack(narrative, attack, dict);
-        ClawttackTypesV4.PendingNcc storage myNcc2 = isAgentA ? pendingNccA : pendingNccB;
+        ClawttackTypes.PendingNcc storage myNcc2 = isAgentA ? pendingNccA : pendingNccB;
         myNcc2.commitment = attack.nccCommitment;
         myNcc2.candidateWordIndices = attack.candidateWordIndices;
         myNcc2.defenderGuessIdx = 0;
@@ -104,41 +104,41 @@ contract V4IntegrationHarness {
     }
 }
 
-contract V4IntegrationTest is Test {
+contract IntegrationTest is Test {
     MockDict dict;
-    V4IntegrationHarness harness;
+    IntegrationHarness harness;
 
     // "the hero must abandon all ability and be able to learn about the world"
     bytes constant NARRATIVE = "the hero must abandon all ability and be able to learn about the world";
 
     function setUp() public {
         dict = new MockDict();
-        harness = new V4IntegrationHarness();
+        harness = new IntegrationHarness();
         harness.init(address(dict));
     }
 
-    function _attack(bytes32 salt, uint8 intendedIdx) internal pure returns (ClawttackTypesV4.NccAttack memory) {
-        return ClawttackTypesV4.NccAttack({
+    function _attack(bytes32 salt, uint8 intendedIdx) internal pure returns (ClawttackTypes.NccAttack memory) {
+        return ClawttackTypes.NccAttack({
             candidateWordIndices: [uint16(0), uint16(1), uint16(2), uint16(3)],
             candidateOffsets: [uint16(14), uint16(26), uint16(41), uint16(55)],
             nccCommitment: keccak256(abi.encodePacked(salt, intendedIdx))
         });
     }
 
-    function _defense(uint8 guess) internal pure returns (ClawttackTypesV4.NccDefense memory) {
-        return ClawttackTypesV4.NccDefense({guessIdx: guess});
+    function _defense(uint8 guess) internal pure returns (ClawttackTypes.NccDefense memory) {
+        return ClawttackTypes.NccDefense({guessIdx: guess});
     }
 
-    function _reveal(bytes32 salt, uint8 idx) internal pure returns (ClawttackTypesV4.NccReveal memory) {
-        return ClawttackTypesV4.NccReveal({salt: salt, intendedIdx: idx});
+    function _reveal(bytes32 salt, uint8 idx) internal pure returns (ClawttackTypes.NccReveal memory) {
+        return ClawttackTypes.NccReveal({salt: salt, intendedIdx: idx});
     }
 
-    function _emptyDefense() internal pure returns (ClawttackTypesV4.NccDefense memory) {
-        return ClawttackTypesV4.NccDefense({guessIdx: 0});
+    function _emptyDefense() internal pure returns (ClawttackTypes.NccDefense memory) {
+        return ClawttackTypes.NccDefense({guessIdx: 0});
     }
 
-    function _emptyReveal() internal pure returns (ClawttackTypesV4.NccReveal memory) {
-        return ClawttackTypesV4.NccReveal({salt: bytes32(0), intendedIdx: 0});
+    function _emptyReveal() internal pure returns (ClawttackTypes.NccReveal memory) {
+        return ClawttackTypes.NccReveal({salt: bytes32(0), intendedIdx: 0});
     }
 
     // ─── Full 6-turn battle ─────────────────────────────────────────────────
@@ -244,9 +244,9 @@ contract V4IntegrationTest is Test {
             bool isA = (i % 2 == 0);
 
             bytes32 salt = bytes32(i + 100);
-            ClawttackTypesV4.NccAttack memory attack = _attack(salt, uint8(i % 4));
-            ClawttackTypesV4.NccDefense memory defense = _defense(uint8((i + 1) % 4)); // always wrong
-            ClawttackTypesV4.NccReveal memory reveal;
+            ClawttackTypes.NccAttack memory attack = _attack(salt, uint8(i % 4));
+            ClawttackTypes.NccDefense memory defense = _defense(uint8((i + 1) % 4)); // always wrong
+            ClawttackTypes.NccReveal memory reveal;
 
             if (i >= 2) {
                 // Reveal previous NCC with correct salt

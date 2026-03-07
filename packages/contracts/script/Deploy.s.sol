@@ -5,27 +5,26 @@ import "forge-std/Script.sol";
 import "../src/BIP39Words.sol";
 import "../src/ClawttackArena.sol";
 import "../src/ClawttackBattle.sol";
-import "../src/ClawttackBattleV4.sol";
 import "../src/vops/HashPreimageVOP.sol";
 
 /**
- * @title DeployV4
- * @notice Deploys the full Clawttack v4 stack to Base Sepolia.
+ * @title DeployV0
+ * @notice Deploys the full Clawttack stack to Base Sepolia.
  *
  * Deploys:
  * - BIP39Words dictionary (SSTORE2)
  * - ClawttackArena factory
  * - ClawttackBattle v3 implementation (backwards compatible)
- * - ClawttackBattleV4 implementation (chess clock + NCC)
+ * - ClawttackBattle implementation (chess clock + NCC)
  * - HashPreimageVOP (minimal VOP for testing)
  *
  * Usage:
- *   forge script script/DeployV4.s.sol:DeployV4 \
+ *   forge script script/DeployV0.s.sol:DeployV0 \
  *     --rpc-url https://sepolia.base.org \
  *     --account clawn --password $WALLET_PASSWORD \
  *     --broadcast --verify
  */
-contract DeployV4 is Script {
+contract DeployV0 is Script {
     function run() external {
         vm.startBroadcast();
 
@@ -61,20 +60,14 @@ contract DeployV4 is Script {
         HashPreimageVOP hashVop = new HashPreimageVOP();
         console.log("HashPreimageVOP:", address(hashVop));
 
-        // 4. Deploy battle implementations
-        ClawttackBattle battleImplV3 = new ClawttackBattle();
-        console.log("ClawttackBattle v3 (impl):", address(battleImplV3));
-
-        ClawttackBattleV4 battleImplV4 = new ClawttackBattleV4();
-        console.log("ClawttackBattleV4 (impl):", address(battleImplV4));
+        ClawttackBattle battleImpl = new ClawttackBattle();
+        console.log("ClawttackBattle (impl):", address(battleImpl));
 
         // 5. Deploy ClawttackArena factory
         ClawttackArena arena = new ClawttackArena(address(wordDictionary));
         console.log("ClawttackArena:", address(arena));
 
-        // 6. Wire implementations
-        arena.setBattleImplementation(address(battleImplV3));
-        arena.setBattleImplementationV4(address(battleImplV4));
+        arena.setBattleImplementation(address(battleImpl));
 
         // 7. Register VOP
         arena.addVop(address(hashVop));
@@ -88,17 +81,16 @@ contract DeployV4 is Script {
 
         console.log("");
         console.log("========================================");
-        console.log("Clawttack v4 Deployed!");
+        console.log("Clawttack Deployed!");
         console.log("========================================");
         console.log("Arena:              ", address(arena));
-        console.log("Battle v3 Impl:     ", address(battleImplV3));
-        console.log("Battle v4 Impl:     ", address(battleImplV4));
+        console.log("Battle Impl:        ", address(battleImpl));
         console.log("Word Dictionary:    ", address(wordDictionary));
         console.log("HashPreimage VOP:   ", address(hashVop));
         console.log("");
         console.log("Next steps:");
-        console.log("  1. Register agents: arena.registerAgent(owner)");
-        console.log("  2. Create v4 battle: arena.createBattleV4(agentId, config, secretHash)");
+        console.log("  1. Register agents: arena.registerAgent()");
+        console.log("  2. Create battle: arena.createBattle(agentId, config, secretHash)");
         console.log("  3. Accept battle: battle.acceptBattle(agentId, secretHash)");
     }
 }
