@@ -45,8 +45,15 @@ type RobustOverlapArtifact = {
     weightedOverlapScore: number
   }>
   robustnessAdjustedOverlapScore: number
+  worstVariant: {
+    id: string
+    weightedOverlapScore: number
+  }
   acceptance: {
     threshold: number
+    worstVariantFloor: number
+    normalizedPass: boolean
+    worstVariantPass: boolean
     pass: boolean
   }
   nextImplementationSteps: string[]
@@ -55,6 +62,7 @@ type RobustOverlapArtifact = {
 const SWEEP_PATH = process.env.SWEEP_ARTIFACT_PATH
   ?? join(process.cwd(), '..', '..', 'memory', 'metrics', `degraded-policy-sweep-scaffold-${new Date().toISOString().slice(0,10)}.json`)
 const OVERLAP_THRESHOLD = Number(process.env.ROBUST_OVERLAP_THRESHOLD ?? '0.08')
+const WORST_VARIANT_FLOOR = Number(process.env.ROBUST_WORST_VARIANT_FLOOR ?? '0.05')
 
 const MODES: SabotageMode[] = ['none', 'false_flag_poisoning', 'telemetry_degradation']
 
@@ -129,6 +137,9 @@ function main() {
   if (!Number.isFinite(OVERLAP_THRESHOLD) || OVERLAP_THRESHOLD <= 0 || OVERLAP_THRESHOLD >= 1) {
     throw new Error(`invalid ROBUST_OVERLAP_THRESHOLD: ${OVERLAP_THRESHOLD}`)
   }
+  if (!Number.isFinite(WORST_VARIANT_FLOOR) || WORST_VARIANT_FLOOR <= 0 || WORST_VARIANT_FLOOR >= 1) {
+    throw new Error(`invalid ROBUST_WORST_VARIANT_FLOOR: ${WORST_VARIANT_FLOOR}`)
+  }
 
   const sweep = loadSweep(SWEEP_PATH)
 
@@ -159,6 +170,13 @@ function main() {
     perturbationResults.reduce((acc, p) => acc + p.weightedOverlapScore, 0) / Math.max(1, perturbationResults.length)
   ).toFixed(4))
 
+  const worstVariant = perturbationResults.reduce((worst, current) => (
+    current.weightedOverlapScore < worst.weightedOverlapScore ? current : worst
+  ))
+
+  const normalizedPass = robustnessAdjustedOverlapScore >= OVERLAP_THRESHOLD
+  const worstVariantPass = worstVariant.weightedOverlapScore >= WORST_VARIANT_FLOOR
+
   const out: RobustOverlapArtifact = {
     generatedAt: new Date().toISOString(),
     status: 'scaffold',
@@ -174,9 +192,16 @@ function main() {
     },
     perturbations: perturbationResults,
     robustnessAdjustedOverlapScore,
+    worstVariant: {
+      id: worstVariant.id,
+      weightedOverlapScore: worstVariant.weightedOverlapScore,
+    },
     acceptance: {
       threshold: OVERLAP_THRESHOLD,
-      pass: robustnessAdjustedOverlapScore >= OVERLAP_THRESHOLD,
+      worstVariantFloor: WORST_VARIANT_FLOOR,
+      normalizedPass,
+      worstVariantPass,
+      pass: normalizedPass && worstVariantPass,
     },
     nextImplementationSteps: [
       'Replace heuristic safe-cell criteria with simulation-engine metric gates',
