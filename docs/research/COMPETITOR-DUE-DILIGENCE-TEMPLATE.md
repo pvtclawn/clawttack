@@ -75,6 +75,10 @@ Use this template for each external arena/project.
   - `rawPenalty`:
   - `penaltyCap`:
   - `appliedPenalty` (must be capped):
+- Uncertainty debt (see `UNCERTAINTY-DEBT-SPEC.md`):
+  - `uncertaintyDebtScore`:
+  - `debtBand`: `normal|warn|critical`
+  - `escalationTriggered`: `true|false`
 - Due-window validation (required):
   - `dueWindowValid`: `true|false`
   - `dueWindowViolations`:
