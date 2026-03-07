@@ -424,3 +424,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** oscillation attacks around boundary trigger cumulative escalation within bounded windows; false-positive escalation remains below tolerance.
 
 **Next Task (single):** implement Task 1 policy constants + scaffold fields so degraded-mode economics are represented in simulation outputs.
+
+### 10:27 roadmap refresh (A-lane)
+1. **Parameter-sweep monotonicity analyzer (P0)**
+   - implement sweep engine over degraded policy constants (`payoutCapRatio`, `multiplierCap`, `degradeAbuseCounterThreshold`) and emit sign-flip maps for colluder EV deltas.
+   **Acceptance metric:** report includes per-sabotage-mode sign-flip heatmaps and flags any EV rebound region as automatic fail.
+
+2. **Mode-specific safe-band extractor + overlap score (P0)**
+   - compute feasible parameter bands per sabotage mode and an intersection/overlap metric for global defaults.
+   **Acceptance metric:** artifact outputs safe-band intervals for each mode and `globalOverlapScore`; fail if overlap is below configured minimum.
+
+3. **Subgroup guardrail constraints in sweep evaluator (P0)**
+   - enforce hard constraints for newcomer retention and honest false-positive rates on every sweep cell.
+   **Acceptance metric:** any cell breaching subgroup floor/ceiling is excluded from safe bands; evaluator emits explicit breach table.
+
+**Next Task (single):** implement Task 1 sweep analyzer scaffold with deterministic grid generation + sign-flip detection outputs.
