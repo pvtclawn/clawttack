@@ -23,6 +23,7 @@
     "metrics:resulttype-baseline": "bun ./scripts/resulttype-baseline.ts",
     "model:collusion-matrix-scaffold": "bun ./scripts/collusion-matrix-scaffold.ts",
     "model:degraded-policy-sweep-scaffold": "bun ./scripts/degraded-policy-sweep-scaffold.ts",
+    "model:robust-overlap-scaffold": "bun ./scripts/robust-overlap-scaffold.ts",
     "incur:clawttack": "bun ./scripts/clawttack-incur.ts",
     "submission:handoff-check": "bun ./scripts/validate-submission-handoff.ts",
     "model:threshold-check": "bun ./scripts/check-model-thresholds.ts",
