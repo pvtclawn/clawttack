@@ -439,3 +439,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** any cell breaching subgroup floor/ceiling is excluded from safe bands; evaluator emits explicit breach table.
 
 **Next Task (single):** implement Task 1 sweep analyzer scaffold with deterministic grid generation + sign-flip detection outputs.
+
+### 11:17 roadmap refresh (A-lane)
+1. **Robust-overlap evaluator under perturbed priors (P0)**
+   - extend safe-band evaluation to run population/matchmaker perturbation variants and compute robustness-adjusted overlap score.
+   **Acceptance metric:** overlap artifact includes baseline + perturbed scores; fail if robustness-adjusted overlap drops below threshold.
+
+2. **Directional instability scorer (P0)**
+   - add axis and diagonal perturbation checks for each candidate cell to catch anisotropic instability ridges.
+   **Acceptance metric:** each candidate includes worst-direction instability score; cells above instability limit are excluded from safe bands.
+
+3. **Boundary-pressure adaptation monitor (P0)**
+   - define detector for clustering near safe-band edges and couple it to canary threshold alerts.
+   **Acceptance metric:** monitor emits boundary-pressure index and triggers warn/critical levels with deterministic thresholds.
+
+**Next Task (single):** implement Task 1 robust-overlap scaffold (baseline vs perturbed-prior overlap reporting) for current sweep artifact.
