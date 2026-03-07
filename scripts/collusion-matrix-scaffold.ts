@@ -9,11 +9,14 @@ type PopulationProfile = {
   colluders: number
 }
 
+type SabotageMode = 'none' | 'false_flag_poisoning' | 'telemetry_degradation'
+
 type Scenario = {
   id: string
   coalitionSize: 2 | 3 | 5
   population: PopulationProfile
   matchmaker: MatchmakerMode
+  sabotage: SabotageMode
   epochs: number
   battlesPerEpoch: number
   trackedOutputs: string[]
@@ -33,6 +36,7 @@ type ScaffoldArtifact = {
     total: number
     byCoalition: Record<string, number>
     byMatchmaker: Record<MatchmakerMode, number>
+    bySabotage: Record<SabotageMode, number>
   }
   scenarios: Scenario[]
   nextImplementationSteps: string[]
@@ -42,6 +46,7 @@ const EPOCHS = Number(process.env.COLLUSION_EPOCHS ?? '12')
 const BATTLES_PER_EPOCH = Number(process.env.COLLUSION_BATTLES_PER_EPOCH ?? '200')
 
 const MATCHMAKER_MODES: MatchmakerMode[] = ['random', 'weak_anti_repeat', 'strong_anti_repeat']
+const SABOTAGE_MODES: SabotageMode[] = ['none', 'false_flag_poisoning', 'telemetry_degradation']
 const COALITION_SIZES: Array<2 | 3 | 5> = [2, 3, 5]
 
 const POPULATIONS: PopulationProfile[] = [
@@ -56,8 +61,13 @@ function assertPositiveInt(name: string, value: number) {
   }
 }
 
-function makeScenarioId(coalitionSize: number, populationIdx: number, matchmaker: MatchmakerMode): string {
-  return `coalition-${coalitionSize}__pop-${populationIdx + 1}__${matchmaker}`
+function makeScenarioId(
+  coalitionSize: number,
+  populationIdx: number,
+  matchmaker: MatchmakerMode,
+  sabotage: SabotageMode,
+): string {
+  return `coalition-${coalitionSize}__pop-${populationIdx + 1}__${matchmaker}__sabotage-${sabotage}`
 }
 
 function buildScenarios(): Scenario[] {
@@ -66,25 +76,31 @@ function buildScenarios(): Scenario[] {
   for (const coalitionSize of COALITION_SIZES) {
     for (const [populationIdx, population] of POPULATIONS.entries()) {
       for (const matchmaker of MATCHMAKER_MODES) {
-        scenarios.push({
-          id: makeScenarioId(coalitionSize, populationIdx, matchmaker),
-          coalitionSize,
-          population,
-          matchmaker,
-          epochs: EPOCHS,
-          battlesPerEpoch: BATTLES_PER_EPOCH,
-          trackedOutputs: [
-            'collusion_multiplier_leakage',
-            'coalition_ev_delta_vs_honest_baseline',
-            'same-opponent-pairing-rate',
-            'newcomer_survival_rate',
-          ],
-          acceptanceChecks: [
-            'abnormal EV for collusion profiles <= configured tolerance',
-            'multiplier leakage remains bounded under all matchmaker modes',
-            'fairness metrics emitted for every scenario',
-          ],
-        })
+        for (const sabotage of SABOTAGE_MODES) {
+          scenarios.push({
+            id: makeScenarioId(coalitionSize, populationIdx, matchmaker, sabotage),
+            coalitionSize,
+            population,
+            matchmaker,
+            sabotage,
+            epochs: EPOCHS,
+            battlesPerEpoch: BATTLES_PER_EPOCH,
+            trackedOutputs: [
+              'collusion_multiplier_leakage',
+              'coalition_ev_delta_vs_honest_baseline',
+              'same-opponent-pairing-rate',
+              'newcomer_survival_rate',
+              'sabotage_false_positive_rate',
+              'telemetry_health_degradation_impact',
+            ],
+            acceptanceChecks: [
+              'abnormal EV for collusion profiles <= configured tolerance',
+              'multiplier leakage remains bounded under all matchmaker modes',
+              'fairness metrics emitted for every scenario',
+              'sabotage scenarios produce separate EV/fairness deltas',
+            ],
+          })
+        }
       }
     }
   }
@@ -99,16 +115,23 @@ function summarize(scenarios: Scenario[]): ScaffoldArtifact['scenarioCounts'] {
     weak_anti_repeat: 0,
     strong_anti_repeat: 0,
   }
+  const bySabotage: Record<SabotageMode, number> = {
+    none: 0,
+    false_flag_poisoning: 0,
+    telemetry_degradation: 0,
+  }
 
   for (const scenario of scenarios) {
     byCoalition[String(scenario.coalitionSize)] = (byCoalition[String(scenario.coalitionSize)] ?? 0) + 1
     byMatchmaker[scenario.matchmaker] += 1
+    bySabotage[scenario.sabotage] += 1
   }
 
   return {
     total: scenarios.length,
     byCoalition,
     byMatchmaker,
+    bySabotage,
   }
 }
 

@@ -394,3 +394,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** alarm table is machine-readable and exercised on historical windows + synthetic exploit windows with deterministic trigger behavior.
 
 **Next Task (single):** implement Task 1 simulation matrix scaffold + baseline run harness so Tasks 2/3 can consume consistent outputs.
+
+### 08:47 roadmap refresh (A-lane)
+1. **Add sabotage-aware scenarios to collusion matrix (P0)**
+   - extend simulation matrix with false-flag reputation poisoning and telemetry-degradation variants.
+   **Acceptance metric:** matrix includes explicit sabotage scenario IDs and emits separate EV/fairness deltas for sabotage vs non-sabotage cells.
+
+2. **Define data-quality gate before fail-closed penalties (P0)**
+   - enforce observability preconditions (head lag, missing sample ratio, watcher health) before applying hard reputation freezes.
+   **Acceptance metric:** gate engine outputs `success|degraded_success|insufficient_evidence` and blocks hard fail-closed actions when preconditions are unmet.
+
+3. **Add graph-level anti-sybil diagnostics to fairness output (P0)**
+   - compute counterparty overlap/concentration metrics to detect identity rotation bypass.
+   **Acceptance metric:** fairness artifact includes overlap metrics + threshold verdict; fail if identity-level metrics are healthy while graph metrics breach limits.
+
+**Next Task (single):** implement Task 1 by extending `collusion-matrix-scaffold.ts` with sabotage scenario dimensions and deterministic IDs.
