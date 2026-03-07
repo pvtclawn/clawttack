@@ -29,6 +29,7 @@ type PerturbationVariant = {
 
 type DecisionTraceEntry = {
   ruleId: 'hard_floor_baseline_overlap' | 'worst_case_variant_floor' | 'normalized_overlap_threshold' | 'raw_overlap_diagnostic'
+  gateIntent: 'safety_gate' | 'liveness_gate' | 'diagnostic'
   order: number
   pass: boolean
   stopOnFail: boolean
@@ -41,6 +42,8 @@ type DecisionTraceEntry = {
 type RobustOverlapArtifact = {
   generatedAt: string
   status: 'scaffold'
+  precedencePolicyVersion: string
+  finalVerdictReason: string
   sourceSweepArtifact: string
   baseline: {
     modeSafeCounts: Record<SabotageMode, number>
@@ -199,6 +202,7 @@ function main() {
   const decisionTrace: DecisionTraceEntry[] = [
     {
       ruleId: 'hard_floor_baseline_overlap',
+      gateIntent: 'safety_gate',
       order: 1,
       pass: hardFloorPass,
       stopOnFail: true,
@@ -209,6 +213,7 @@ function main() {
     },
     {
       ruleId: 'worst_case_variant_floor',
+      gateIntent: 'safety_gate',
       order: 2,
       pass: worstVariantPass,
       stopOnFail: true,
@@ -219,6 +224,7 @@ function main() {
     },
     {
       ruleId: 'normalized_overlap_threshold',
+      gateIntent: 'liveness_gate',
       order: 3,
       pass: normalizedPass,
       stopOnFail: true,
@@ -229,6 +235,7 @@ function main() {
     },
     {
       ruleId: 'raw_overlap_diagnostic',
+      gateIntent: 'diagnostic',
       order: 4,
       pass: true,
       stopOnFail: false,
@@ -240,10 +247,13 @@ function main() {
   ]
 
   const firstHardFailure = decisionTrace.find((entry) => entry.stopOnFail && !entry.pass)
+  const finalVerdictReason = firstHardFailure?.ruleId ?? 'all_hard_rules_passed'
 
   const out: RobustOverlapArtifact = {
     generatedAt: new Date().toISOString(),
     status: 'scaffold',
+    precedencePolicyVersion: 'v1-hardstop-ordered-gates',
+    finalVerdictReason,
     sourceSweepArtifact: SWEEP_PATH,
     baseline: {
       modeSafeCounts: {
