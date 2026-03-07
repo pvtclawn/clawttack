@@ -619,3 +619,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** waiver artifact validation fails when governance constraints are unmet.
 
 **Next Task (single):** implement Task 1 by drafting a CI predicate report schema doc with rule-tier grouping and grouped failure output examples.
+
+### 21:07 roadmap refresh (A-lane)
+1. **Predicate runtime source pinning (P0)**
+   - enforce merge-base/HEAD pin fields in predicate report and reject runs without full diff context.
+   **Acceptance metric:** report includes `mergeBaseSha` + `headSha`; check fails on missing fields or shallow-context detection.
+
+2. **Runtime fingerprint + artifact integrity (P0)**
+   - include tool/parser version fingerprint and require report artifact publication for every run.
+   **Acceptance metric:** CI fails if report artifact missing or fingerprint fields absent.
+
+3. **Branch-rule coverage audit (P0)**
+   - implement config audit ensuring required checks are enforced on all protected merge paths.
+   **Acceptance metric:** audit job emits pass/fail matrix; any uncovered path blocks merge.
+
+**Next Task (single):** implement Task 1 by extending predicate schema with merge-base/head source-pinning fields and runtime context requirements.
