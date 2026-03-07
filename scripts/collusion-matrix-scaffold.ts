@@ -1,0 +1,148 @@
+#!/usr/bin/env bun
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+type MatchmakerMode = 'random' | 'weak_anti_repeat' | 'strong_anti_repeat'
+type PopulationProfile = {
+  honestAdaptive: number
+  scriptedExploiters: number
+  colluders: number
+}
+
+type Scenario = {
+  id: string
+  coalitionSize: 2 | 3 | 5
+  population: PopulationProfile
+  matchmaker: MatchmakerMode
+  epochs: number
+  battlesPerEpoch: number
+  trackedOutputs: string[]
+  acceptanceChecks: string[]
+}
+
+type ScaffoldArtifact = {
+  generatedAt: string
+  purpose: string
+  status: 'scaffold'
+  assumptions: {
+    rewardModel: string
+    penaltyModel: string
+    qualityGateModel: string
+  }
+  scenarioCounts: {
+    total: number
+    byCoalition: Record<string, number>
+    byMatchmaker: Record<MatchmakerMode, number>
+  }
+  scenarios: Scenario[]
+  nextImplementationSteps: string[]
+}
+
+const EPOCHS = Number(process.env.COLLUSION_EPOCHS ?? '12')
+const BATTLES_PER_EPOCH = Number(process.env.COLLUSION_BATTLES_PER_EPOCH ?? '200')
+
+const MATCHMAKER_MODES: MatchmakerMode[] = ['random', 'weak_anti_repeat', 'strong_anti_repeat']
+const COALITION_SIZES: Array<2 | 3 | 5> = [2, 3, 5]
+
+const POPULATIONS: PopulationProfile[] = [
+  { honestAdaptive: 60, scriptedExploiters: 30, colluders: 10 },
+  { honestAdaptive: 45, scriptedExploiters: 35, colluders: 20 },
+  { honestAdaptive: 30, scriptedExploiters: 50, colluders: 20 },
+]
+
+function assertPositiveInt(name: string, value: number) {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`invalid ${name}: expected positive integer, got ${value}`)
+  }
+}
+
+function makeScenarioId(coalitionSize: number, populationIdx: number, matchmaker: MatchmakerMode): string {
+  return `coalition-${coalitionSize}__pop-${populationIdx + 1}__${matchmaker}`
+}
+
+function buildScenarios(): Scenario[] {
+  const scenarios: Scenario[] = []
+
+  for (const coalitionSize of COALITION_SIZES) {
+    for (const [populationIdx, population] of POPULATIONS.entries()) {
+      for (const matchmaker of MATCHMAKER_MODES) {
+        scenarios.push({
+          id: makeScenarioId(coalitionSize, populationIdx, matchmaker),
+          coalitionSize,
+          population,
+          matchmaker,
+          epochs: EPOCHS,
+          battlesPerEpoch: BATTLES_PER_EPOCH,
+          trackedOutputs: [
+            'collusion_multiplier_leakage',
+            'coalition_ev_delta_vs_honest_baseline',
+            'same-opponent-pairing-rate',
+            'newcomer_survival_rate',
+          ],
+          acceptanceChecks: [
+            'abnormal EV for collusion profiles <= configured tolerance',
+            'multiplier leakage remains bounded under all matchmaker modes',
+            'fairness metrics emitted for every scenario',
+          ],
+        })
+      }
+    }
+  }
+
+  return scenarios
+}
+
+function summarize(scenarios: Scenario[]): ScaffoldArtifact['scenarioCounts'] {
+  const byCoalition: Record<string, number> = {}
+  const byMatchmaker: Record<MatchmakerMode, number> = {
+    random: 0,
+    weak_anti_repeat: 0,
+    strong_anti_repeat: 0,
+  }
+
+  for (const scenario of scenarios) {
+    byCoalition[String(scenario.coalitionSize)] = (byCoalition[String(scenario.coalitionSize)] ?? 0) + 1
+    byMatchmaker[scenario.matchmaker] += 1
+  }
+
+  return {
+    total: scenarios.length,
+    byCoalition,
+    byMatchmaker,
+  }
+}
+
+function main() {
+  assertPositiveInt('COLLUSION_EPOCHS', EPOCHS)
+  assertPositiveInt('COLLUSION_BATTLES_PER_EPOCH', BATTLES_PER_EPOCH)
+
+  const scenarios = buildScenarios()
+  const out: ScaffoldArtifact = {
+    generatedAt: new Date().toISOString(),
+    purpose: 'P0 collusion-ring simulation matrix scaffold for dynamic reward + fixed penalty hardening',
+    status: 'scaffold',
+    assumptions: {
+      rewardModel: 'dynamic reward multiplier based on verified-quality streak',
+      penaltyModel: 'fixed penalty constants',
+      qualityGateModel: 'heuristic gate (to be stress-tested with drift alarms)',
+    },
+    scenarioCounts: summarize(scenarios),
+    scenarios,
+    nextImplementationSteps: [
+      'Wire scenario runner to actual battle simulation engine',
+      'Emit fairness/concentration metric pack alongside EV outputs',
+      'Attach alarm-threshold evaluator for heuristic-gaming drift checks',
+    ],
+  }
+
+  const outDir = join(process.cwd(), '..', '..', 'memory', 'metrics')
+  mkdirSync(outDir, { recursive: true })
+  const filename = `collusion-matrix-scaffold-${new Date().toISOString().slice(0, 10)}.json`
+  const outPath = join(outDir, filename)
+  writeFileSync(outPath, JSON.stringify(out, null, 2))
+
+  console.log(outPath)
+  console.log(JSON.stringify(out.scenarioCounts, null, 2))
+}
+
+main()
