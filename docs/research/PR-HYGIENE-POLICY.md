@@ -27,8 +27,22 @@ dependsOn:
 - deployment artifacts required for reproducibility
 - lockfile updates tied to dependency/security fixes
 
+## Required-Check Matrix (Branch Protection)
+| Merge path | Required checks |
+|---|---|
+| PR → main/develop (all changes) | `ci/test`, `ci/typecheck`, `ci/pr-hygiene` |
+| PR with interface delta | all above + `ci/interface-delta-report` |
+| PR with split-series=true | all above + `ci/split-series-metadata` |
+| Emergency override merge | all above unless explicitly waived in override record; `postmortem` + `followup-issue` required within 24h |
+
 ## Merge Preconditions
 - Interface delta declared and consistent with diff
 - If split-series=true: parentIssue + dependsOn present
 - Generated artifacts either allowlisted or removed
 - Tests/typecheck pass
+- Required-check matrix coverage satisfied for selected merge path
+
+## Merge-Path Coverage Notes
+- No direct pushes to protected branches for mechanism-critical changes.
+- Any path that bypasses `ci/pr-hygiene` is considered non-compliant.
+- Override path is for time-critical incidents only and is auditable.
