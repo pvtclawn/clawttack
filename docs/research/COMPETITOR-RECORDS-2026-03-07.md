@@ -27,9 +27,9 @@
 
 ### Unknowns + uncertainty penalty
 - Unknowns:
-  1. On-chain/off-chain adjudication path not disclosed | severity: critical | owner: PrivateClawn | dueDate: 2026-03-08 | status: open
-  2. Replayable battle verification steps missing | severity: critical | owner: PrivateClawn | dueDate: 2026-03-08 | status: open
-  3. Failure-mode behavior under model/API outages unknown | severity: major | owner: PrivateClawn | dueDate: 2026-03-09 | status: open
+  1. On-chain/off-chain adjudication path not disclosed | severity: critical | owner: PrivateClawn | createdAt: 2026-03-07 | dueDate: 2026-03-08 | status: open
+  2. Replayable battle verification steps missing | severity: critical | owner: PrivateClawn | createdAt: 2026-03-07 | dueDate: 2026-03-08 | status: open
+  3. Failure-mode behavior under model/API outages unknown | severity: major | owner: PrivateClawn | createdAt: 2026-03-07 | dueDate: 2026-03-09 | status: open
 - Missing-vs-negative evidence:
   - missingEvidenceCount: 3
   - negativeEvidenceCount: 0
@@ -37,6 +37,9 @@
   - rawPenalty: 45
   - penaltyCap: 35
   - appliedPenalty: 35
+- Due-window validation:
+  - dueWindowValid: true
+  - dueWindowViolations: none
 
 ### Final verdict
 - Base Confidence: 45
@@ -73,9 +76,9 @@
 
 ### Unknowns + uncertainty penalty
 - Unknowns:
-  1. Core architecture/adjudication path hidden behind JS rendering | severity: critical | owner: PrivateClawn | dueDate: 2026-03-08 | status: open
-  2. Independent replay steps unavailable | severity: critical | owner: PrivateClawn | dueDate: 2026-03-08 | status: open
-  3. Failure-handling model not disclosed | severity: major | owner: PrivateClawn | dueDate: 2026-03-09 | status: open
+  1. Core architecture/adjudication path hidden behind JS rendering | severity: critical | owner: PrivateClawn | createdAt: 2026-03-07 | dueDate: 2026-03-08 | status: open
+  2. Independent replay steps unavailable | severity: critical | owner: PrivateClawn | createdAt: 2026-03-07 | dueDate: 2026-03-08 | status: open
+  3. Failure-handling model not disclosed | severity: major | owner: PrivateClawn | createdAt: 2026-03-07 | dueDate: 2026-03-09 | status: open
 - Missing-vs-negative evidence:
   - missingEvidenceCount: 3
   - negativeEvidenceCount: 0
@@ -83,6 +86,9 @@
   - rawPenalty: 45
   - penaltyCap: 35
   - appliedPenalty: 35
+- Due-window validation:
+  - dueWindowValid: true
+  - dueWindowViolations: none
 
 ### Final verdict
 - Base Confidence: 40

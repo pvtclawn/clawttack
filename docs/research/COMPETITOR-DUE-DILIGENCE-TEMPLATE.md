@@ -63,11 +63,11 @@ Use this template for each external arena/project.
 
 ## 7) Unknowns + Uncertainty Penalty (Required for Tier 0/1)
 - Unknown severity taxonomy:
-  - `critical` = blocks trust/replayability determination
-  - `major` = weakens confidence materially
-  - `minor` = informational gap with limited decision impact
+  - `critical` = blocks trust/replayability determination (max due window: **2 days**)
+  - `major` = weakens confidence materially (max due window: **7 days**)
+  - `minor` = informational gap with limited decision impact (max due window: **14 days**)
 - Unknowns:
-  - [ ] `<unknown item>` | severity: `critical|major|minor` | owner: `<name>` | dueDate: `YYYY-MM-DD` | status: `open|in_progress|resolved`
+  - [ ] `<unknown item>` | severity: `critical|major|minor` | owner: `<name>` | createdAt: `YYYY-MM-DD` | dueDate: `YYYY-MM-DD` | status: `open|in_progress|resolved`
 - Missing-vs-negative evidence flags:
   - `missingEvidenceCount`:
   - `negativeEvidenceCount`:
@@ -75,6 +75,10 @@ Use this template for each external arena/project.
   - `rawPenalty`:
   - `penaltyCap`:
   - `appliedPenalty` (must be capped):
+- Due-window validation (required):
+  - `dueWindowValid`: `true|false`
+  - `dueWindowViolations`:
+    - [ ] `<unknown id or summary>` exceeded severity max window
 
 ## 8) Confidence and Risks
 - Base confidence score (0-100):
