@@ -27,6 +27,15 @@ dependsOn:
 - deployment artifacts required for reproducibility
 - lockfile updates tied to dependency/security fixes
 
+## Merge-Path Guard Inventory
+| Path ID | Merge path | Allowed | Required guards | Notes |
+|---|---|---|---|---|
+| MP-001 | PR → `main`/`develop` (standard) | yes | `ci/test`, `ci/typecheck`, `ci/pr-hygiene` | baseline protected path |
+| MP-002 | PR with interface delta | yes | MP-001 + `ci/interface-delta-report` | declaration must match detected delta |
+| MP-003 | PR with split-series=true | yes | MP-001 + `ci/split-series-metadata` | `parentIssue` + `dependsOn` required |
+| MP-004 | Emergency override merge | restricted | waiver record + approver(s) + postmortem + followup issue | use only for time-critical incidents |
+| MP-005 | Direct push to protected branch | no | n/a | policy violation |
+
 ## Required-Check Matrix (Branch Protection)
 | Merge path | Required checks |
 |---|---|
