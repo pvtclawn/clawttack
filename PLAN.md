@@ -409,3 +409,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** fairness artifact includes overlap metrics + threshold verdict; fail if identity-level metrics are healthy while graph metrics breach limits.
 
 **Next Task (single):** implement Task 1 by extending `collusion-matrix-scaffold.ts` with sabotage scenario dimensions and deterministic IDs.
+
+### 09:37 roadmap refresh (A-lane)
+1. **Degraded-mode economics and abuse controls (P0)**
+   - define payout/multiplier caps and degrade-frequency abuse counters to prevent strategic telemetry-jamming gains.
+   **Acceptance metric:** simulated degrade-attack scenarios show colluder EV remains below no-gate baseline while honest-agent reward retention stays above configured floor.
+
+2. **Corroboration independence checks (P0)**
+   - add detector-correlation budget and require at least one orthogonal corroborating signal before hard punitive transitions.
+   **Acceptance metric:** confidence pipeline emits correlation score + orthogonality verdict; hard penalties blocked when independence conditions fail.
+
+3. **Hysteresis + cumulative risk thresholds (P0)**
+   - replace single-edge thresholds with rolling debt/risk accumulation and recovery hysteresis.
+   **Acceptance metric:** oscillation attacks around boundary trigger cumulative escalation within bounded windows; false-positive escalation remains below tolerance.
+
+**Next Task (single):** implement Task 1 policy constants + scaffold fields so degraded-mode economics are represented in simulation outputs.

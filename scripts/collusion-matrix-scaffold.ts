@@ -11,12 +11,19 @@ type PopulationProfile = {
 
 type SabotageMode = 'none' | 'false_flag_poisoning' | 'telemetry_degradation'
 
+type DegradedModePolicy = {
+  payoutCapRatio: number
+  multiplierCap: number
+  degradeAbuseCounterThreshold: number
+}
+
 type Scenario = {
   id: string
   coalitionSize: 2 | 3 | 5
   population: PopulationProfile
   matchmaker: MatchmakerMode
   sabotage: SabotageMode
+  degradedModePolicy: DegradedModePolicy
   epochs: number
   battlesPerEpoch: number
   trackedOutputs: string[]
@@ -31,6 +38,7 @@ type ScaffoldArtifact = {
     rewardModel: string
     penaltyModel: string
     qualityGateModel: string
+    degradedModePolicy: DegradedModePolicy
   }
   scenarioCounts: {
     total: number
@@ -44,6 +52,10 @@ type ScaffoldArtifact = {
 
 const EPOCHS = Number(process.env.COLLUSION_EPOCHS ?? '12')
 const BATTLES_PER_EPOCH = Number(process.env.COLLUSION_BATTLES_PER_EPOCH ?? '200')
+
+const BASE_DEGRADED_PAYOUT_CAP_RATIO = Number(process.env.DEGRADED_PAYOUT_CAP_RATIO ?? '0.6')
+const BASE_DEGRADED_MULTIPLIER_CAP = Number(process.env.DEGRADED_MULTIPLIER_CAP ?? '1.1')
+const BASE_DEGRADE_ABUSE_COUNTER_THRESHOLD = Number(process.env.DEGRADE_ABUSE_COUNTER_THRESHOLD ?? '3')
 
 const MATCHMAKER_MODES: MatchmakerMode[] = ['random', 'weak_anti_repeat', 'strong_anti_repeat']
 const SABOTAGE_MODES: SabotageMode[] = ['none', 'false_flag_poisoning', 'telemetry_degradation']
@@ -61,6 +73,18 @@ function assertPositiveInt(name: string, value: number) {
   }
 }
 
+function assertPositiveNumber(name: string, value: number) {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`invalid ${name}: expected positive number, got ${value}`)
+  }
+}
+
+function assertRatio(name: string, value: number) {
+  if (!Number.isFinite(value) || value <= 0 || value > 1) {
+    throw new Error(`invalid ${name}: expected ratio in (0,1], got ${value}`)
+  }
+}
+
 function makeScenarioId(
   coalitionSize: number,
   populationIdx: number,
@@ -68,6 +92,30 @@ function makeScenarioId(
   sabotage: SabotageMode,
 ): string {
   return `coalition-${coalitionSize}__pop-${populationIdx + 1}__${matchmaker}__sabotage-${sabotage}`
+}
+
+function degradedModePolicyFor(sabotage: SabotageMode): DegradedModePolicy {
+  if (sabotage === 'none') {
+    return {
+      payoutCapRatio: 1,
+      multiplierCap: 1.2,
+      degradeAbuseCounterThreshold: BASE_DEGRADE_ABUSE_COUNTER_THRESHOLD,
+    }
+  }
+
+  if (sabotage === 'false_flag_poisoning') {
+    return {
+      payoutCapRatio: BASE_DEGRADED_PAYOUT_CAP_RATIO,
+      multiplierCap: BASE_DEGRADED_MULTIPLIER_CAP,
+      degradeAbuseCounterThreshold: BASE_DEGRADE_ABUSE_COUNTER_THRESHOLD,
+    }
+  }
+
+  return {
+    payoutCapRatio: Math.max(0.4, BASE_DEGRADED_PAYOUT_CAP_RATIO - 0.1),
+    multiplierCap: Math.max(1, BASE_DEGRADED_MULTIPLIER_CAP - 0.05),
+    degradeAbuseCounterThreshold: Math.max(1, BASE_DEGRADE_ABUSE_COUNTER_THRESHOLD - 1),
+  }
 }
 
 function buildScenarios(): Scenario[] {
@@ -83,6 +131,7 @@ function buildScenarios(): Scenario[] {
             population,
             matchmaker,
             sabotage,
+            degradedModePolicy: degradedModePolicyFor(sabotage),
             epochs: EPOCHS,
             battlesPerEpoch: BATTLES_PER_EPOCH,
             trackedOutputs: [
@@ -92,12 +141,15 @@ function buildScenarios(): Scenario[] {
               'newcomer_survival_rate',
               'sabotage_false_positive_rate',
               'telemetry_health_degradation_impact',
+              'degraded_mode_cap_enforcement_rate',
+              'degrade_abuse_counter_trigger_rate',
             ],
             acceptanceChecks: [
               'abnormal EV for collusion profiles <= configured tolerance',
               'multiplier leakage remains bounded under all matchmaker modes',
               'fairness metrics emitted for every scenario',
               'sabotage scenarios produce separate EV/fairness deltas',
+              'degraded-mode payout/multiplier caps applied when sabotage mode is active',
             ],
           })
         }
@@ -138,6 +190,9 @@ function summarize(scenarios: Scenario[]): ScaffoldArtifact['scenarioCounts'] {
 function main() {
   assertPositiveInt('COLLUSION_EPOCHS', EPOCHS)
   assertPositiveInt('COLLUSION_BATTLES_PER_EPOCH', BATTLES_PER_EPOCH)
+  assertRatio('DEGRADED_PAYOUT_CAP_RATIO', BASE_DEGRADED_PAYOUT_CAP_RATIO)
+  assertPositiveNumber('DEGRADED_MULTIPLIER_CAP', BASE_DEGRADED_MULTIPLIER_CAP)
+  assertPositiveInt('DEGRADE_ABUSE_COUNTER_THRESHOLD', BASE_DEGRADE_ABUSE_COUNTER_THRESHOLD)
 
   const scenarios = buildScenarios()
   const out: ScaffoldArtifact = {
@@ -148,6 +203,11 @@ function main() {
       rewardModel: 'dynamic reward multiplier based on verified-quality streak',
       penaltyModel: 'fixed penalty constants',
       qualityGateModel: 'heuristic gate (to be stress-tested with drift alarms)',
+      degradedModePolicy: {
+        payoutCapRatio: BASE_DEGRADED_PAYOUT_CAP_RATIO,
+        multiplierCap: BASE_DEGRADED_MULTIPLIER_CAP,
+        degradeAbuseCounterThreshold: BASE_DEGRADE_ABUSE_COUNTER_THRESHOLD,
+      },
     },
     scenarioCounts: summarize(scenarios),
     scenarios,
