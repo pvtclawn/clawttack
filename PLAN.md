@@ -574,3 +574,33 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** PR check posts deterministic interface-delta report; missing declaration blocks merge.
 
 **Next Task (single):** implement Task 1 by drafting a PR hygiene policy doc + template fields for split-series metadata.
+
+### 18:37 roadmap refresh (A-lane)
+1. **Branch-protection required-check map (P0)**
+   - define required CI checks and merge paths where hygiene checks are mandatory.
+   **Acceptance metric:** policy doc includes explicit required-check matrix; missing required-check path is treated as config failure.
+
+2. **Semantic metadata validator (P0)**
+   - enforce non-placeholder content for split-series/interface-delta fields.
+   **Acceptance metric:** CI validator rejects empty/placeholder metadata and outputs offending fields.
+
+3. **Emergency override protocol (P0)**
+   - add controlled bypass path requiring reason, approver, postmortem, and follow-up issue.
+   **Acceptance metric:** override artifact includes all mandatory fields; missing postmortem/follow-up blocks closure.
+
+**Next Task (single):** implement Task 1 by extending PR-HYGIENE-POLICY.md with required-check matrix and merge-path coverage notes.
+
+### 19:27 roadmap refresh (A-lane)
+1. **OWASP checklist evidence-link enforcement (P0)**
+   - require at least one concrete evidence link per mandatory OWASP item in PR security reviews.
+   **Acceptance metric:** checklist validator fails when any mandatory item lacks evidence link.
+
+2. **Clawttack-specific OWASP control mapping (P0)**
+   - add per-item interpretation notes mapping OWASP categories to Clawttack mechanism/process controls.
+   **Acceptance metric:** checklist includes all mandatory OWASP items with project-specific control guidance.
+
+3. **Checklist versioning + review cadence (P0)**
+   - add `checklistVersion`, `lastReviewedAt`, and required periodic review interval metadata.
+   **Acceptance metric:** stale checklist (review age beyond interval) triggers warning/block in review workflow.
+
+**Next Task (single):** implement Task 1 by creating an OWASP mapping checklist doc with mandatory evidence-link fields for PR reviews.
