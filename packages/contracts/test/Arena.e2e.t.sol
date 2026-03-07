@@ -3,8 +3,8 @@ pragma solidity ^0.8.34;
 
 import {Test} from "forge-std/Test.sol";
 import {ClawttackArena} from "../src/ClawttackArena.sol";
-import {ClawttackBattleV4} from "../src/ClawttackBattleV4.sol";
-import {ClawttackTypesV4} from "../src/libraries/ClawttackTypesV4.sol";
+import {ClawttackBattle} from "../src/ClawttackBattle.sol";
+import {ClawttackTypes} from "../src/libraries/ClawttackTypes.sol";
 import {BIP39Words} from "../src/BIP39Words.sol";
 import {HashPreimageVOP} from "../src/vops/HashPreimageVOP.sol";
 import {IWordDictionary} from "../src/interfaces/IWordDictionary.sol";
@@ -25,12 +25,12 @@ contract TestWordDict is IWordDictionary {
 }
 
 /**
- * @title ArenaV4E2E
- * @notice Full lifecycle test: deploy arena → register agents → create v4 battle → accept → play turns
+ * @title ArenaE2E
+ * @notice Full lifecycle test: deploy arena → register agents → create v0 battle → accept → play turns
  */
-contract ArenaV4E2E is Test {
+contract ArenaE2E is Test {
     ClawttackArena arena;
-    ClawttackBattleV4 battleImpl;
+    ClawttackBattle battleImpl;
     TestWordDict wordDict;
     HashPreimageVOP hashVop;
 
@@ -41,10 +41,10 @@ contract ArenaV4E2E is Test {
         // Deploy infrastructure
         wordDict = new TestWordDict();
         hashVop = new HashPreimageVOP();
-        battleImpl = new ClawttackBattleV4();
+        battleImpl = new ClawttackBattle();
 
         arena = new ClawttackArena(address(wordDict));
-        arena.setBattleImplementationV4(address(battleImpl));
+        arena.setBattleImplementation(address(battleImpl));
         arena.addVop(address(hashVop));
 
         // Zero fees for testing
@@ -67,8 +67,8 @@ contract ArenaV4E2E is Test {
         uint256 bobId = arena.registerAgent();
         assertEq(bobId, 2);
 
-        // 2. Create v4 battle
-        ClawttackTypesV4.BattleConfigV4 memory config = ClawttackTypesV4.BattleConfigV4({
+        // 2. Create v0 battle
+        ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 0.01 ether,
             warmupBlocks: 15,
             targetAgentId: 0, // open challenge
@@ -77,12 +77,12 @@ contract ArenaV4E2E is Test {
         bytes32 aliceSecret = keccak256("alice-secret");
 
         vm.prank(alice);
-        address battleAddr = arena.createBattleV4{value: 0.01 ether}(aliceId, config, aliceSecret);
+        address battleAddr = arena.createBattle{value: 0.01 ether}(aliceId, config, aliceSecret);
         assertTrue(battleAddr != address(0), "Battle should be deployed");
 
         // 3. Verify battle state
-        ClawttackBattleV4 battle = ClawttackBattleV4(payable(battleAddr));
-        (ClawttackBattleV4.BattlePhase phase,,,,, uint256 battleId) = battle.getBattleState();
+        ClawttackBattle battle = ClawttackBattle(payable(battleAddr));
+        (ClawttackBattle.BattlePhase phase,,,,, uint256 battleId) = battle.getBattleState();
         assertEq(uint8(phase), 0, "Should be Open");
         assertEq(battleId, 1, "First battle");
 
@@ -91,59 +91,59 @@ contract ArenaV4E2E is Test {
         vm.prank(bob);
         battle.acceptBattle{value: 0.01 ether}(bobId, bobSecret);
 
-        (ClawttackBattleV4.BattlePhase phaseAfter,,,,,) = battle.getBattleState();
+        (ClawttackBattle.BattlePhase phaseAfter,,,,,) = battle.getBattleState();
         assertEq(uint8(phaseAfter), 1, "Should be Active");
 
         // 5. Verify pot
         assertEq(address(battle).balance, 0.02 ether, "Pot should be 2x stake");
     }
 
-    function test_createBattleV4_requiresV4Impl() public {
-        // Deploy arena without v4 impl
+    function test_createBattle_requiresV4Impl() public {
+        // Deploy arena without v0 impl
         ClawttackArena arena2 = new ClawttackArena(address(wordDict));
-        // Don't set v4 impl
+        // Don't set v0 impl
 
         vm.prank(alice);
         arena2.registerAgent();
 
-        ClawttackTypesV4.BattleConfigV4 memory config = ClawttackTypesV4.BattleConfigV4({
+        ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 0, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2, clozeEnabled: false
         });
 
         vm.prank(alice);
-        vm.expectRevert(); // InvalidCall — no v4 impl set
-        arena2.createBattleV4(1, config, bytes32(0));
+        vm.expectRevert(); // InvalidCall — no v0 impl set
+        arena2.createBattle(1, config, bytes32(0));
     }
 
-    function test_createBattleV4_invalidConfig() public {
+    function test_createBattle_invalidConfig() public {
         vm.prank(alice);
         arena.registerAgent();
 
         // warmupBlocks too low
-        ClawttackTypesV4.BattleConfigV4 memory config = ClawttackTypesV4.BattleConfigV4({
+        ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 0, warmupBlocks: 1, targetAgentId: 0, maxJokers: 2, clozeEnabled: false
         });
 
         vm.prank(alice);
         vm.expectRevert(); // ConfigOutOfBounds
-        arena.createBattleV4(1, config, bytes32(0));
+        arena.createBattle(1, config, bytes32(0));
     }
 
     function test_cancelBattle_refundsStake() public {
         vm.prank(alice);
         uint256 aliceId = arena.registerAgent();
 
-        ClawttackTypesV4.BattleConfigV4 memory config = ClawttackTypesV4.BattleConfigV4({
+        ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 0.05 ether, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2, clozeEnabled: false
         });
 
         uint256 balBefore = alice.balance;
         vm.prank(alice);
-        address battleAddr = arena.createBattleV4{value: 0.05 ether}(aliceId, config, bytes32(0));
+        address battleAddr = arena.createBattle{value: 0.05 ether}(aliceId, config, bytes32(0));
 
         // Cancel
         vm.prank(alice);
-        ClawttackBattleV4(payable(battleAddr)).cancelBattle();
+        ClawttackBattle(payable(battleAddr)).cancelBattle();
 
         // Alice gets refund
         assertEq(alice.balance, balBefore, "Alice should get full refund");

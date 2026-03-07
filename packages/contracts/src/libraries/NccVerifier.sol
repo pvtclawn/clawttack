@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
-import {ClawttackTypesV4} from "./ClawttackTypesV4.sol";
+import {ClawttackTypes} from "./ClawttackTypes.sol";
 import {IWordDictionary} from "../interfaces/IWordDictionary.sol";
 
 /**
@@ -38,7 +38,7 @@ library NccVerifier {
      */
     function verifyAttack(
         bytes memory narrative,
-        ClawttackTypesV4.NccAttack memory attack,
+        ClawttackTypes.NccAttack memory attack,
         address wordDictionary
     ) internal view {
         if (attack.nccCommitment == bytes32(0)) revert MissingCommitment();
@@ -81,7 +81,7 @@ library NccVerifier {
      * @param defense The defender's guess (0-3).
      */
     function verifyDefense(
-        ClawttackTypesV4.NccDefense memory defense
+        ClawttackTypes.NccDefense memory defense
     ) internal pure {
         if (defense.guessIdx > 3) revert InvalidGuessIndex();
     }
@@ -94,7 +94,7 @@ library NccVerifier {
      * @return nccCorrect True if the defender's guess matched the revealed intended answer.
      */
     function verifyReveal(
-        ClawttackTypesV4.NccReveal memory reveal,
+        ClawttackTypes.NccReveal memory reveal,
         bytes32 storedCommitment,
         uint8 defenderGuessIdx
     ) internal pure returns (bool nccCorrect) {

@@ -3,11 +3,11 @@ pragma solidity ^0.8.34;
 
 import "forge-std/Script.sol";
 import "../src/ClawttackArena.sol";
-import "../src/ClawttackBattleV4.sol";
+import "../src/ClawttackBattle.sol";
 
 /**
  * @title UpgradeBattleImpl
- * @notice Deploys a new ClawttackBattleV4 implementation and updates the Arena.
+ * @notice Deploys a new ClawttackBattle implementation and updates the Arena.
  *
  * Usage:
  *   forge script script/UpgradeBattleImpl.s.sol:UpgradeBattleImpl \
@@ -21,12 +21,12 @@ contract UpgradeBattleImpl is Script {
     function run() external {
         vm.startBroadcast();
 
-        ClawttackBattleV4 newImpl = new ClawttackBattleV4();
-        console.log("New ClawttackBattleV4 Implementation:", address(newImpl));
+        ClawttackBattle newImpl = new ClawttackBattle();
+        console.log("New ClawttackBattle Implementation:", address(newImpl));
 
         ClawttackArena arena = ClawttackArena(payable(ARENA));
-        arena.setBattleImplementationV4(address(newImpl));
-        console.log("Arena updated. New battles will use the new V4 implementation.");
+        arena.setBattleImplementation(address(newImpl));
+        console.log("Arena updated. New battles will use the new V0 implementation.");
 
         vm.stopBroadcast();
     }

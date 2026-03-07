@@ -4,10 +4,10 @@ pragma solidity ^0.8.34;
 import {Clones} from "openzeppelin-contracts/contracts/proxy/Clones.sol";
 import {Ownable2Step, Ownable} from "openzeppelin-contracts/contracts/access/Ownable2Step.sol";
 import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
-import {ClawttackTypesV4} from "./libraries/ClawttackTypesV4.sol";
+import {ClawttackTypes} from "./libraries/ClawttackTypes.sol";
 import {ClawttackErrors} from "./libraries/ClawttackErrors.sol";
 import {EloMath} from "./libraries/EloMath.sol";
-import {IClawttackBattleV4} from "./interfaces/IClawttackBattleV4.sol";
+import {IClawttackBattle} from "./interfaces/IClawttackBattle.sol";
 
 /**
  * @title ClawttackArena
@@ -42,7 +42,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
     // ─── Storage ─────────────────────────────────────────────────────────────
 
-    address public battleImplementationV4;
+    address public battleImplementation;
 
     uint256 public agentRegistrationFee;
     uint256 public battleCreationFee;
@@ -53,7 +53,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     uint256 public battlesCount;
     uint256 public agentsCount;
 
-    mapping(uint256 => ClawttackTypesV4.AgentProfile) public agents;
+    mapping(uint256 => ClawttackTypes.AgentProfile) public agents;
     mapping(uint256 => address) public battles;
 
     // ─── VOP Registry ──────────────────────────────────────────────
@@ -87,9 +87,9 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
     // ─── External: Admin ─────────────────────────────────────────────────────
 
-    function setBattleImplementationV4(address _impl) external onlyOwner {
+    function setBattleImplementation(address _impl) external onlyOwner {
         if (_impl == address(0)) revert ClawttackErrors.InvalidCall();
-        battleImplementationV4 = _impl;
+        battleImplementation = _impl;
     }
 
     function setBattleCreationFee(uint256 _fee) external onlyOwner {
@@ -152,7 +152,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         protocolFees += msg.value;
         unchecked { agentId = ++agentsCount; }
 
-        agents[agentId] = ClawttackTypesV4.AgentProfile({
+        agents[agentId] = ClawttackTypes.AgentProfile({
             owner: msg.sender,
             eloRating: DEFAULT_ELO_RATING,
             totalWins: 0,
@@ -170,13 +170,13 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
      * @param secretHash The challenger's secret hash for CTF verification.
      * @return battleAddress The address of the deployed battle clone.
      */
-    function createBattleV4(uint256 challengerId, ClawttackTypesV4.BattleConfigV4 calldata config, bytes32 secretHash)
+    function createBattle(uint256 challengerId, ClawttackTypes.BattleConfig calldata config, bytes32 secretHash)
         external
         payable
         nonReentrant
         returns (address battleAddress)
     {
-        if (battleImplementationV4 == address(0)) revert ClawttackErrors.InvalidCall();
+        if (battleImplementation == address(0)) revert ClawttackErrors.InvalidCall();
         if (agents[challengerId].owner == address(0)) revert ClawttackErrors.NotParticipant();
         if (agents[challengerId].owner != msg.sender) revert ClawttackErrors.NotAgentOwner();
 
@@ -191,10 +191,10 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         uint256 battleId;
         unchecked { battleId = ++battlesCount; }
 
-        battleAddress = Clones.clone(battleImplementationV4);
+        battleAddress = Clones.clone(battleImplementation);
         battles[battleId] = battleAddress;
 
-        IClawttackBattleV4(battleAddress).initialize(
+        IClawttackBattle(battleAddress).initialize(
             address(this), battleId, challengerId, msg.sender, config, secretHash
         );
 

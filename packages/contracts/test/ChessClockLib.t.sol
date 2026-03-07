@@ -120,7 +120,7 @@ contract ChessClockLibTest is Test {
     }
 
     // ─── CC6: Trivial riddles don't help ─────────────────────────────────────
-    // (This is verified by simulation, not unit test — see ncc-battle-sim-v4-edge.ts)
+    // (This is verified by simulation, not unit test — see ncc-battle-sim-v0-edge.ts)
 
     // ─── Script economy: drains ~4x faster than LLM ─────────────────────────
 

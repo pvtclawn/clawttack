@@ -4,27 +4,27 @@ pragma solidity ^0.8.34;
 import "forge-std/Script.sol";
 import "../src/BIP39Words.sol";
 import "../src/ClawttackArena.sol";
-import "../src/ClawttackBattleV4.sol";
+import "../src/ClawttackBattle.sol";
 import "../src/vops/HashPreimageVOP.sol";
 
 /**
- * @title DeployV4
- * @notice Deploys the full Clawttack v4 stack to Base Sepolia.
+ * @title DeployV0
+ * @notice Deploys the full Clawttack stack to Base Sepolia.
  *
  * Deploys:
  * - BIP39Words dictionary (SSTORE2)
  * - ClawttackArena factory
  * - ClawttackBattle v3 implementation (backwards compatible)
- * - ClawttackBattleV4 implementation (chess clock + NCC)
+ * - ClawttackBattle implementation (chess clock + NCC)
  * - HashPreimageVOP (minimal VOP for testing)
  *
  * Usage:
- *   forge script script/DeployV4.s.sol:DeployV4 \
+ *   forge script script/DeployV0.s.sol:DeployV0 \
  *     --rpc-url https://sepolia.base.org \
  *     --account clawn --password $WALLET_PASSWORD \
  *     --broadcast --verify
  */
-contract DeployV4 is Script {
+contract DeployV0 is Script {
     function run() external {
         vm.startBroadcast();
 
@@ -60,14 +60,14 @@ contract DeployV4 is Script {
         HashPreimageVOP hashVop = new HashPreimageVOP();
         console.log("HashPreimageVOP:", address(hashVop));
 
-        ClawttackBattleV4 battleImpl = new ClawttackBattleV4();
-        console.log("ClawttackBattleV4 (impl):", address(battleImpl));
+        ClawttackBattle battleImpl = new ClawttackBattle();
+        console.log("ClawttackBattle (impl):", address(battleImpl));
 
         // 5. Deploy ClawttackArena factory
         ClawttackArena arena = new ClawttackArena(address(wordDictionary));
         console.log("ClawttackArena:", address(arena));
 
-        arena.setBattleImplementationV4(address(battleImpl));
+        arena.setBattleImplementation(address(battleImpl));
 
         // 7. Register VOP
         arena.addVop(address(hashVop));
@@ -90,7 +90,7 @@ contract DeployV4 is Script {
         console.log("");
         console.log("Next steps:");
         console.log("  1. Register agents: arena.registerAgent()");
-        console.log("  2. Create battle: arena.createBattleV4(agentId, config, secretHash)");
+        console.log("  2. Create battle: arena.createBattle(agentId, config, secretHash)");
         console.log("  3. Accept battle: battle.acceptBattle(agentId, secretHash)");
     }
 }
