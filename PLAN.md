@@ -514,3 +514,33 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** output includes trajectory + spot-check status; confidence score decreases automatically on failed spot-checks.
 
 **Next Task (single):** implement Task 1 by adding a structured competitor-evidence template file under `docs/research/` and backfilling current known competitors.
+
+### 15:27 roadmap refresh (A-lane)
+1. **Unknown-severity taxonomy + penalty cap (P0)**
+   - define fixed unknown classes (`critical`, `major`, `minor`) and cap cumulative uncertainty penalty.
+   **Acceptance metric:** competitor record evaluator outputs severity counts + capped penalty with deterministic formula.
+
+2. **Unknown-resolution ownership workflow (P0)**
+   - require `owner`, `dueDate`, and `status` for each unknown evidence gap.
+   **Acceptance metric:** record validation fails when any unknown lacks owner/dueDate.
+
+3. **Tier-upgrade guard for unresolved critical unknowns (P0)**
+   - block Tier upgrades when critical unknowns remain unresolved unless explicit waiver is logged.
+   **Acceptance metric:** evaluator emits `tierUpgradeBlocked=true` with reason list when unresolved critical unknowns exist.
+
+**Next Task (single):** implement Task 1 by extending competitor records template with unknown severity taxonomy + capped uncertainty penalty fields.
+
+### 16:17 roadmap refresh (A-lane)
+1. **Severity-bound due-date policy (P0)**
+   - enforce max due windows by unknown severity (`critical < major < minor`) in competitor records.
+   **Acceptance metric:** validator flags any unknown with dueDate beyond severity max window.
+
+2. **Unresolved-age debt metric (P0)**
+   - add time-decay debt field that grows with unresolved critical/major unknown age (in addition to capped penalty).
+   **Acceptance metric:** records emit `uncertaintyDebtScore` and threshold-based escalation status.
+
+3. **Evidence-backed status transitions (P0)**
+   - require evidence links for transitions to `in_progress`/`resolved`; auto-revert stale `in_progress` to `open` after timeout.
+   **Acceptance metric:** transition without evidence is rejected; stale transition detector emits corrective action.
+
+**Next Task (single):** implement Task 1 by extending competitor template with severity-based max due-window rules and validation notes.
