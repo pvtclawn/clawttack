@@ -634,3 +634,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** audit job emits pass/fail matrix; any uncovered path blocks merge.
 
 **Next Task (single):** implement Task 1 by extending predicate schema with merge-base/head source-pinning fields and runtime context requirements.
+
+### 21:57 roadmap refresh (A-lane)
+1. **Merge-candidate predicate recheck (P0)**
+   - run `ci/pr-hygiene` on merge-candidate commit state in addition to PR head.
+   **Acceptance metric:** report includes both `prHeadStatus` and `mergeCandidateStatus`; mismatch blocks merge.
+
+2. **Predicate scope declaration (P0)**
+   - require explicit `outOfScopeChecks` section listing dependencies not covered by predicate engine.
+   **Acceptance metric:** report fails when scope declaration missing for known external dependencies.
+
+3. **Predicate lifecycle + provenance policy (P0)**
+   - add version lifecycle process and mandatory provenance fields for report artifacts.
+   **Acceptance metric:** reports missing version/provenance fields are invalid; stale predicate versions trigger review warning.
+
+**Next Task (single):** implement Task 1 by extending CI predicate schema with dual-state (`prHead` + `mergeCandidate`) evaluation fields.
