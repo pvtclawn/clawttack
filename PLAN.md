@@ -484,3 +484,18 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** artifact emits `recalibrationTrigger` boolean + supporting churn metrics; trigger deterministically reproducible on replay.
 
 **Next Task (single):** implement Task 1 in `robust-overlap-scaffold.ts` by adding machine-readable `decisionTrace[]` with hard-stop precedence semantics.
+
+### 13:47 roadmap refresh (A-lane)
+1. **Decision-trace governance fields (P0)**
+   - extend robust-overlap artifact with `precedencePolicyVersion`, `finalVerdictReason`, and explicit gate intent tags (`safety_gate`/`liveness_gate`/`diagnostic`).
+   **Acceptance metric:** every run emits all governance fields; `finalVerdictReason` deterministically equals first failing hard rule (or `all_hard_rules_passed`).
+
+2. **Liveness-debt tracking + stuck fail-safe alarm (P0)**
+   - track consecutive blocked cycles and median recovery horizon; raise alarm when fail-safe lock exceeds threshold.
+   **Acceptance metric:** artifact includes `livenessDebt` object + `stuckFailSafe` boolean and deterministic trigger threshold.
+
+3. **Worst-variant trust-state audit trail (P0)**
+   - add trust-state labels (`trusted_fail` / `suspect_fail`) with immutable rationale fields and anti-flip detection.
+   **Acceptance metric:** trust-state transitions are logged with reason codes; repeated flips over threshold emit `trustFlipAlert=true`.
+
+**Next Task (single):** implement Task 1 in `robust-overlap-scaffold.ts` (policy versioning + final verdict reason + gate-intent tags).
