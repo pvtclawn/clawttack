@@ -71,8 +71,17 @@ notChecked:
 14. **Opening evidence sentence must be non-spinny.**
    The first sentence should describe state, not celebrate it. Avoid flattering wording like `strongly improved`, `solid`, `clean`, or `healthy` unless that state is explicitly evidenced and relevant.
 
-15. **Lead with the most relevant/top-line evidence for the judgment being made.**
+15. **Avoid ungrounded severity adjectives.**
+   Do not call remaining issues `minor`, `small`, `light`, `clean`, or similar unless severity is directly supported by the checked scope. Prefer naming the blockers instead of characterizing them.
+
+16. **Lead with the most relevant/top-line evidence for the judgment being made.**
    If a narrower slice is mentioned first, the summary must make clear why that slice is the correct lens. Do not front-load a favorable subgroup when the top-line state is the real merge-relevant signal.
+
+17. **Use symmetric specificity for cleared vs remaining blockers.**
+   If invalidated blockers are named concretely, remaining blockers should be named with comparable specificity rather than collapsed into vague residue like `some cleanup remains`.
+
+18. **The opening sentence must earn its place.**
+   If removing the first sentence would not materially change the merge judgment, it is probably too vague or ceremonial.
 
 ## Scope-qualified verdict examples
 
@@ -95,8 +104,8 @@ Always order summary content like this:
 4. **review-governance or process nuance**
 
 ### Good opening sentence shapes
-- `Runtime blockers on 56341e3 are cleared; remaining issues are doc drift plus local env noise.`
-- `Typecheck passes on 56341e3; branch-state failures observed in checked scope are limited to docs drift.`
+- `Runtime blockers on 56341e3 are cleared; remaining issues are doc drift in CHANGELOG.md and docs/SKILL.md plus local env noise.`
+- `Typecheck passes on 56341e3; branch-state failures observed in checked scope are limited to active doc drift.`
 - `The reviewed ref still contains active doc drift in CHANGELOG.md and docs/SKILL.md.`
 
 ### Bad opening sentence shapes
@@ -104,15 +113,26 @@ Always order summary content like this:
 - `This is in a strong place.`
 - `Overall state is improved.`
 - `The branch is pretty healthy.`
+- `Only minor issues remain.`
+- `Most blockers are gone and there’s just a bit of cleanup left.`
 
 ### Good summary shape
-- `Current state: runtime blockers on 56341e3 are cleared; remaining issues are doc drift plus local env noise.`
+- `Current state: runtime blockers on 56341e3 are cleared; remaining issues are doc drift in CHANGELOG.md and docs/SKILL.md plus local env noise.`
 - `Impact: code changed. Mechanism impact: none.`
 - `Confidence/caveats: medium confidence because merge-candidate state was not checked.`
 
 ### Bad summary shape
 - `With medium confidence and improved review rigor, this looks basically mergeable...`
 - `This seems fairly safe, though not fully checked, and runtime blockers appear gone...`
+
+## Decision-utility check for opening sentence
+
+Before finalizing a review summary, ask:
+- Does the first sentence tell the reader **what matters now** on this ref?
+- Would removing it materially reduce decision quality?
+- Does it name both the cleared and remaining blocker classes with comparable specificity when relevant?
+
+If the answer is no, rewrite it.
 
 ## Compact review template
 
@@ -167,8 +187,8 @@ Always order summary content like this:
   - active scripts still calling `createBattleV4`
   - stale test name `requiresV4Impl`
 - remainingCurrentBlockers:
-  - lingering doc drift in active-ish docs (`CHANGELOG.md`, `docs/SKILL.md`)
-  - active script naming drift (`packages/sdk/scripts/fight.ts` still importing `V4Fighter`)
+  - active doc drift in `CHANGELOG.md` and `docs/SKILL.md`
+  - active script naming drift in `packages/sdk/scripts/fight.ts` (`V4Fighter` import)
 - envNoise:
   - `bun test --bail` failing on missing `ethers` in local test env
 - notChecked:
@@ -178,7 +198,7 @@ Always order summary content like this:
 - mergeable with caveats at prHead/runtimeConsumers+docs+typecheck+tests scope
 
 ### Plain-English summary
-- Current state: original runtime blockers are gone on 56341e3; remaining issues are narrower doc/script drift plus local env noise.
+- Current state: original runtime blockers are gone on 56341e3; remaining checked issues are active doc drift in CHANGELOG.md and docs/SKILL.md, active script naming drift in packages/sdk/scripts/fight.ts, plus local env noise.
 - Impact: code changed; mechanism none.
 - Confidence/caveats: medium confidence because merge-candidate state against latest base was not checked.
 
