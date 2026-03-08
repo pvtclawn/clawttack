@@ -65,6 +65,15 @@ notChecked:
 12. **Mention governance/review improvements only after branch/evidence state is clear.**
    Review-process quality, template quality, or governance rigor belongs after the branch-state and impact state are established.
 
+13. **Opening evidence sentence must be concrete.**
+   The first summary sentence must name actual current blockers, invalidated blockers, pass/fail state, or measured branch state. Vague openings like `things look better now` or `overall state is improved` are not acceptable.
+
+14. **Opening evidence sentence must be non-spinny.**
+   The first sentence should describe state, not celebrate it. Avoid flattering wording like `strongly improved`, `solid`, `clean`, or `healthy` unless that state is explicitly evidenced and relevant.
+
+15. **Lead with the most relevant/top-line evidence for the judgment being made.**
+   If a narrower slice is mentioned first, the summary must make clear why that slice is the correct lens. Do not front-load a favorable subgroup when the top-line state is the real merge-relevant signal.
+
 ## Scope-qualified verdict examples
 
 **Acceptable:**
@@ -85,10 +94,21 @@ Always order summary content like this:
 3. **confidence / caveats / env noise**
 4. **review-governance or process nuance**
 
-### Good summary shape
+### Good opening sentence shapes
 - `Runtime blockers on 56341e3 are cleared; remaining issues are doc drift plus local env noise.`
-- `Code impact: changed. Mechanism impact: none.`
-- `Semantic confidence: medium because merge-candidate state was not checked.`
+- `Typecheck passes on 56341e3; branch-state failures observed in checked scope are limited to docs drift.`
+- `The reviewed ref still contains active doc drift in CHANGELOG.md and docs/SKILL.md.`
+
+### Bad opening sentence shapes
+- `Things look much better now.`
+- `This is in a strong place.`
+- `Overall state is improved.`
+- `The branch is pretty healthy.`
+
+### Good summary shape
+- `Current state: runtime blockers on 56341e3 are cleared; remaining issues are doc drift plus local env noise.`
+- `Impact: code changed. Mechanism impact: none.`
+- `Confidence/caveats: medium confidence because merge-candidate state was not checked.`
 
 ### Bad summary shape
 - `With medium confidence and improved review rigor, this looks basically mergeable...`
@@ -119,7 +139,7 @@ Always order summary content like this:
 - <scope-qualified mergeable / not mergeable / mergeable with caveats>
 
 ### Plain-English summary
-- Current state: <what the reviewed ref shows right now>.
+- Current state: <concrete current blockers / invalidated blockers / pass-fail state on the reviewed ref>.
 - Impact: code <none|unknown|changed>; mechanism <none|unknown|changed>.
 - Confidence/caveats: <short caveat sentence, if needed>.
 
