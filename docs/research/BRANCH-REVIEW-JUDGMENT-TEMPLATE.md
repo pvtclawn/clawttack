@@ -56,6 +56,15 @@ notChecked:
 9. **Freshness is not semantic certainty.**
    `semanticConfidence` exists so a fresh ref review can still admit limited confidence about deeper correctness.
 
+10. **Lead with evidence state, not confidence language.**
+   In summaries and verdict rationale, say what the reviewed ref actually shows first (current blockers, invalidated blockers, pass/fail state). Confidence labels and caveats come after the evidence state.
+
+11. **Keep confidence language subordinate and short.**
+   Confidence/uncertainty wording should be brief and must not outgrow the evidence-state sentence it qualifies.
+
+12. **Mention governance/review improvements only after branch/evidence state is clear.**
+   Review-process quality, template quality, or governance rigor belongs after the branch-state and impact state are established.
+
 ## Scope-qualified verdict examples
 
 **Acceptable:**
@@ -67,6 +76,23 @@ notChecked:
 - `mergeable`
 - `safe to merge`
 - `looks good to me`
+
+## Plain-English summary order
+
+Always order summary content like this:
+1. **current branch/evidence state**
+2. **impact limits** (`codeImpact` / `mechanismImpact` when relevant)
+3. **confidence / caveats / env noise**
+4. **review-governance or process nuance**
+
+### Good summary shape
+- `Runtime blockers on 56341e3 are cleared; remaining issues are doc drift plus local env noise.`
+- `Code impact: changed. Mechanism impact: none.`
+- `Semantic confidence: medium because merge-candidate state was not checked.`
+
+### Bad summary shape
+- `With medium confidence and improved review rigor, this looks basically mergeable...`
+- `This seems fairly safe, though not fully checked, and runtime blockers appear gone...`
 
 ## Compact review template
 
@@ -91,6 +117,11 @@ notChecked:
 
 ### Judgment
 - <scope-qualified mergeable / not mergeable / mergeable with caveats>
+
+### Plain-English summary
+- Current state: <what the reviewed ref shows right now>.
+- Impact: code <none|unknown|changed>; mechanism <none|unknown|changed>.
+- Confidence/caveats: <short caveat sentence, if needed>.
 
 ### Rationale
 - <1–3 bullets tied only to reviewedRef + declared scope>
@@ -126,6 +157,11 @@ notChecked:
 ### Judgment
 - mergeable with caveats at prHead/runtimeConsumers+docs+typecheck+tests scope
 
+### Plain-English summary
+- Current state: original runtime blockers are gone on 56341e3; remaining issues are narrower doc/script drift plus local env noise.
+- Impact: code changed; mechanism none.
+- Confidence/caveats: medium confidence because merge-candidate state against latest base was not checked.
+
 ### Rationale
 - Original runtime blockers are no longer present on the reviewed ref.
 - Remaining issues are narrower and mostly naming/doc drift.
@@ -137,3 +173,4 @@ notChecked:
 - A more disciplined review template improves **judgment quality**, not code quality.
 - Fresh ref + structured fields does not imply deep semantic review.
 - Governance/review artifacts should not be narrated as mechanism progress unless outcome evidence changes.
+- Better confidence language should make claims smaller and clearer, not more impressive.
