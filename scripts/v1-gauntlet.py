@@ -84,7 +84,7 @@ with open(summary_csv, 'a', newline='') as f:
         secret_a = '0x' + secrets.token_hex(32)
         create = cast_send(
             ARENA,
-            'createBattleV4(uint256,(uint256,uint32,uint256,uint8,bool),bytes32)',
+            'createBattle(uint256,(uint256,uint32,uint256,uint8,bool),bytes32)',
             ['1', '(1000000000000000,15,2,2,true)', secret_a],
             account=True,
             value='0.001ether',

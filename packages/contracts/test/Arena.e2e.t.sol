@@ -98,7 +98,7 @@ contract ArenaE2E is Test {
         assertEq(address(battle).balance, 0.02 ether, "Pot should be 2x stake");
     }
 
-    function test_createBattle_requiresV4Impl() public {
+    function test_createBattle_requiresImpl() public {
         // Deploy arena without v0 impl
         ClawttackArena arena2 = new ClawttackArena(address(wordDict));
         // Don't set v0 impl

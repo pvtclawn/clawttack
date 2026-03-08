@@ -1,6 +1,6 @@
-# NEXT STEPS — Clawttack v4
+# NEXT STEPS
 
-**Status:** v4 ALL P0s COMPLETE. Ready for testnet deployment.  
+**Status:** ALL P0s COMPLETE. Ready for testnet deployment.  
 **Date:** March 1, 2026  
 **Tests:** 637 (480 Bun + 157 Forge), 0 failures
 
@@ -11,23 +11,23 @@
 ### Contracts (Solidity)
 - [x] `ChessClockLib.sol` — timing engine (14 tests)
 - [x] `NccVerifier.sol` — NCC verification, 48K gas (15 tests)
-- [x] `ClawttackTypesV4.sol` — v4 types
-- [x] `ClawttackBattleV4.sol` — full battle contract (6 integration tests)
+- [x] `ClawttackTypes.sol` — v4 types
+- [x] `ClawttackBattle.sol` — full battle contract (6 integration tests)
 - [x] `FastSubstring.sol` — 4.4x faster poison check (14 tests)
 - [x] Self-audit: 5 findings, 2 fixed (Elo check + reveal forfeit)
 
 ### SDK (TypeScript)
-- [x] `v4-types.ts` — TypeScript mirrors of Solidity types
+- [x] `types.ts` — TypeScript mirrors of Solidity types
 - [x] `ncc-helper.ts` — attack/defense/reveal (15 tests)
 - [x] `bip39-scanner.ts` — narrative word scanner (10 tests)
-- [x] `v4-fighter.ts` — autonomous on-chain battle agent
-- [x] `v4-strategy-template.ts` — reference LLM strategy (5 tests)
+- [x] `fighter.ts` — autonomous on-chain battle agent
+- [x] `strategy-template.ts` — reference LLM strategy (5 tests)
 
 ### Docs
 - [x] `RULES.md` — complete game rules
 - [x] `V4D-DESIGN.md` — technical design (chess clock + NCC flow)
 - [x] `V4D-INVARIANTS.md` — 51 invariants
-- [x] SDK README updated with v4 guide
+- [x] SDK README updated
 
 ### Analysis
 - [x] ZK deleted (Egor confirmed)
@@ -41,9 +41,9 @@
 
 ### P0 — Must Have for Deployment
 
-1. **~~Arena factory v4~~** ✅ — `createBattleV4()` in ClawttackArena.sol (commit 38423f1)
+1. **~~Arena factory v4~~** ✅ — `createBattle()` in ClawttackArena.sol (commit 38423f1)
 
-2. **VOP solver** — V4Fighter has `solution: 0n` placeholder. Need SDK module that solves VOP challenges (hash preimages, TWAP reads).
+2. **VOP solver** — Fighter has `solution: 0n` placeholder. Need SDK module that solves VOP challenges (hash preimages, TWAP reads).
    - Estimate: 2-4 hours
    - Can stub initially (arena can disable VOPs for testing)
 
@@ -57,7 +57,7 @@
    - Identified by Kimi as economic attack
    - Estimate: 3-4 hours (contract + SDK changes)
 
-5. **Event-based fighter** — Current V4Fighter polls. Switch to event listeners for lower latency.
+5. **Event-based fighter** — Current Fighter polls. Switch to event listeners for lower latency.
    - Estimate: 2 hours
 
 6. **Gas optimization** — `containsSubstring` still 116K. Assembly SIMD or different algorithm could push to ~50K.
@@ -84,6 +84,6 @@
 
 When Egor approves:
 1. `git checkout main && git merge develop` (355+ commits ahead)
-2. Tag `v4.0.0-alpha`
+2. Tag `v0.1.0-alpha`
 3. Deploy to Base Sepolia for testing
-4. First v4 battle between two test agents
+4. First battle between two test agents

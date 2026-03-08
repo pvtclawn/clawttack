@@ -1,9 +1,9 @@
 /**
- * useChain.ts — V3 on-chain data hooks for Clawttack Arena
- * 
- * V3 Architecture:
+ * useChain.ts — On-chain data hooks for Clawttack Arena
+ *
+ * Architecture:
  *   Arena (factory) creates Battle clones.
- *   battleId is uint256, not bytes32.
+ *   battleId is uint256.
  *   Battle state lives on each clone (read directly from clone address).
  *   TurnSubmitted events are emitted by individual Battle clones.
  */
@@ -63,19 +63,18 @@ async function getLogsChunked<T>(params: {
   return results
 }
 
-// ─── V3 Types ────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────
 
-export interface V3BattleCreatedEvent {
+export interface BattleCreatedEvent {
   battleId: bigint
   challengerId: bigint
   stake: bigint
-  baseTimeoutBlocks: number
-  maxTurns: number
+  targetAgentId: bigint
   blockNumber: bigint
   txHash: `0x${string}`
 }
 
-export interface V3BattleInfo {
+export interface BattleInfo {
   battleId: bigint
   address: Address
   state: number          // 0=Open, 1=Active, 2=Settled, 3=Cancelled
@@ -97,7 +96,7 @@ export interface V3BattleInfo {
   resultType?: number  // 0=None, 1=Compromise, 2=InvalidSolution, 3=PoisonViolation, 4=Timeout, 5=BankEmpty, 6=FlagCaptured, 7=NccRevealFailed
 }
 
-export interface V3TurnEvent {
+export interface TurnEvent {
   battleId: bigint
   turnNumber: number
   playerId: bigint
@@ -112,7 +111,7 @@ export interface V3TurnEvent {
   timestamp?: number
 }
 
-export interface V3SettledEvent {
+export interface SettledEvent {
   battleId: bigint
   winnerId: bigint
   loserId: bigint
@@ -121,7 +120,7 @@ export interface V3SettledEvent {
   txHash: `0x${string}`
 }
 
-export interface V3AgentProfile {
+export interface AgentProfile {
   agentId: bigint
   owner: Address
   eloRating: number
@@ -203,36 +202,17 @@ export function useArenaStats() {
 /** Get all BattleCreated events from the Arena */
 export function useBattleCreatedEvents(live = false) {
   return useQuery({
-    queryKey: ['v3', 'battles', 'created'],
-    queryFn: async (): Promise<V3BattleCreatedEvent[]> => {
-      // Try v4 event first
-      const v4Events = await getLogsChunked({
-        address: CONTRACTS.arena,
-        event: parseAbiItem('event BattleV4Created(uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint256 targetAgentId)'),
-        fromBlock: ARENA_DEPLOY_BLOCK,
-        mapFn: (log) => ({
-          battleId: log.args.battleId!,
-          challengerId: log.args.challengerId!,
-          stake: log.args.stake!,
-          baseTimeoutBlocks: 0,
-          maxTurns: 0,
-          blockNumber: log.blockNumber,
-          txHash: log.transactionHash!,
-        }),
-      })
-      if (v4Events.length > 0) return v4Events
-
-      // Fallback: v3 event
+    queryKey: ['arena', 'battles', 'created'],
+    queryFn: async (): Promise<BattleCreatedEvent[]> => {
       return getLogsChunked({
         address: CONTRACTS.arena,
-        event: parseAbiItem('event BattleCreated(uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint32 baseTimeoutBlocks, uint8 maxTurns)'),
+        event: parseAbiItem('event BattleCreated(uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint256 targetAgentId)'),
         fromBlock: ARENA_DEPLOY_BLOCK,
         mapFn: (log) => ({
           battleId: log.args.battleId!,
           challengerId: log.args.challengerId!,
           stake: log.args.stake!,
-          baseTimeoutBlocks: Number(log.args.baseTimeoutBlocks!),
-          maxTurns: Number(log.args.maxTurns!),
+          targetAgentId: log.args.targetAgentId!,
           blockNumber: log.blockNumber,
           txHash: log.transactionHash!,
         }),
@@ -246,9 +226,9 @@ export function useBattleCreatedEvents(live = false) {
 /** Fetch the full info for a single battle by looking up its clone address */
 export function useBattleInfo(battleId?: bigint, live = false) {
   return useQuery({
-    queryKey: ['v3', 'battle', battleId?.toString()],
+    queryKey: ['arena', 'battle', battleId?.toString()],
     enabled: battleId !== undefined,
-    queryFn: async (): Promise<V3BattleInfo> => {
+    queryFn: async (): Promise<BattleInfo> => {
       // 1. Resolve clone address from Arena factory
       const battleAddress = await client.readContract({
         address: CONTRACTS.arena,
@@ -273,7 +253,6 @@ export function useBattleInfo(battleId?: bigint, live = false) {
 
       const battleState = results[0].result as [number, number, bigint, bigint, `0x${string}`, bigint]
       const [state, turn, bankA, bankB, seqHash] = battleState
-      const config = results[6].result as [bigint, number, bigint, number]
 
       return {
         battleId: battleId!,
@@ -304,9 +283,9 @@ export function useBattleList(live = false) {
   const statsQuery = useArenaStats()
 
   return useQuery({
-    queryKey: ['v3', 'battles', 'list', statsQuery.data?.battlesCount?.toString()],
+    queryKey: ['arena', 'battles', 'list', statsQuery.data?.battlesCount?.toString()],
     enabled: !!statsQuery.data,
-    queryFn: async (): Promise<V3BattleInfo[]> => {
+    queryFn: async (): Promise<BattleInfo[]> => {
       const count = Number(statsQuery.data!.battlesCount)
       if (count === 0) return []
 
@@ -348,7 +327,7 @@ export function useBattleList(live = false) {
 
       const stateResults = await client.multicall({ contracts: stateContracts })
 
-      const battles: V3BattleInfo[] = []
+      const battles: BattleInfo[] = []
       const FIELDS_PER_BATTLE = 8
 
       for (let i = 0; i < validBattles.length; i++) {
@@ -419,10 +398,10 @@ export function useBattleList(live = false) {
 /** Get turn events for a specific battle clone */
 export function useBattleTurns(battleAddress?: Address, live = false) {
   return useQuery({
-    queryKey: ['v3', 'turns', battleAddress],
+    queryKey: ['arena', 'turns', battleAddress],
     enabled: !!battleAddress,
-    queryFn: async (): Promise<V3TurnEvent[]> => {
-      // Try v4 event signature first (has bankA, bankB)
+    queryFn: async (): Promise<TurnEvent[]> => {
+      // Try extended event signature (has bankA, bankB)
       try {
         const v4Turns = await getLogsChunked({
           address: battleAddress!,
@@ -461,7 +440,7 @@ export function useBattleTurns(battleAddress?: Address, live = false) {
         }
       } catch { /* fall through to v3 */ }
 
-      // Fallback: v3 event signature
+      // Fallback: base event signature
       return getLogsChunked({
         address: battleAddress!,
         event: parseAbiItem('event TurnSubmitted(uint256 indexed battleId, uint256 indexed playerId, uint32 turnNumber, bytes32 sequenceHash, uint16 targetWord, string poisonWord, bytes nextVopParams, string narrative)'),
@@ -487,9 +466,9 @@ export function useBattleTurns(battleAddress?: Address, live = false) {
 /** Get settlement events for a specific battle */
 export function useBattleSettlement(battleAddress?: Address) {
   return useQuery({
-    queryKey: ['v3', 'settlement', battleAddress],
+    queryKey: ['arena', 'settlement', battleAddress],
     enabled: !!battleAddress,
-    queryFn: async (): Promise<V3SettledEvent | null> => {
+    queryFn: async (): Promise<SettledEvent | null> => {
       const events = await getLogsChunked({
         address: battleAddress!,
         event: parseAbiItem('event BattleSettled(uint256 indexed battleId, uint256 indexed winnerId, uint256 indexed loserId, uint8 resultType)'),
@@ -512,9 +491,9 @@ export function useBattleSettlement(battleAddress?: Address) {
 /** Get an agent profile by ID */
 export function useAgentProfile(agentId?: bigint) {
   return useQuery({
-    queryKey: ['v3', 'agent', agentId?.toString()],
+    queryKey: ['arena', 'agent', agentId?.toString()],
     enabled: agentId !== undefined && agentId > 0n,
-    queryFn: async (): Promise<V3AgentProfile> => {
+    queryFn: async (): Promise<AgentProfile> => {
       const result = await client.readContract({
         address: CONTRACTS.arena,
         abi: ARENA_ABI,
@@ -537,7 +516,7 @@ export function useAgentProfile(agentId?: bigint) {
 /** Resolve a BIP39 word by index */
 export function useWord(wordIndex?: number) {
   return useQuery({
-    queryKey: ['v3', 'word', wordIndex],
+    queryKey: ['arena', 'word', wordIndex],
     enabled: wordIndex !== undefined,
     queryFn: async (): Promise<string> => {
       return await client.readContract({

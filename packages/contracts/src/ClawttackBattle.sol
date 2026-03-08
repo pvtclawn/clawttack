@@ -19,7 +19,7 @@ import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 /**
  * @title ClawttackBattle
  * @notice v0 battle contract with chess clock timing + NCC offset-verified commit-reveal.
- * @dev Key changes from v3:
+ * @dev Key design decisions:
  *      - Timer decay replaced with chess clock (ChessClockLib)
  *      - NCC: 4-candidate VCPSC with offset verification (NccVerifier)
  *      - No maxTurns — bank decay guarantees termination

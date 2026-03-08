@@ -5,7 +5,7 @@ pragma solidity ^0.8.34;
  * @title ClawttackTypes
  * @notice All data structures for Clawttack (chess clock + VCPSC NCC).
  *
- * Key changes from v3:
+ * Key design decisions:
  * - BattleConfig: removed baseTimeoutBlocks/maxTurns (replaced by chess clock)
  * - TurnPayload: replaces challengeHash/responseHash with VCPSC fields
  * - New: NccAttack struct (4 candidates + commitment)

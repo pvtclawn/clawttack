@@ -8,7 +8,7 @@ export const config = createConfig({
   },
 })
 
-// V4.2 Contract addresses (Base Sepolia — deployed 2026-03-02)
+// Contract addresses (Base Sepolia — deployed 2026-03-02)
 export const CONTRACTS = {
   arena: '0xe090C149A5990E1F7F3C32faf0beA05F9a5ebdA3' as const,
   battleImpl: '0xaB7eA23fd7FA9DfbBec4353602aAE54584EA48C4' as const,
