@@ -3,16 +3,27 @@
 // Tests the Fighter class: construction, config defaults, fight flow,
 // timeout handling, error paths, and result mapping.
 
-import { describe, test, expect, mock, beforeEach } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
+import { ethers } from 'ethers';
 import { Fighter, type FighterConfig, type FightResult } from '../src/fighter.ts';
 
 // --- Helpers ---
 
+// Minimal mocks so the Fighter constructor doesn't attempt live RPC
+const mockProvider = new ethers.JsonRpcProvider('http://localhost:8545');
+const mockWallet = new ethers.Wallet(
+  '0x' + '1'.repeat(64),
+  mockProvider,
+);
+const MOCK_BATTLE_ADDRESS = '0x' + 'a'.repeat(40);
+
 const BASE_CONFIG: FighterConfig = {
-  relayUrl: 'http://localhost:8787',
-  privateKey: '0x' + '1'.repeat(64),
-  name: 'TestFighter',
-  strategy: async (ctx) => `Turn ${ctx.turnNumber} response`,
+  provider: mockProvider,
+  wallet: mockWallet,
+  battleAddress: MOCK_BATTLE_ADDRESS,
+  agentId: 1n,
+  strategy: async (_ctx) => ({ narrative: 'test', poisonWord: 'abandon' }),
+  verbose: false,
 };
 
 describe('Fighter', () => {
@@ -25,56 +36,53 @@ describe('Fighter', () => {
 
     test('stores config with defaults', () => {
       const fighter = new Fighter(BASE_CONFIG);
-      // Access private config via cast for testing
       const cfg = (fighter as any).config;
-      expect(cfg.relayUrl).toBe('http://localhost:8787');
-      expect(cfg.name).toBe('TestFighter');
-      expect(cfg.turnTimeoutMs).toBeUndefined(); // defaults applied at fight() time
-      expect(cfg.battleTimeoutMs).toBeUndefined();
-      expect(cfg.verbose).toBeUndefined();
-    });
-
-    test('accepts custom timeouts', () => {
-      const fighter = new Fighter({
-        ...BASE_CONFIG,
-        turnTimeoutMs: 10_000,
-        battleTimeoutMs: 120_000,
-        verbose: false,
-      });
-      const cfg = (fighter as any).config;
-      expect(cfg.turnTimeoutMs).toBe(10_000);
-      expect(cfg.battleTimeoutMs).toBe(120_000);
+      expect(cfg.battleAddress).toBe(MOCK_BATTLE_ADDRESS);
+      expect(cfg.agentId).toBe(1n);
+      expect(cfg.pollIntervalMs).toBeUndefined(); // defaults applied at fight() time
+      expect(cfg.maxBattleTimeMs).toBeUndefined();
       expect(cfg.verbose).toBe(false);
     });
 
-    test('creates ClawttackClient internally', () => {
+    test('accepts custom poll interval', () => {
+      const fighter = new Fighter({
+        ...BASE_CONFIG,
+        pollIntervalMs: 2000,
+        maxBattleTimeMs: 600_000,
+        verbose: true,
+      });
+      const cfg = (fighter as any).config;
+      expect(cfg.pollIntervalMs).toBe(2000);
+      expect(cfg.maxBattleTimeMs).toBe(600_000);
+      expect(cfg.verbose).toBe(true);
+    });
+
+    test('creates battle contract internally', () => {
       const fighter = new Fighter(BASE_CONFIG);
-      const client = (fighter as any).client;
-      expect(client).toBeDefined();
-      expect(client.address).toBeDefined();
-      // Address should be derived from the private key
-      expect(client.address).toMatch(/^0x[0-9a-fA-F]{40}$/);
+      const battle = (fighter as any).battle;
+      expect(battle).toBeDefined();
+      expect(battle.target).toBe(MOCK_BATTLE_ADDRESS);
     });
   });
 
   describe('config validation', () => {
     test('strategy function is stored', () => {
-      const customStrategy = async () => 'custom response';
+      const customStrategy = async () => ({ narrative: 'custom', poisonWord: 'able' });
       const fighter = new Fighter({ ...BASE_CONFIG, strategy: customStrategy });
       expect((fighter as any).config.strategy).toBe(customStrategy);
     });
 
-    test('relayUrl is passed to client', () => {
+    test('battleAddress is passed to contract', () => {
       const fighter = new Fighter({
         ...BASE_CONFIG,
-        relayUrl: 'http://custom:9999',
+        battleAddress: '0x' + 'b'.repeat(40),
       });
-      expect((fighter as any).config.relayUrl).toBe('http://custom:9999');
+      expect((fighter as any).config.battleAddress).toBe('0x' + 'b'.repeat(40));
     });
 
-    test('name is passed through', () => {
-      const fighter = new Fighter({ ...BASE_CONFIG, name: 'SpecialAgent' });
-      expect((fighter as any).config.name).toBe('SpecialAgent');
+    test('agentId is passed through', () => {
+      const fighter = new Fighter({ ...BASE_CONFIG, agentId: 42n });
+      expect((fighter as any).config.agentId).toBe(42n);
     });
   });
 
@@ -85,160 +93,164 @@ describe('Fighter', () => {
         ...BASE_CONFIG,
         strategy: async (ctx) => {
           receivedCtx = ctx;
-          return 'test';
+          return { narrative: 'test', poisonWord: 'able' };
         },
       });
-      // We can't easily call strategy through fight() without mocking WS,
-      // but we can verify the strategy function works standalone
       const mockCtx = {
-        battleId: '0x123',
-        scenarioId: 'injection-ctf',
-        role: 'attacker',
         turnNumber: 1,
-        opponentMessage: undefined,
-        maxTurns: 10,
+        isAgentA: true,
+        myBank: 400n,
+        opponentBank: 400n,
+        targetWord: 'abandon',
+        poisonWord: 'able',
+        vopParams: '0x' as `0x${string}`,
+        opponentNarrative: undefined,
+        opponentNccAttack: null,
+        myPreviousNccAttack: null,
+        sequenceHash: '0x' as `0x${string}`,
+        recentNarratives: [],
+        jokersRemaining: 2,
       };
       const result = await (fighter as any).config.strategy(mockCtx);
       expect(receivedCtx).toEqual(mockCtx);
-      expect(result).toBe('test');
+      expect(result.narrative).toBe('test');
     });
 
     test('strategy can access all context fields', async () => {
       const fighter = new Fighter({
         ...BASE_CONFIG,
-        strategy: async (ctx) => {
-          return `${ctx.scenarioId}:${ctx.role}:${ctx.turnNumber}:${ctx.maxTurns}`;
-        },
+        strategy: async (ctx) => ({
+          narrative: `${ctx.targetWord}:${ctx.turnNumber}:${ctx.jokersRemaining}`,
+          poisonWord: 'able',
+        }),
       });
 
       const result = await (fighter as any).config.strategy({
-        battleId: '0xabc',
-        scenarioId: 'poison-word',
-        role: 'defender',
         turnNumber: 3,
-        opponentMessage: 'hello',
-        maxTurns: 8,
+        isAgentA: false,
+        myBank: 300n,
+        opponentBank: 350n,
+        targetWord: 'abandon',
+        poisonWord: 'able',
+        vopParams: '0x' as `0x${string}`,
+        opponentNarrative: 'hello',
+        opponentNccAttack: null,
+        myPreviousNccAttack: null,
+        sequenceHash: '0xabc' as `0x${string}`,
+        recentNarratives: [],
+        jokersRemaining: 1,
       });
-      expect(result).toBe('poison-word:defender:3:8');
+      expect(result.narrative).toBe('abandon:3:1');
     });
 
-    test('strategy receives opponent message when available', async () => {
-      let capturedMsg: string | undefined;
+    test('strategy receives opponentNarrative when available', async () => {
+      let capturedNarrative: string | undefined;
       const fighter = new Fighter({
         ...BASE_CONFIG,
         strategy: async (ctx) => {
-          capturedMsg = ctx.opponentMessage;
-          return 'response';
+          capturedNarrative = ctx.opponentNarrative;
+          return { narrative: 'response', poisonWord: 'able' };
         },
       });
 
       await (fighter as any).config.strategy({
-        battleId: '0x1',
-        scenarioId: 'test',
-        role: 'attacker',
         turnNumber: 2,
-        opponentMessage: 'opponent said this',
-        maxTurns: 5,
+        isAgentA: true,
+        myBank: 400n,
+        opponentBank: 380n,
+        targetWord: 'ability',
+        poisonWord: 'able',
+        vopParams: '0x' as `0x${string}`,
+        opponentNarrative: 'opponent said this',
+        opponentNccAttack: null,
+        myPreviousNccAttack: null,
+        sequenceHash: '0x1' as `0x${string}`,
+        recentNarratives: [],
+        jokersRemaining: 2,
       });
-      expect(capturedMsg).toBe('opponent said this');
+      expect(capturedNarrative).toBe('opponent said this');
     });
   });
 
   describe('FightResult type', () => {
     test('result shape matches interface', () => {
       const result: FightResult = {
-        battleId: '0x' + 'a'.repeat(64),
-        scenarioId: 'injection-ctf',
+        battleAddress: '0x' + 'a'.repeat(40),
         won: true,
-        role: 'attacker',
+        reason: 'settled',
         totalTurns: 5,
-        reason: 'flag_captured',
-        opponentAddress: '0x' + 'b'.repeat(40),
-        opponentName: 'Opponent',
+        gasUsed: 100000n,
       };
-      expect(result.battleId).toMatch(/^0x/);
+      expect(result.battleAddress).toMatch(/^0x/);
       expect(result.won).toBe(true);
       expect(result.totalTurns).toBe(5);
     });
 
     test('won can be null for draws', () => {
       const result: FightResult = {
-        battleId: '0x123',
-        scenarioId: 'test',
+        battleAddress: '0x123',
         won: null,
-        role: 'defender',
+        reason: 'fighter_timeout',
         totalTurns: 10,
-        reason: 'max_turns',
-        opponentAddress: '0x' + 'c'.repeat(40),
-        opponentName: 'DrawBot',
+        gasUsed: 0n,
       };
       expect(result.won).toBeNull();
     });
 
     test('won false for losses', () => {
       const result: FightResult = {
-        battleId: '0x456',
-        scenarioId: 'test',
+        battleAddress: '0x456',
         won: false,
-        role: 'attacker',
+        reason: 'settled',
         totalTurns: 3,
-        reason: 'flag_stolen',
-        opponentAddress: '0x' + 'd'.repeat(40),
-        opponentName: 'WinnerBot',
+        gasUsed: 50000n,
       };
       expect(result.won).toBe(false);
     });
   });
 
-  describe('WebSocket URL derivation', () => {
-    test('http:// converts to ws://', () => {
-      const fighter = new Fighter({
-        ...BASE_CONFIG,
-        relayUrl: 'http://localhost:8787',
-      });
-      // The URL conversion happens inside fight(), verify the logic
-      const wsUrl = 'http://localhost:8787'.replace(/^http/, 'ws');
-      expect(wsUrl).toBe('ws://localhost:8787');
+  describe('battle contract', () => {
+    test('battle contract target matches config address', () => {
+      const addr = '0x' + 'c'.repeat(40);
+      const fighter = new Fighter({ ...BASE_CONFIG, battleAddress: addr });
+      expect((fighter as any).battle.target).toBe(addr);
     });
 
-    test('https:// converts to wss://', () => {
-      const wsUrl = 'https://relay.clawttack.com'.replace(/^http/, 'ws');
-      expect(wsUrl).toBe('wss://relay.clawttack.com');
+    test('wordDict is null by default (no wordDictionaryAddress)', () => {
+      const fighter = new Fighter(BASE_CONFIG);
+      expect((fighter as any).wordDict).toBeNull();
     });
   });
 
   describe('timeout defaults', () => {
-    test('default turn timeout is 30s', () => {
+    test('default poll interval is 4s at fight() time', () => {
       const fighter = new Fighter(BASE_CONFIG);
       const cfg = (fighter as any).config;
-      // Default is applied at fight() time: timeoutMs ?? 30_000
-      expect(cfg.turnTimeoutMs ?? 30_000).toBe(30_000);
+      expect(cfg.pollIntervalMs ?? 4000).toBe(4000);
     });
 
-    test('default battle timeout is 5 min', () => {
+    test('default max battle time is 60min at fight() time', () => {
       const fighter = new Fighter(BASE_CONFIG);
       const cfg = (fighter as any).config;
-      // Default is applied at fight() time: battleTimeoutMs ?? 300_000
-      expect(cfg.battleTimeoutMs ?? 300_000).toBe(300_000);
+      expect(cfg.maxBattleTimeMs ?? 3_600_000).toBe(3_600_000);
     });
 
     test('custom timeouts override defaults', () => {
       const fighter = new Fighter({
         ...BASE_CONFIG,
-        turnTimeoutMs: 5_000,
-        battleTimeoutMs: 60_000,
+        pollIntervalMs: 2000,
+        maxBattleTimeMs: 120_000,
       });
       const cfg = (fighter as any).config;
-      expect(cfg.turnTimeoutMs ?? 30_000).toBe(5_000);
-      expect(cfg.battleTimeoutMs ?? 300_000).toBe(60_000);
+      expect(cfg.pollIntervalMs ?? 4000).toBe(2000);
+      expect(cfg.maxBattleTimeMs ?? 3_600_000).toBe(120_000);
     });
   });
 
   describe('verbose flag', () => {
-    test('defaults to undefined (truthy at fight time via ??)', () => {
-      const fighter = new Fighter(BASE_CONFIG);
+    test('defaults to undefined (true at fight time)', () => {
+      const fighter = new Fighter({ ...BASE_CONFIG, verbose: undefined });
       const cfg = (fighter as any).config;
-      // verbose ?? true = true when undefined
       expect(cfg.verbose ?? true).toBe(true);
     });
 

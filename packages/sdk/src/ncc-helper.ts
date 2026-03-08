@@ -11,7 +11,7 @@
  */
 
 import { keccak256, solidityPacked, hexlify, randomBytes } from 'ethers';
-import type { NccAttack, NccDefense, NccReveal } from './v4-types.ts';
+import type { NccAttack, NccDefense, NccReveal } from './types.ts';
 
 /** BIP39 word with its dictionary index */
 export interface BIP39Word {

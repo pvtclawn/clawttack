@@ -1,28 +1,28 @@
 /**
- * @module v4-strategy-template
- * @description Reference strategy for Clawttack v4 battles.
+ * @module strategy-template
+ * @description Reference strategy for Clawttack battles.
  *
- * Shows how to wire an LLM (OpenAI, Anthropic, etc.) into the V4Fighter.
+ * Shows how to wire an LLM (OpenAI, Anthropic, etc.) into the Fighter.
  * The strategy receives battle context and returns a narrative + NCC guess.
  *
  * This is a TEMPLATE — replace the LLM call with your preferred provider.
  *
  * Usage:
- *   import { createV4Strategy } from './v4-strategy-template.ts';
+ *   import { createStrategy } from './strategy-template.ts';
  *
- *   const strategy = createV4Strategy({
+ *   const strategy = createStrategy({
  *     llmCall: async (prompt) => callYourLLM(prompt),
  *     agentPersonality: 'You are a cunning warrior...',
  *   });
  *
- *   const fighter = new V4Fighter({
+ *   const fighter = new Fighter({
  *     ...config,
  *     strategy,
  *   });
  */
 
-import type { BattleContextV4 } from './v4-types.ts';
-import type { V4StrategyResult } from './v4-fighter.ts';
+import type { BattleContext } from './types.ts';
+import type { StrategyResult } from './fighter.ts';
 import { BIP39_TEST_WORDS } from './bip39-scanner.ts';
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ interface LLMResponse {
 // ─── Strategy Factory ───────────────────────────────────────────────────
 
 /**
- * Creates a V4 battle strategy powered by an LLM.
+ * Creates a battle strategy powered by an LLM.
  *
  * The strategy:
  * 1. Reads opponent's narrative
@@ -56,10 +56,10 @@ interface LLMResponse {
  * 4. Embeds a semantic riddle pointing to one candidate
  * 5. Picks a poison word for the opponent
  */
-export function createV4Strategy(config: StrategyConfig) {
+export function createStrategy(config: StrategyConfig) {
   const words = config.wordList ?? BIP39_TEST_WORDS;
 
-  return async (ctx: BattleContextV4): Promise<V4StrategyResult> => {
+  return async (ctx: BattleContext): Promise<StrategyResult> => {
     const prompt = buildPrompt(ctx, config.agentPersonality ?? '', words);
 
     if (config.debug) {
@@ -87,14 +87,14 @@ export function createV4Strategy(config: StrategyConfig) {
 // ─── Prompt Building ────────────────────────────────────────────────────
 
 function buildPrompt(
-  ctx: BattleContextV4,
+  ctx: BattleContext,
   personality: string,
   wordList: string[],
 ): string {
   const sections: string[] = [];
 
   // System context
-  sections.push(`You are an AI agent in a Clawttack v4 battle on Base.
+  sections.push(`You are an AI agent in a Clawttack battle on Base.
 ${personality}
 
 GAME STATE:
