@@ -31,6 +31,21 @@ When agents run independently (as designed), LLM comprehension = real strategic 
 
 ## Next Task (singular focus)
 
+### 20:17 roadmap refresh (A-lane)
+1. **Promote evidence-preserving refactor invariants into explicit merge gates (P0)**
+   - formalize four required invariants for migration/rename PRs: canonical consumer inventory, evidence continuity with semantic-delta declaration, replacement-equivalence mapping, and review-locality/noise control.
+   **Acceptance metric:** planning/docs name all 4 invariants, define pass conditions, and distinguish machine-checkable vs reviewer-attested fields.
+
+2. **Define canonical consumer inventory scope for battle-surface migrations (P0)**
+   - enumerate required consumer classes: web UI/event readers, SDK/scripts, metric generators, active docs/examples, and any explicitly out-of-scope surfaces.
+   **Acceptance metric:** migration governance note includes inventory categories plus a mandatory `outOfScopeConsumers` declaration.
+
+3. **Add replacement-equivalence taxonomy for deleted suites/surfaces (P0)**
+   - require `equivalent|partial|retired` classification with proof link and risk-acceptance requirement for `partial`.
+   **Acceptance metric:** replacement mapping template blocks merge when equivalence class or reviewer proof is missing.
+
+**Next Task (single):** implement Task 1 by updating the PR #8 execution/governance docs with the 4-part invariant set and merge-gate language.
+
 ### Immediate Focus: Skill-only onboarding + anti-script survivability (within v4.2 mechanics)
 
 **Why:** Clawttack must be agent-vs-agent by default: any OpenClaw agent with wallet + `SKILL.md` should be able to join and survive if genuinely LLM+tools-driven.
@@ -649,3 +664,63 @@ When agents run independently (as designed), LLM comprehension = real strategic 
    **Acceptance metric:** reports missing version/provenance fields are invalid; stale predicate versions trigger review warning.
 
 **Next Task (single):** implement Task 1 by extending CI predicate schema with dual-state (`prHead` + `mergeCandidate`) evaluation fields.
+
+### 22:47 roadmap refresh (A-lane)
+1. **Merge-path guard inventory (P0)**
+   - enumerate all merge/override paths and map required predicate checks per path.
+   **Acceptance metric:** inventory table includes all known paths; uncovered path => policy failure.
+
+2. **Merge-time freshness recheck (P0)**
+   - require predicate re-evaluation when PR head changes after initial evaluation.
+   **Acceptance metric:** stale evaluation detected => merge blocked until recheck pass.
+
+3. **Failure reason code taxonomy (P0)**
+   - define structured reason codes and remediation hints for predicate failures.
+   **Acceptance metric:** every failed rule emits reason code + remediation hint.
+
+**Next Task (single):** implement Task 1 by adding merge-path guard inventory table to `PR-HYGIENE-POLICY.md`.
+
+### 23:37 roadmap refresh (A-lane)
+1. **Fail-closed branch-protection audit behavior (P0)**
+   - if branch-protection config cannot be read (permissions/API errors), audit must fail with explicit reason code.
+   **Acceptance metric:** audit report includes `configReadStatus`; non-success always yields fail.
+
+2. **Branch-set parity verification (P0)**
+   - compare policy-declared protected branches vs repo-config protected branches and fail on mismatch.
+   **Acceptance metric:** audit outputs `policyBranchSet`, `repoBranchSet`, and `parityPass`.
+
+3. **Audit validity window + merge-time recheck (P0)**
+   - enforce max age for branch-protection audit and require refresh before merge if stale.
+   **Acceptance metric:** report includes `auditGeneratedAt`, `validUntil`, and `isFresh`; stale reports block merge.
+
+**Next Task (single):** implement Task 1 by extending CI predicate schema with config-read status fields and fail-closed semantics.
+
+### 00:27 roadmap refresh (A-lane)
+1. **Config-audit permission preflight (P0)**
+   - add explicit token scope preflight in CI with fail-closed reason codes.
+   **Acceptance metric:** report includes `permissionPreflightPass`; false => terminal fail with reason code.
+
+2. **Deterministic retry/failure classification (P0)**
+   - implement bounded retry strategy for API calls with terminal state taxonomy.
+   **Acceptance metric:** report includes `apiAttemptCount`, `terminalState`, and no ambiguous outcomes.
+
+3. **Governance artifact retention policy (P0)**
+   - enforce minimum retention + fallback PR comment summary for critical fields.
+   **Acceptance metric:** retention policy documented and CI emits retention metadata in report.
+
+**Next Task (single):** implement Task 1 by extending CI predicate schema with permission preflight fields and terminal fail reason codes.
+
+### 01:17 roadmap refresh (A-lane)
+1. **Tiered reason-code catalog (P0)**
+   - define `class` + `subcode` structure to prevent code explosion and preserve precision.
+   **Acceptance metric:** schema doc includes tiered examples and bounded top-level classes.
+
+2. **Owner/remediation mapping (P0)**
+   - each reason code must map to `owner` and `defaultRemediation`.
+   **Acceptance metric:** validation fails when mapping fields are missing.
+
+3. **Attempt-trace + catalog-version checks (P0)**
+   - include retry trace summary and runtime catalog-version assertion.
+   **Acceptance metric:** report emits `attemptTraceSummary` + `catalogVersion`; mismatch triggers fail/warn per policy.
+
+**Next Task (single):** implement Task 1 by adding tiered reason-code catalog section to CI predicate schema docs.
