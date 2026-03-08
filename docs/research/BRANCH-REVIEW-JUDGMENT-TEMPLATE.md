@@ -14,6 +14,9 @@ reviewScope:
   - tests
   - ciStatus
   - mergeState
+codeImpact: none | unknown | changed
+mechanismImpact: none | unknown | changed
+semanticConfidence: low | medium | high
 invalidatedPriorBlockers:
   - <previous blocker no longer present on reviewedRef>
 remainingCurrentBlockers:
@@ -41,6 +44,30 @@ notChecked:
 5. **Distinguish PR head from merge candidate.**
    A `prHead` approval is not automatically a `mergeCandidate` approval.
 
+6. **State code/mechanism impact explicitly.**
+   If the review artifact or process improved but the underlying code/mechanism did not, say `codeImpact: none` and `mechanismImpact: none`.
+
+7. **Scope-qualify the verdict.**
+   If review coverage is partial, the headline judgment must say so (for example: `mergeable at prHead/runtime+typecheck scope`). Avoid unqualified global `mergeable` when scope is limited.
+
+8. **Use `notChecked` as a real disclosure, not a decorative field.**
+   If meaningful areas were not checked, say so plainly. Empty `notChecked` on a partial review is a governance defect.
+
+9. **Freshness is not semantic certainty.**
+   `semanticConfidence` exists so a fresh ref review can still admit limited confidence about deeper correctness.
+
+## Scope-qualified verdict examples
+
+**Acceptable:**
+- `mergeable at prHead/runtime+typecheck scope`
+- `not mergeable at mergeCandidate/docs+tests scope`
+- `mergeable with caveats at prHead/runtimeConsumers scope`
+
+**Unacceptable when scope is partial:**
+- `mergeable`
+- `safe to merge`
+- `looks good to me`
+
 ## Compact review template
 
 ```md
@@ -50,6 +77,9 @@ notChecked:
 - judgmentType: <prHead|mergeCandidate>
 - reviewScope:
   - <scope item>
+- codeImpact: <none|unknown|changed>
+- mechanismImpact: <none|unknown|changed>
+- semanticConfidence: <low|medium|high>
 - invalidatedPriorBlockers:
   - <item>
 - remainingCurrentBlockers:
@@ -60,7 +90,7 @@ notChecked:
   - <item>
 
 ### Judgment
-- <mergeable | not mergeable | mergeable with caveats>
+- <scope-qualified mergeable / not mergeable / mergeable with caveats>
 
 ### Rationale
 - <1–3 bullets tied only to reviewedRef + declared scope>
@@ -78,6 +108,9 @@ notChecked:
   - docs
   - typecheck
   - tests
+- codeImpact: changed
+- mechanismImpact: none
+- semanticConfidence: medium
 - invalidatedPriorBlockers:
   - `useChain.ts` still using stale `BattleV4Created`
   - active scripts still calling `createBattleV4`
@@ -91,10 +124,16 @@ notChecked:
   - merge-candidate state against latest base
 
 ### Judgment
-- mergeable with caveats
+- mergeable with caveats at prHead/runtimeConsumers+docs+typecheck+tests scope
 
 ### Rationale
 - Original runtime blockers are no longer present on the reviewed ref.
 - Remaining issues are narrower and mostly naming/doc drift.
 - Test red signal appears environment-scoped rather than proven branch regression.
 ```
+
+## Anti-prestige reminders
+
+- A more disciplined review template improves **judgment quality**, not code quality.
+- Fresh ref + structured fields does not imply deep semantic review.
+- Governance/review artifacts should not be narrated as mechanism progress unless outcome evidence changes.
