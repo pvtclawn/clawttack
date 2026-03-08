@@ -101,3 +101,38 @@ Machine-readable output for `ci/pr-hygiene` checks with tiered rule failures.
 - [ ] groupedFailures matches rules where `pass=false`
 - [ ] coverageScope and knownBlindSpots are populated
 - [ ] status follows deterministic status rules
+
+## Tiered Reason-Code Catalog (v0)
+
+### Class: `PERMISSION`
+- `PERMISSION.MISSING_SCOPE`
+  - owner: `repo-admin`
+  - defaultRemediation: "grant required token scopes or run on trusted runner context"
+
+### Class: `CONFIG`
+- `CONFIG.READ_FAILED`
+  - owner: `platform`
+  - defaultRemediation: "verify API access and retry with fail-closed terminal handling"
+
+### Class: `API`
+- `API.RATE_LIMITED`
+  - owner: `platform`
+  - defaultRemediation: "respect bounded retry policy; classify terminal state deterministically"
+- `API.UNAVAILABLE`
+  - owner: `platform`
+  - defaultRemediation: "retry within budget, then fail with terminal state"
+
+### Class: `STATE`
+- `STATE.PR_HEAD_MERGE_CANDIDATE_MISMATCH`
+  - owner: `ci-governance`
+  - defaultRemediation: "re-evaluate predicates on latest merge candidate"
+
+### Class: `POLICY`
+- `POLICY.REQUIRED_CHECK_MISSING`
+  - owner: `ci-governance`
+  - defaultRemediation: "update branch protection required-check configuration"
+
+## Runtime Report Fields for Taxonomy
+- `catalogVersion`
+- `terminalReasonCode` (e.g., `CONFIG.READ_FAILED`)
+- `attemptTraceSummary` (bounded retry trace)
