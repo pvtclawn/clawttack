@@ -23,3 +23,4 @@ export * from './v3-test-utils.ts';
 export * from './randomized-horizon.ts';
 export * from './stallguard-mode.ts';
 export * from './risk-aware-rating.ts';
+export * from './dual-clock-timeout.ts';
