@@ -66,7 +66,7 @@ class WebSocketConnection implements ITransportConnection {
   }
 
   async sendTurn(turn: {
-    message: string;
+    narrative: string;
     turnNumber: number;
     timestamp: number;
     signature: string;

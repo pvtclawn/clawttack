@@ -145,20 +145,20 @@ export class WakuFighter {
   /** Sign a turn message using canonical hash (protocol-compatible) */
   private async signTurn(
     battleId: string,
-    message: string,
+    narrative: string,
     turnNumber: number,
-  ): Promise<{ message: string; turnNumber: number; timestamp: number; signature: string }> {
+  ): Promise<{ narrative: string; turnNumber: number; timestamp: number; signature: string }> {
     const timestamp = Date.now();
     const turnMessage: TurnMessage = {
       battleId,
       agentAddress: this.wallet.address,
-      message,
+      narrative,
       turnNumber,
       timestamp,
     };
     const hash = canonicalTurnHash(turnMessage);
     const signature = await this.wallet.signMessage(ethers.getBytes(hash));
-    return { message, turnNumber, timestamp, signature };
+    return { narrative, turnNumber, timestamp, signature };
   }
 
   /**
@@ -335,7 +335,10 @@ export class WakuFighter {
         (async () => {
           const regTimestamp = Date.now();
           const regSig = await signRegistration(this.wallet, battleId, regTimestamp);
-          await conn.register(this.address, regSig, regTimestamp);
+          const registerWithProof = conn as unknown as {
+            register: (agentAddress: string, signature?: string, signedTimestamp?: number) => Promise<void>;
+          };
+          await registerWithProof.register(this.address, regSig, regTimestamp);
           if (verbose) console.log(`✅ ${this.config.name}: registered with signed proof`);
         })().catch(reject);
       }),

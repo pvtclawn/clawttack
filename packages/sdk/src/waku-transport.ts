@@ -347,7 +347,7 @@ class WakuConnection implements ITransportConnection {
   }
 
   async sendTurn(turn: {
-    message: string;
+    narrative: string;
     turnNumber: number;
     timestamp: number;
     signature: string;
@@ -360,7 +360,7 @@ class WakuConnection implements ITransportConnection {
       sender: this.agentAddress,
       timestamp: turn.timestamp,
       payload: {
-        message: turn.message,
+        narrative: turn.narrative,
         turnNumber: turn.turnNumber,
       },
       signature: turn.signature,
@@ -569,7 +569,7 @@ class WakuConnection implements ITransportConnection {
 
   private handleTurn(msg: WakuBattleMessage): void {
     const turnNumber = msg.payload.turnNumber as number;
-    const message = msg.payload.message as string;
+    const narrative = (msg.payload.narrative ?? msg.payload.message) as string;
 
     // Reject turns from unregistered agents (prevents third-party injection)
     if (!this.registeredAgents.has(msg.sender)) {
@@ -598,7 +598,7 @@ class WakuConnection implements ITransportConnection {
     const turnMessage: TurnMessage = {
       battleId: this.battleId,
       agentAddress: msg.sender,
-      message,
+      narrative,
       turnNumber,
       timestamp: msg.timestamp,
     };
@@ -617,7 +617,7 @@ class WakuConnection implements ITransportConnection {
 
     this.emit('opponentTurn', {
       agentAddress: msg.sender,
-      message,
+      narrative,
       turnNumber,
       timestamp: msg.timestamp,
       signature: msg.signature,
@@ -627,7 +627,7 @@ class WakuConnection implements ITransportConnection {
 
     this.emit('yourTurn', {
       turnNumber: turnNumber + 1,
-      opponentMessage: message,
+      opponentMessage: narrative,
     } satisfies YourTurnData);
 
     // M4.5.4: Start turn timer for OUR response (we need to reply in time)
@@ -693,7 +693,7 @@ export class WakuTransport implements ITransport {
   private node: any;
   private config: Required<
     Pick<WakuTransportConfig, 'nwakuRestUrl' | 'clusterId' | 'shardId' | 'topicPrefix' | 'turnTimeoutMs'>
-  > & { nwakuMultiaddr?: string };
+  > & { nwakuMultiaddr?: string; turnTimeoutFn?: (turnNumber: number) => number };
   private connections = new Map<string, WakuConnection>();
   // Shared subscriptions: one filter sub per content topic, fan out to all connections
   private topicSubscriptions = new Map<string, { sub: any; connectionIds: Set<string> }>();
@@ -708,6 +708,7 @@ export class WakuTransport implements ITransport {
       shardId: config.shardId ?? DEFAULT_SHARD_ID,
       topicPrefix: config.topicPrefix ?? DEFAULT_TOPIC_PREFIX,
       turnTimeoutMs: config.turnTimeoutMs ?? DEFAULT_TURN_TIMEOUT_MS,
+      turnTimeoutFn: config.turnTimeoutFn,
     };
   }
 
@@ -820,7 +821,7 @@ export class WakuTransport implements ITransport {
       networkConfig: {
         clusterId: this.config.clusterId,
         shards: [this.config.shardId],
-      },
+      } as any,
       libp2p: {
         filterMultiaddrs: false,
         hideWebSocketInfo: true,
