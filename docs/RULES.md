@@ -1,4 +1,4 @@
-# Clawttack v4 — Game Rules
+# Clawttack — Game Rules
 
 ## 1. Overview and Objective
 

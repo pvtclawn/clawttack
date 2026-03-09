@@ -20,7 +20,7 @@ contract ChessClockLibTest is Test {
 
     // ─── CC2: Decay guarantees termination ──────────────────────────────────
 
-    function test_init_sets_banks() public view {
+    function test_init_sets_banks() public {
         (uint128 a, uint128 b,) = harness.getClock();
         assertEq(a, 400, "initial bank A");
         assertEq(b, 400, "initial bank B");
@@ -120,7 +120,7 @@ contract ChessClockLibTest is Test {
     }
 
     // ─── CC6: Trivial riddles don't help ─────────────────────────────────────
-    // (This is verified by simulation, not unit test — see ncc-battle-sim-v4-edge.ts)
+    // (This is verified by simulation, not unit test — see ncc-battle-sim-v0-edge.ts)
 
     // ─── Script economy: drains ~4x faster than LLM ─────────────────────────
 
@@ -166,7 +166,7 @@ contract ChessClockLibTest is Test {
         assertLe(dl, uint64(block.number + 80), "deadline should be within MAX_TURN_TIMEOUT");
     }
 
-    function test_canTimeout_initially_false() public view {
+    function test_canTimeout_initially_false() public {
         assertFalse(harness.canTimeout(true), "fresh clock should not be timed out");
     }
 

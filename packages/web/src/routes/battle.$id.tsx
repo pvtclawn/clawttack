@@ -7,7 +7,7 @@ import {
   useBattleSettlement,
   useAgentProfile,
   useWord,
-  type V3TurnEvent,
+  type TurnEvent,
 } from '../hooks/useChain'
 import { formatEther } from 'viem'
 import { agentLabel, explorerUrl, copyToClipboard, formatAddress, blocksToSeconds } from '../lib/format'
@@ -267,7 +267,7 @@ function WinnerBanner({
 function TurnCard({
   turn, isLeft, agentAddress, isWinner,
 }: {
-  turn: V3TurnEvent; isLeft: boolean; agentAddress?: string; isWinner?: boolean
+  turn: TurnEvent; isLeft: boolean; agentAddress?: string; isWinner?: boolean
 }) {
   const { data: targetWord } = useWord(turn.targetWord)
   const poisonWord = turn.poisonWord
@@ -336,7 +336,7 @@ function TurnCard({
 
 // ─── Replay drain simulation hook ────────────────────────────────────────────
 // Simulates elapsed blocks ticking up between turns during replay
-function useReplayDrain(isReplaying: boolean, displayedTurns: V3TurnEvent[], turns: V3TurnEvent[] | undefined) {
+function useReplayDrain(isReplaying: boolean, displayedTurns: TurnEvent[], turns: TurnEvent[] | undefined) {
   const [simElapsed, setSimElapsed] = useState(0)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 

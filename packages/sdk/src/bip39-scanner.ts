@@ -2,7 +2,7 @@
  * @module bip39-scanner
  * @description Scans narrative text for BIP39 dictionary words.
  *
- * Used by V4Fighter to:
+ * Used by Fighter to:
  * 1. Find all BIP39 words present in a narrative
  * 2. Pick 4 candidates for NCC attack
  * 3. Calculate byte offsets for on-chain verification

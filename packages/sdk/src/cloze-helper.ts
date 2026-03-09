@@ -1,5 +1,5 @@
 /**
- * Cloze Helper — SDK support for NCC Cloze test (v4.1)
+ * Cloze Helper — SDK support for NCC Cloze test (cloze)
  *
  * Attackers: create narratives with [BLANK] replacing the answer word
  * Defenders: identify which candidate fills [BLANK] using LLM comprehension

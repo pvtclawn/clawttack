@@ -43,3 +43,12 @@ broadcast/
 -e 
 # battle transcripts
 battles/
+
+# Package manager noise
+.pnp.cjs
+.pnp.loader.mjs
+.yarn/install-state.gz
+yarn.lock
+
+# Local research files
+llms/

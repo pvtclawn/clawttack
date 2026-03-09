@@ -9,8 +9,8 @@ export type { FighterConfig, FightResult } from './fighter.ts';
 export { WakuFighter, generateChallengeWord, getChallengeWordTimeout } from './waku-fighter.ts';
 export type { WakuFighterConfig, WakuBattleContext, WakuStrategy, WakuFightResult, ChallengeWordConfig } from './waku-fighter.ts';
 export type { MatchResult } from './types.ts';
-// v4: Chess Clock + NCC
-export * from './v4-types.ts';
+
+export * from './types.ts';
 export {
   createNccAttack,
   createNccDefense,
@@ -21,16 +21,16 @@ export {
 } from './ncc-helper.ts';
 export type { BIP39Word } from './ncc-helper.ts';
 export { createGatewayStrategy, createPentestAttackerStrategy, sanitizeDefenderResponse } from './strategies/gateway.ts';
-// v4: On-chain fighter
-export { V4Fighter } from './v4-fighter.ts';
-export type { V4FighterConfig, V4Strategy, V4StrategyResult, V4FightResult } from './v4-fighter.ts';
-// v4: BIP39 scanner
+// On-chain fighter
+export { Fighter } from './fighter.ts';
+export type { FighterConfig, Strategy, StrategyResult, FightResult } from './fighter.ts';
+// BIP39 scanner
 export { scanForBip39Words, loadWordList, BIP39_TEST_WORDS } from './bip39-scanner.ts';
 export type { WordMatch, ScanResult } from './bip39-scanner.ts';
-// v4: Strategy template
-export { createV4Strategy } from './v4-strategy-template.ts';
-export type { StrategyConfig } from './v4-strategy-template.ts';
-// v4: VOP solver
+// Strategy template
+export { createStrategy } from './strategy-template.ts';
+export type { StrategyConfig } from './strategy-template.ts';
+// VOP solver
 export { solveHashPreimage, solveVOP } from './vop-solver.ts';
 export type { VOPSolution } from './vop-solver.ts';
 export type { GatewayStrategyConfig } from './strategies/gateway.ts';

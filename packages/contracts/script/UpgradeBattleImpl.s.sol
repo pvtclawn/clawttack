@@ -21,20 +21,12 @@ contract UpgradeBattleImpl is Script {
     function run() external {
         vm.startBroadcast();
 
-        // Deploy new Battle implementation with fixes:
-        // - P0: Poison word boundary check
-        // - P1: MIN_TIMEOUT_FLOOR = 10 blocks
-        // - P1: rescueStuckFunds()
         ClawttackBattle newImpl = new ClawttackBattle();
-        console.log("New Battle Implementation:", address(newImpl));
+        console.log("New ClawttackBattle Implementation:", address(newImpl));
 
-        // Update Arena to use new implementation
         ClawttackArena arena = ClawttackArena(payable(ARENA));
         arena.setBattleImplementation(address(newImpl));
-        console.log("Arena updated. New battles will use the fixed implementation.");
-
-        // Note: Existing battles are NOT affected (they use the old clone).
-        // Only NEW battles created after this point will have the fixes.
+        console.log("Arena updated. New battles will use the new V0 implementation.");
 
         vm.stopBroadcast();
     }

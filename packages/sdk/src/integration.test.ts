@@ -1,6 +1,6 @@
 /**
- * @module v4-integration
- * @description Integration test: exercises the full SDK v4 stack in a single flow.
+ * @module integration
+ * @description Integration test: exercises the full SDK stack in a single flow.
  *
  * Simulates: narrative generation → BIP39 scan → NCC attack/defense/reveal →
  * VOP solve → strategy prompt → response parsing. No on-chain calls.
@@ -12,10 +12,10 @@ import { createNccAttack, createNccDefense, createNccReveal, verifyCommitment, f
 import type { BIP39Word } from './ncc-helper.ts';
 import { scanForBip39Words, BIP39_TEST_WORDS } from './bip39-scanner.ts';
 import { solveHashPreimage } from './vop-solver.ts';
-import { createV4Strategy } from './v4-strategy-template.ts';
-import type { BattleContextV4 } from './v4-types.ts';
+import { createStrategy } from './strategy-template.ts';
+import type { BattleContext } from './types.ts';
 
-describe('v4 SDK integration', () => {
+describe('SDK integration', () => {
   const wordList = BIP39_TEST_WORDS;
 
   test('full turn flow: scan → attack → defense → reveal → verify', () => {
@@ -107,7 +107,7 @@ describe('v4 SDK integration', () => {
   });
 
   test('strategy produces valid output for battle context', async () => {
-    const strategy = createV4Strategy({
+    const strategy = createStrategy({
       llmCall: async (_prompt) => {
         // Mock LLM: produces a valid narrative with BIP39 words
         return `NARRATIVE: the hero must abandon the quest to absorb the abstract truth and achieve acoustic mastery across the vast realm of ancient knowledge and hidden access
@@ -117,7 +117,7 @@ NCC_GUESS: 1`;
       wordList,
     });
 
-    const ctx: BattleContextV4 = {
+    const ctx: BattleContext = {
       turnNumber: 3,
       isAgentA: true,
       myBank: 300n,
