@@ -19,10 +19,15 @@ export interface TurnParams {
   solution: bigint;
   customPoisonWord: string;
   narrative: string;
+  responseHash?: Hex;
+  challengeHash?: Hex;
+  hint?: string;
   anchoredBlockNumber?: bigint;
   anchoredBlockHash?: Hex;
   expectedSequenceHash?: Hex;
 }
+
+const ZERO_HASH: Hex = '0x0000000000000000000000000000000000000000000000000000000000000000';
 
 export interface ValidationResult {
   passesTarget: boolean;
@@ -103,7 +108,10 @@ export class BattleClient {
       args: [{
         solution: params.solution,
         customPoisonWord: params.customPoisonWord,
-        narrative: params.narrative
+        narrative: params.narrative,
+        responseHash: params.responseHash ?? ZERO_HASH,
+        challengeHash: params.challengeHash ?? ZERO_HASH,
+        hint: params.hint ?? ''
       }],
       chain: this.config.walletClient.chain,
       account: this.config.walletClient.account!,
@@ -310,20 +318,47 @@ export class BattleClient {
       })
     ]);
 
+    // wouldNarrativePass currently accepts poison *index* (uint16), while battle state exposes
+    // custom poison as a string. Use on-chain checks for target/length/ascii and validate poison
+    // locally against the concrete poison string for pipeline parity.
     const wouldPass = await this.config.publicClient.readContract({
       address: this.config.battleAddress,
       abi: CLAWTTACK_BATTLE_ABI,
       functionName: 'wouldNarrativePass',
       args: [
         params.narrative,
-        targetIdx as number,
-        currentPoison as string, 
-        currentTurn === 0
+        Number(targetIdx),
+        0,
+        true
       ],
       blockNumber: anchoredBlock.number
     });
 
-    const [passesTarget, passesPoison, passesLength, passesAscii] = wouldPass as [boolean, boolean, boolean, boolean];
+    const [passesTarget, _passesPoisonFromIndex, passesLength, passesAscii] =
+      wouldPass as [boolean, boolean, boolean, boolean];
+
+    const poison = String(currentPoison ?? '').toLowerCase();
+    const narrativeLower = params.narrative.toLowerCase();
+    const isLetter = (c: string) =>
+      (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+
+    let passesPoison = true;
+    if (currentTurn > 0 && poison.length > 0) {
+      let searchFrom = 0;
+      while (searchFrom <= narrativeLower.length - poison.length) {
+        const idx = narrativeLower.indexOf(poison, searchFrom);
+        if (idx === -1) break;
+        const startOk = idx === 0 || !isLetter(params.narrative.charAt(idx - 1));
+        const endOk =
+          idx + poison.length === params.narrative.length ||
+          !isLetter(params.narrative.charAt(idx + poison.length));
+        if (startOk && endOk) {
+          passesPoison = false;
+          break;
+        }
+        searchFrom = idx + 1;
+      }
+    }
 
     // 2. VOP puzzle dry-run
     const [currentVop, currentVopParams] = await Promise.all([

@@ -86,8 +86,8 @@ export function validateNarrative(
   while (searchFrom <= nLower.length - t.length) {
     const idx = nLower.indexOf(t, searchFrom);
     if (idx === -1) break;
-    const startOk = idx === 0 || !isLetter(n[idx - 1]);
-    const endOk = idx + t.length === n.length || !isLetter(n[idx + t.length]);
+    const startOk = idx === 0 || !isLetter(n.charAt(idx - 1));
+    const endOk = idx + t.length === n.length || !isLetter(n.charAt(idx + t.length));
     if (startOk && endOk) {
       foundTarget = true;
       break;
@@ -103,8 +103,8 @@ export function validateNarrative(
     while (searchFrom2 <= nLower.length - p.length) {
       const idx = nLower.indexOf(p, searchFrom2);
       if (idx === -1) break;
-      const startOk = idx === 0 || !isLetter(n[idx - 1]);
-      const endOk = idx + p.length === n.length || !isLetter(n[idx + p.length]);
+      const startOk = idx === 0 || !isLetter(n.charAt(idx - 1));
+      const endOk = idx + p.length === n.length || !isLetter(n.charAt(idx + p.length));
       if (startOk && endOk) {
         errors.push(`Poison word "${poisonWord}" found at position ${idx} with word boundaries`);
         break;
@@ -152,8 +152,10 @@ export function generateTemplateNarrative(
     while (sf <= nLower.length - pLower.length) {
       const pi = nLower.indexOf(pLower, sf);
       if (pi === -1) break;
-      const sOk = pi === 0 || !isLetter(narrative[pi - 1]);
-      const eOk = pi + pLower.length === narrative.length || !isLetter(narrative[pi + pLower.length]);
+      const sOk = pi === 0 || !isLetter(narrative.charAt(pi - 1));
+      const eOk =
+        pi + pLower.length === narrative.length ||
+        !isLetter(narrative.charAt(pi + pLower.length));
       if (sOk && eOk) {
         found = true;
         // Replace with "enigma"
