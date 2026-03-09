@@ -112,6 +112,15 @@ notChecked:
 27. **Explain why non-blockers are non-blocking when relevant.**
    If named non-blocking issues are close enough to matter in the decision, briefly say why they are non-blocking within the checked scope.
 
+28. **Tie blocker labels to reviewed artifacts when possible.**
+   Prefer blocker statements that point to concrete files, outputs, logs, or checks that were actually reviewed. Avoid blocker labels that float free of checked evidence.
+
+29. **Rationale must add decision value beyond labels.**
+   The rationale should do more than restate `blocker` / `non-blocking` categories — it should explain why those labels change the merge decision in the checked scope.
+
+30. **Explain verdict changes across refreshed reviews.**
+   If the final verdict changes after a ref refresh or scope update, name the blocker/evidence/scope change that caused the verdict change.
+
 ## Scope-qualified verdict examples
 
 **Acceptable:**
@@ -165,6 +174,14 @@ Before finalizing a review summary, ask:
 
 If the answer is no, rewrite it.
 
+## Weak vs strong rationale examples
+
+**Weak:**
+- `These issues are non-blocking, so the branch is mergeable.`
+
+**Stronger:**
+- `No blockers were found in the checked runtime+typecheck scope; the remaining issues are doc drift and local env noise, which do not change runtime behavior in that scope, so the branch is mergeable with caveats at prHead scope.`
+
 ## Compact review template
 
 ```md
@@ -197,7 +214,7 @@ If the answer is no, rewrite it.
 - Confidence/caveats: <short caveat sentence, if needed>.
 
 ### Rationale
-- Blocker state: <what is blocking / not blocking within the checked scope>.
+- Blocker state: <what is blocking / not blocking within the checked scope, tied to reviewed artifacts when possible>.
 - Verdict linkage: <how that blocker state produces the final judgment within scope>.
 - Caveat linkage: <what remains outside scope or why named non-blockers stay non-blocking, if relevant>.
 ```
@@ -240,7 +257,7 @@ If the answer is no, rewrite it.
 - Confidence/caveats: medium confidence because merge-candidate state against latest base was not checked.
 
 ### Rationale
-- Blocker state: no merge blockers were found within the checked `prHead/runtimeConsumers+docs+typecheck+tests` scope; the remaining listed issues are non-blocking within that scope.
+- Blocker state: no merge blockers were found within the checked `prHead/runtimeConsumers+docs+typecheck+tests` scope; remaining issues are limited to reviewed doc drift, script naming drift, and local env noise.
 - Verdict linkage: because no blockers were found in the checked scope, the branch is mergeable with caveats at that scope.
 - Caveat linkage: merge-candidate state was not checked, and the local test red signal appears environment-scoped rather than proven branch regression.
 ```
