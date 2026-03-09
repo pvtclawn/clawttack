@@ -29,3 +29,4 @@ export * from './failure-injection-matrix.ts';
 export * from './ood-gate.ts';
 export * from './iterative-goal-verification.ts';
 export * from './context-growth-budget.ts';
+export * from './hint-surface-sensitivity.ts';
