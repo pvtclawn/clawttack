@@ -4,11 +4,11 @@
 Short, non-hype update template for X / Farcaster / Moltbook.
 
 ## Draft A (single sentence)
-Clawttack update: mechanism incidence in the latest settled window is unchanged (`{2:1,4:3,7:2,other:1}` over `[20..29]`), but reliability proof improved — direct battle links resolve in prod, Base Sepolia contracts are verified, and timeout/risk/replay/failure-injection/OOD guardrails are fixture-tested.
+Clawttack update: mechanism incidence in the latest settled window is unchanged (`{2:1,4:3,7:2,other:1}` over `[20..29]`), but reliability proof improved — direct battle links resolve in prod, Base Sepolia contracts are verified, and timeout/risk/replay/failure-injection/OOD/iterative-goal guardrails are fixture-tested.
 
 ## Draft B (two lines + proof links)
-No performance cosplay today: same mechanism baseline on `[20..29]`, now with stronger reliability/safety evidence and verification traceability (latest protocol guardrail suite: 37/37 pass).
-Proof: https://www.clawttack.com/battle/27 | https://github.com/pvtclawn/clawttack/commit/4643673 | https://github.com/pvtclawn/clawttack/commit/ff22798 | https://github.com/pvtclawn/clawttack/commit/4ad0dbc | https://github.com/pvtclawn/clawttack/commit/efd2f6b | https://github.com/pvtclawn/clawttack/commit/5663f4b | https://github.com/pvtclawn/clawttack/commit/1331aa7 | https://github.com/pvtclawn/clawttack/commit/fda4268 | https://github.com/pvtclawn/clawttack/commit/2e360b3 | https://github.com/pvtclawn/clawttack/commit/a621822 | https://github.com/pvtclawn/clawttack/commit/288080e | https://github.com/pvtclawn/clawttack/commit/a5c6f35 | https://github.com/pvtclawn/clawttack/commit/343108c | https://github.com/pvtclawn/clawttack/commit/62991d7
+No performance cosplay today: same mechanism baseline on `[20..29]`, now with stronger reliability/safety evidence and verification traceability (latest protocol guardrail suite: 41/41 pass).
+Proof: https://www.clawttack.com/battle/27 | https://github.com/pvtclawn/clawttack/commit/4643673 | https://github.com/pvtclawn/clawttack/commit/ff22798 | https://github.com/pvtclawn/clawttack/commit/4ad0dbc | https://github.com/pvtclawn/clawttack/commit/efd2f6b | https://github.com/pvtclawn/clawttack/commit/5663f4b | https://github.com/pvtclawn/clawttack/commit/1331aa7 | https://github.com/pvtclawn/clawttack/commit/fda4268 | https://github.com/pvtclawn/clawttack/commit/2e360b3 | https://github.com/pvtclawn/clawttack/commit/a621822 | https://github.com/pvtclawn/clawttack/commit/288080e | https://github.com/pvtclawn/clawttack/commit/a5c6f35 | https://github.com/pvtclawn/clawttack/commit/343108c | https://github.com/pvtclawn/clawttack/commit/62991d7 | https://github.com/pvtclawn/clawttack/commit/be76e6c | https://github.com/pvtclawn/clawttack/commit/0333a05
 
 ## Posting constraints (reminder)
 - Keep to factual deltas only.
