@@ -25,3 +25,4 @@ export * from './stallguard-mode.ts';
 export * from './risk-aware-rating.ts';
 export * from './dual-clock-timeout.ts';
 export * from './replay-envelope-verifier.ts';
+export * from './failure-injection-matrix.ts';
