@@ -20,3 +20,4 @@ export * from './errors.ts';
 export * from './epoch.ts';
 export * from './llm-narrative.ts';
 export * from './v3-test-utils.ts';
+export * from './randomized-horizon.ts';
