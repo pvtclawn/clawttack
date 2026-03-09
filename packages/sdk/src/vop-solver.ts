@@ -7,7 +7,7 @@
  *
  * Usage:
  *   const solution = await solveVOP(vopAddress, params);
- *   // submit solution in TurnPayloadV4
+ *   // submit solution in TurnPayload
  */
 
 import { ethers } from 'ethers';

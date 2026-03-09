@@ -3,7 +3,7 @@ pragma solidity ^0.8.34;
 
 /**
  * @title ChessClockLib
- * @notice Encapsulates the v4 chess clock timing model for Clawttack battles.
+ * @notice Encapsulates the v0 chess clock timing model for Clawttack battles.
  * @dev Bank-based timing replaces exponential timeout decay.
  *      Key insight: comprehension (NCC success) is rewarded with time refunds,
  *      while scripting (NCC failure) incurs penalties. Bank decay guarantees termination.

@@ -3,7 +3,7 @@ pragma solidity ^0.8.34;
 
 import {Test} from "forge-std/Test.sol";
 import {NccVerifier} from "../src/libraries/NccVerifier.sol";
-import {ClawttackTypesV4} from "../src/libraries/ClawttackTypesV4.sol";
+import {ClawttackTypes} from "../src/libraries/ClawttackTypes.sol";
 import {IWordDictionary} from "../src/interfaces/IWordDictionary.sol";
 
 contract MockWordDictionary is IWordDictionary {
@@ -26,18 +26,18 @@ contract MockWordDictionary is IWordDictionary {
 contract NccVerifierHarness {
     function verifyAttack(
         bytes memory narrative,
-        ClawttackTypesV4.NccAttack memory attack,
+        ClawttackTypes.NccAttack memory attack,
         address wordDictionary
     ) external view {
         NccVerifier.verifyAttack(narrative, attack, wordDictionary);
     }
 
-    function verifyDefense(ClawttackTypesV4.NccDefense memory defense) external pure {
+    function verifyDefense(ClawttackTypes.NccDefense memory defense) external pure {
         NccVerifier.verifyDefense(defense);
     }
 
     function verifyReveal(
-        ClawttackTypesV4.NccReveal memory reveal,
+        ClawttackTypes.NccReveal memory reveal,
         bytes32 storedCommitment,
         uint8 defenderGuessIdx
     ) external pure returns (bool) {
@@ -58,8 +58,8 @@ contract NccVerifierTest is Test {
         harness = new NccVerifierHarness();
     }
 
-    function _validAttack() internal pure returns (ClawttackTypesV4.NccAttack memory) {
-        return ClawttackTypesV4.NccAttack({
+    function _validAttack() internal pure returns (ClawttackTypes.NccAttack memory) {
+        return ClawttackTypes.NccAttack({
             candidateWordIndices: [uint16(0), uint16(1), uint16(2), uint16(3)],
             candidateOffsets: [uint16(14), uint16(26), uint16(41), uint16(55)],
             nccCommitment: keccak256(abi.encodePacked(bytes32(uint256(42)), uint8(0)))
@@ -68,26 +68,26 @@ contract NccVerifierTest is Test {
 
     // ─── verifyAttack ───────────────────────────────────────────────────────
 
-    function test_verifyAttack_valid() public view {
+    function test_verifyAttack_valid() public {
         harness.verifyAttack(NARRATIVE, _validAttack(), address(dict));
     }
 
     function test_verifyAttack_wrongOffset() public {
-        ClawttackTypesV4.NccAttack memory attack = _validAttack();
+        ClawttackTypes.NccAttack memory attack = _validAttack();
         attack.candidateOffsets[3] = 10; // wrong offset for "about"
         vm.expectRevert(NccVerifier.CandidateNotInNarrative.selector);
         harness.verifyAttack(NARRATIVE, attack, address(dict));
     }
 
     function test_verifyAttack_offsetOutOfBounds() public {
-        ClawttackTypesV4.NccAttack memory attack = _validAttack();
+        ClawttackTypes.NccAttack memory attack = _validAttack();
         attack.candidateOffsets[3] = 200;
         vm.expectRevert(NccVerifier.CandidateNotInNarrative.selector);
         harness.verifyAttack(NARRATIVE, attack, address(dict));
     }
 
     function test_verifyAttack_duplicateCandidates() public {
-        ClawttackTypesV4.NccAttack memory attack = _validAttack();
+        ClawttackTypes.NccAttack memory attack = _validAttack();
         attack.candidateWordIndices[1] = 0; // duplicate "abandon"
         attack.candidateOffsets[1] = 14;
         vm.expectRevert(NccVerifier.DuplicateCandidate.selector);
@@ -95,45 +95,45 @@ contract NccVerifierTest is Test {
     }
 
     function test_verifyAttack_missingCommitment() public {
-        ClawttackTypesV4.NccAttack memory attack = _validAttack();
+        ClawttackTypes.NccAttack memory attack = _validAttack();
         attack.nccCommitment = bytes32(0);
         vm.expectRevert(NccVerifier.MissingCommitment.selector);
         harness.verifyAttack(NARRATIVE, attack, address(dict));
     }
 
-    function test_verifyAttack_caseInsensitive() public view {
+    function test_verifyAttack_caseInsensitive() public {
         bytes memory upper = "THE HERO MUST ABANDON ALL ABILITY AND BE ABLE TO LEARN ABOUT THE WORLD";
         harness.verifyAttack(upper, _validAttack(), address(dict));
     }
 
     // ─── verifyDefense ──────────────────────────────────────────────────────
 
-    function test_verifyDefense_valid() public pure {
-        NccVerifier.verifyDefense(ClawttackTypesV4.NccDefense({guessIdx: 2}));
+    function test_verifyDefense_valid() public {
+        NccVerifier.verifyDefense(ClawttackTypes.NccDefense({guessIdx: 2}));
     }
 
     function test_verifyDefense_invalidIndex() public {
         vm.expectRevert(NccVerifier.InvalidGuessIndex.selector);
-        harness.verifyDefense(ClawttackTypesV4.NccDefense({guessIdx: 4}));
+        harness.verifyDefense(ClawttackTypes.NccDefense({guessIdx: 4}));
     }
 
     // ─── verifyReveal ───────────────────────────────────────────────────────
 
-    function test_verifyReveal_correct() public view {
+    function test_verifyReveal_correct() public {
         bytes32 salt = bytes32(uint256(42));
         bytes32 commitment = keccak256(abi.encodePacked(salt, uint8(2)));
         bool correct = harness.verifyReveal(
-            ClawttackTypesV4.NccReveal({salt: salt, intendedIdx: 2}),
+            ClawttackTypes.NccReveal({salt: salt, intendedIdx: 2}),
             commitment, 2
         );
         assertTrue(correct);
     }
 
-    function test_verifyReveal_wrong() public view {
+    function test_verifyReveal_wrong() public {
         bytes32 salt = bytes32(uint256(42));
         bytes32 commitment = keccak256(abi.encodePacked(salt, uint8(2)));
         bool correct = harness.verifyReveal(
-            ClawttackTypesV4.NccReveal({salt: salt, intendedIdx: 2}),
+            ClawttackTypes.NccReveal({salt: salt, intendedIdx: 2}),
             commitment, 1
         );
         assertFalse(correct);
@@ -144,7 +144,7 @@ contract NccVerifierTest is Test {
         bytes32 commitment = keccak256(abi.encodePacked(salt, uint8(2)));
         vm.expectRevert(NccVerifier.RevealMismatch.selector);
         harness.verifyReveal(
-            ClawttackTypesV4.NccReveal({salt: salt, intendedIdx: 1}),
+            ClawttackTypes.NccReveal({salt: salt, intendedIdx: 1}),
             commitment, 1
         );
     }
@@ -154,14 +154,14 @@ contract NccVerifierTest is Test {
         bytes32 commitment = keccak256(abi.encodePacked(salt, uint8(5)));
         vm.expectRevert(NccVerifier.InvalidRevealIndex.selector);
         harness.verifyReveal(
-            ClawttackTypesV4.NccReveal({salt: salt, intendedIdx: 5}),
+            ClawttackTypes.NccReveal({salt: salt, intendedIdx: 5}),
             commitment, 0
         );
     }
 
     // ─── computeCommitment ──────────────────────────────────────────────────
 
-    function test_computeCommitment_matches() public pure {
+    function test_computeCommitment_matches() public {
         bytes32 salt = bytes32(uint256(12345));
         bytes32 fromHelper = NccVerifier.computeCommitment(salt, 3);
         bytes32 manual = keccak256(abi.encodePacked(salt, uint8(3)));
@@ -183,7 +183,7 @@ contract NccVerifierTest is Test {
         bytes32 commitment = keccak256(abi.encodePacked(salt, uint8(2)));
         uint256 gasBefore = gasleft();
         harness.verifyReveal(
-            ClawttackTypesV4.NccReveal({salt: salt, intendedIdx: 2}),
+            ClawttackTypes.NccReveal({salt: salt, intendedIdx: 2}),
             commitment, 2
         );
         uint256 gasUsed = gasBefore - gasleft();

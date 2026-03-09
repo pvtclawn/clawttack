@@ -21,19 +21,19 @@ contract ClozeVerifierTest is Test {
         wrapper = new ClozeWrapper();
     }
 
-    function test_verifyBlank_findsMarker() public pure {
+    function test_verifyBlank_findsMarker() public {
         bytes memory narrative = "The knight [BLANK]ed his quest when the dragon appeared";
         uint256 offset = ClozeVerifier.verifyBlank(narrative);
         assertEq(offset, 11); // "[BLANK]" starts at byte 11
     }
 
-    function test_verifyBlank_atStart() public pure {
+    function test_verifyBlank_atStart() public {
         bytes memory narrative = "[BLANK] is a powerful concept in combat";
         uint256 offset = ClozeVerifier.verifyBlank(narrative);
         assertEq(offset, 0);
     }
 
-    function test_verifyBlank_atEnd() public pure {
+    function test_verifyBlank_atEnd() public {
         bytes memory narrative = "The warrior chose to [BLANK]";
         uint256 offset = ClozeVerifier.verifyBlank(narrative);
         assertEq(offset, 21);
@@ -51,40 +51,40 @@ contract ClozeVerifierTest is Test {
         wrapper.verifyBlank(narrative);
     }
 
-    function test_reconstruct_middle() public pure {
+    function test_reconstruct_middle() public {
         bytes memory narrative = "The knight [BLANK]ed his quest";
         bytes memory word = "abandon";
         bytes memory original = ClozeVerifier.reconstruct(narrative, 11, word);
         assertEq(string(original), "The knight abandoned his quest");
     }
 
-    function test_reconstruct_start() public pure {
+    function test_reconstruct_start() public {
         bytes memory narrative = "[BLANK] is everything";
         bytes memory word = "ability";
         bytes memory original = ClozeVerifier.reconstruct(narrative, 0, word);
         assertEq(string(original), "ability is everything");
     }
 
-    function test_reconstruct_end() public pure {
+    function test_reconstruct_end() public {
         bytes memory narrative = "Choose to [BLANK]";
         bytes memory word = "absorb";
         bytes memory original = ClozeVerifier.reconstruct(narrative, 10, word);
         assertEq(string(original), "Choose to absorb");
     }
 
-    function test_verifyReveal_valid() public pure {
+    function test_verifyReveal_valid() public {
         bytes memory narrative = "The [BLANK] was fierce";
         bool valid = ClozeVerifier.verifyReveal(narrative, "battle", 4);
         assertTrue(valid);
     }
 
-    function test_verifyReveal_wrongOffset() public pure {
+    function test_verifyReveal_wrongOffset() public {
         bytes memory narrative = "The [BLANK] was fierce";
         bool valid = ClozeVerifier.verifyReveal(narrative, "battle", 0);
         assertFalse(valid);
     }
 
-    function test_verifyReveal_outOfBounds() public pure {
+    function test_verifyReveal_outOfBounds() public {
         bytes memory narrative = "Short [BLANK]";
         bool valid = ClozeVerifier.verifyReveal(narrative, "word", 100);
         assertFalse(valid);

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { useBattleList, useArenaStats, type V3BattleInfo } from '../hooks/useChain'
+import { useBattleList, useArenaStats, type BattleInfo } from '../hooks/useChain'
 import { formatEther } from 'viem'
 import { useState, useMemo } from 'react'
 
@@ -79,7 +79,7 @@ function BattlesPage() {
       )}
 
       <div className="space-y-3">
-        {filteredBattles.map((b: V3BattleInfo) => (
+        {filteredBattles.map((b: BattleInfo) => (
           <div
             key={b.battleId.toString()}
             className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:bg-[var(--surface-hover)] transition-colors"

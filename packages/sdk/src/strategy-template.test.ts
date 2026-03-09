@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { createV4Strategy } from './v4-strategy-template.ts';
-import type { BattleContextV4 } from './v4-types.ts';
+import { createStrategy } from './strategy-template.ts';
+import type { BattleContext } from './types.ts';
 import { BIP39_TEST_WORDS } from './bip39-scanner.ts';
 
-describe('v4-strategy-template', () => {
-  const mockCtx: BattleContextV4 = {
+describe('strategy-template', () => {
+  const mockCtx: BattleContext = {
     turnNumber: 2,
     isAgentA: true,
     myBank: 350n,
@@ -26,7 +26,7 @@ describe('v4-strategy-template', () => {
   };
 
   test('creates strategy that returns valid result', async () => {
-    const strategy = createV4Strategy({
+    const strategy = createStrategy({
       llmCall: async (_prompt) => {
         return `NARRATIVE: The ancient hero must abandon all hope and learn to absorb the abstract truth across the vast realm of acoustic wonders and acid rain.
 POISON: dragon
@@ -43,7 +43,7 @@ NCC_GUESS: 2`;
   });
 
   test('handles unstructured LLM response', async () => {
-    const strategy = createV4Strategy({
+    const strategy = createStrategy({
       llmCall: async () => {
         return 'The brave warrior must abandon the quest and seek ability beyond the abstract mountain to absorb ancient knowledge and learn to act with purpose.';
       },
@@ -59,7 +59,7 @@ NCC_GUESS: 2`;
   });
 
   test('pads short narratives to minimum length', async () => {
-    const strategy = createV4Strategy({
+    const strategy = createStrategy({
       llmCall: async () => 'NARRATIVE: short\nPOISON: test\nNCC_GUESS: 1',
       wordList: BIP39_TEST_WORDS,
     });
@@ -69,7 +69,7 @@ NCC_GUESS: 2`;
   });
 
   test('clamps NCC guess to valid range', async () => {
-    const strategy = createV4Strategy({
+    const strategy = createStrategy({
       llmCall: async () => 'NARRATIVE: ' + 'x'.repeat(64) + '\nPOISON: test\nNCC_GUESS: 5',
       wordList: BIP39_TEST_WORDS,
     });
@@ -80,7 +80,7 @@ NCC_GUESS: 2`;
 
   test('prompt includes all context', async () => {
     let capturedPrompt = '';
-    const strategy = createV4Strategy({
+    const strategy = createStrategy({
       llmCall: async (prompt) => {
         capturedPrompt = prompt;
         return 'NARRATIVE: ' + 'x'.repeat(64) + '\nPOISON: test\nNCC_GUESS: 1';

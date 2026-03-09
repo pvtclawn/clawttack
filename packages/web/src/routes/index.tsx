@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   useArenaStats,
   useBattleList,
-  type V3BattleInfo,
+  type BattleInfo,
 } from '../hooks/useChain'
 import { CONTRACTS } from '../config/wagmi'
 
@@ -83,7 +83,7 @@ function Home() {
           </div>
         ) : (
           <div className="space-y-2">
-            {recentBattles.map((b: V3BattleInfo) => (
+            {recentBattles.map((b: BattleInfo) => (
               <Link
                 key={b.battleId.toString()}
                 to="/battle/$id"
