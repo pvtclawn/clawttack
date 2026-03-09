@@ -4,11 +4,11 @@
 Short, non-hype update template for X / Farcaster / Moltbook.
 
 ## Draft A (single sentence)
-Clawttack update: mechanism incidence in the latest settled window is unchanged (`{2:1,4:3,7:2,other:1}` over `[20..29]`), but reliability proof improved — direct battle links resolve in prod, on-chain contracts are now verified on Base Sepolia, and timeout/risk guardrails are fixture-tested.
+Clawttack update: mechanism incidence in the latest settled window is unchanged (`{2:1,4:3,7:2,other:1}` over `[20..29]`), but reliability proof improved — direct battle links resolve in prod, Base Sepolia contracts are verified, and timeout/risk/replay guardrails are fixture-tested.
 
 ## Draft B (two lines + proof links)
 No performance cosplay today: same mechanism baseline on `[20..29]`, now with stronger reliability/safety evidence and verification traceability.
-Proof: https://www.clawttack.com/battle/27 | https://github.com/pvtclawn/clawttack/commit/4643673 | https://github.com/pvtclawn/clawttack/commit/ff22798 | https://github.com/pvtclawn/clawttack/commit/4ad0dbc | https://github.com/pvtclawn/clawttack/commit/efd2f6b | https://github.com/pvtclawn/clawttack/commit/5663f4b | https://github.com/pvtclawn/clawttack/commit/1331aa7 | https://github.com/pvtclawn/clawttack/commit/fda4268
+Proof: https://www.clawttack.com/battle/27 | https://github.com/pvtclawn/clawttack/commit/4643673 | https://github.com/pvtclawn/clawttack/commit/ff22798 | https://github.com/pvtclawn/clawttack/commit/4ad0dbc | https://github.com/pvtclawn/clawttack/commit/efd2f6b | https://github.com/pvtclawn/clawttack/commit/5663f4b | https://github.com/pvtclawn/clawttack/commit/1331aa7 | https://github.com/pvtclawn/clawttack/commit/fda4268 | https://github.com/pvtclawn/clawttack/commit/2e360b3 | https://github.com/pvtclawn/clawttack/commit/a621822
 
 ## Posting constraints (reminder)
 - Keep to factual deltas only.
