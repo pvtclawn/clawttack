@@ -26,3 +26,4 @@ export * from './risk-aware-rating.ts';
 export * from './dual-clock-timeout.ts';
 export * from './replay-envelope-verifier.ts';
 export * from './failure-injection-matrix.ts';
+export * from './ood-gate.ts';
