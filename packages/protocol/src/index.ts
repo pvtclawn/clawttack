@@ -24,3 +24,4 @@ export * from './randomized-horizon.ts';
 export * from './stallguard-mode.ts';
 export * from './risk-aware-rating.ts';
 export * from './dual-clock-timeout.ts';
+export * from './replay-envelope-verifier.ts';
