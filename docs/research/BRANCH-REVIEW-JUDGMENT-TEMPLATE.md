@@ -21,6 +21,8 @@ invalidatedPriorBlockers:
   - <previous blocker no longer present on reviewedRef>
 remainingCurrentBlockers:
   - <blocker still present on reviewedRef>
+nonBlockingIssues:
+  - <narrow cleanup / doc drift / naming issue not currently merge-blocking>
 envNoise:
   - <local/dependency/tooling issue not proven to be branch-state>
 notChecked:
@@ -77,11 +79,17 @@ notChecked:
 16. **Lead with the most relevant/top-line evidence for the judgment being made.**
    If a narrower slice is mentioned first, the summary must make clear why that slice is the correct lens. Do not front-load a favorable subgroup when the top-line state is the real merge-relevant signal.
 
-17. **Use symmetric specificity for cleared vs remaining blockers.**
-   If invalidated blockers are named concretely, remaining blockers should be named with comparable specificity rather than collapsed into vague residue like `some cleanup remains`.
+17. **Use symmetric specificity for cleared vs remaining issues without flattening relevance.**
+   If invalidated blockers are named concretely, remaining issues should also be concrete — but merge blockers must stay visibly distinct from non-blocking residue.
 
 18. **The opening sentence must earn its place.**
    If removing the first sentence would not materially change the merge judgment, it is probably too vague or ceremonial.
+
+19. **Preserve blocker relevance hierarchy.**
+   Balanced wording must not create false equivalence between merge blockers and non-blockers. If blocker status differs, the summary should say so explicitly.
+
+20. **Treat symmetry as a tool, not the objective.**
+   Symmetric wording is useful only when it improves decision quality. Do not force tidy paired phrasing if it obscures what actually matters for mergeability.
 
 ## Scope-qualified verdict examples
 
@@ -104,9 +112,9 @@ Always order summary content like this:
 4. **review-governance or process nuance**
 
 ### Good opening sentence shapes
-- `Runtime blockers on 56341e3 are cleared; remaining issues are doc drift in CHANGELOG.md and docs/SKILL.md plus local env noise.`
-- `Typecheck passes on 56341e3; branch-state failures observed in checked scope are limited to active doc drift.`
-- `The reviewed ref still contains active doc drift in CHANGELOG.md and docs/SKILL.md.`
+- `Runtime blockers on 56341e3 are cleared; remaining merge-relevant issues are none in checked scope, while non-blocking issues include doc drift in CHANGELOG.md and docs/SKILL.md plus local env noise.`
+- `Typecheck passes on 56341e3; no branch-state merge blockers were found in checked scope, and remaining non-blocking issues are limited to active doc drift.`
+- `The reviewed ref still contains merge-blocking issues in <file/path>; non-blocking cleanup remains in <file/path>.`
 
 ### Bad opening sentence shapes
 - `Things look much better now.`
@@ -115,9 +123,10 @@ Always order summary content like this:
 - `The branch is pretty healthy.`
 - `Only minor issues remain.`
 - `Most blockers are gone and there’s just a bit of cleanup left.`
+- `Cleared blockers and remaining issues are roughly balanced now.`
 
 ### Good summary shape
-- `Current state: runtime blockers on 56341e3 are cleared; remaining issues are doc drift in CHANGELOG.md and docs/SKILL.md plus local env noise.`
+- `Current state: runtime blockers on 56341e3 are cleared; no merge blockers were found in checked scope, while remaining non-blocking issues are doc drift in CHANGELOG.md and docs/SKILL.md plus local env noise.`
 - `Impact: code changed. Mechanism impact: none.`
 - `Confidence/caveats: medium confidence because merge-candidate state was not checked.`
 
@@ -130,7 +139,8 @@ Always order summary content like this:
 Before finalizing a review summary, ask:
 - Does the first sentence tell the reader **what matters now** on this ref?
 - Would removing it materially reduce decision quality?
-- Does it name both the cleared and remaining blocker classes with comparable specificity when relevant?
+- Does it preserve blocker priority instead of flattening all issues into a balanced list?
+- Are remaining merge blockers and non-blockers clearly separated?
 
 If the answer is no, rewrite it.
 
@@ -150,6 +160,8 @@ If the answer is no, rewrite it.
   - <item>
 - remainingCurrentBlockers:
   - <item>
+- nonBlockingIssues:
+  - <item>
 - envNoise:
   - <item>
 - notChecked:
@@ -159,7 +171,7 @@ If the answer is no, rewrite it.
 - <scope-qualified mergeable / not mergeable / mergeable with caveats>
 
 ### Plain-English summary
-- Current state: <concrete current blockers / invalidated blockers / pass-fail state on the reviewed ref>.
+- Current state: <concrete current blockers / invalidated blockers / pass-fail state on the reviewed ref, with blockers and non-blockers clearly separated>.
 - Impact: code <none|unknown|changed>; mechanism <none|unknown|changed>.
 - Confidence/caveats: <short caveat sentence, if needed>.
 
@@ -187,6 +199,8 @@ If the answer is no, rewrite it.
   - active scripts still calling `createBattleV4`
   - stale test name `requiresV4Impl`
 - remainingCurrentBlockers:
+  - none found in checked scope
+- nonBlockingIssues:
   - active doc drift in `CHANGELOG.md` and `docs/SKILL.md`
   - active script naming drift in `packages/sdk/scripts/fight.ts` (`V4Fighter` import)
 - envNoise:
@@ -198,13 +212,13 @@ If the answer is no, rewrite it.
 - mergeable with caveats at prHead/runtimeConsumers+docs+typecheck+tests scope
 
 ### Plain-English summary
-- Current state: original runtime blockers are gone on 56341e3; remaining checked issues are active doc drift in CHANGELOG.md and docs/SKILL.md, active script naming drift in packages/sdk/scripts/fight.ts, plus local env noise.
+- Current state: original runtime blockers are gone on 56341e3; no merge blockers were found in checked scope, while remaining non-blocking issues are active doc drift in CHANGELOG.md and docs/SKILL.md, active script naming drift in packages/sdk/scripts/fight.ts, plus local env noise.
 - Impact: code changed; mechanism none.
 - Confidence/caveats: medium confidence because merge-candidate state against latest base was not checked.
 
 ### Rationale
 - Original runtime blockers are no longer present on the reviewed ref.
-- Remaining issues are narrower and mostly naming/doc drift.
+- Remaining issues are narrower and non-blocking within the checked scope.
 - Test red signal appears environment-scoped rather than proven branch regression.
 ```
 
