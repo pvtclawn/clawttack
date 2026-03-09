@@ -103,6 +103,15 @@ notChecked:
 24. **Explain blocker-status changes across refreshed reviews.**
    If an issue moved from blocker to non-blocker (or vice versa), note why the classification changed: new ref, narrower/broader scope, or corrected stale objection.
 
+25. **Use blocker-first rationale structure.**
+   In the rationale, establish blocker/non-blocker state before stating or defending the verdict. Do not lead with the conclusion and backfill the blocker story afterward.
+
+26. **Keep rationale inside declared scope.**
+   If a reason depends on unreviewed areas, move it to `notChecked` or caveats instead of silently using it to justify the verdict.
+
+27. **Explain why non-blockers are non-blocking when relevant.**
+   If named non-blocking issues are close enough to matter in the decision, briefly say why they are non-blocking within the checked scope.
+
 ## Scope-qualified verdict examples
 
 **Acceptable:**
@@ -188,7 +197,9 @@ If the answer is no, rewrite it.
 - Confidence/caveats: <short caveat sentence, if needed>.
 
 ### Rationale
-- <1–3 bullets tied only to reviewedRef + declared scope, including explicit blocker-to-verdict linkage when relevant>
+- Blocker state: <what is blocking / not blocking within the checked scope>.
+- Verdict linkage: <how that blocker state produces the final judgment within scope>.
+- Caveat linkage: <what remains outside scope or why named non-blockers stay non-blocking, if relevant>.
 ```
 
 ## Example — stale review corrected by live head
@@ -229,9 +240,9 @@ If the answer is no, rewrite it.
 - Confidence/caveats: medium confidence because merge-candidate state against latest base was not checked.
 
 ### Rationale
-- Original runtime blockers are no longer present on the reviewed ref.
-- No merge blockers were found within the checked `prHead/runtimeConsumers+docs+typecheck+tests` scope, so the branch is mergeable with caveats at that scope.
-- Remaining issues are non-blocking within the checked scope, while the test red signal appears environment-scoped rather than proven branch regression.
+- Blocker state: no merge blockers were found within the checked `prHead/runtimeConsumers+docs+typecheck+tests` scope; the remaining listed issues are non-blocking within that scope.
+- Verdict linkage: because no blockers were found in the checked scope, the branch is mergeable with caveats at that scope.
+- Caveat linkage: merge-candidate state was not checked, and the local test red signal appears environment-scoped rather than proven branch regression.
 ```
 
 ## Anti-prestige reminders
