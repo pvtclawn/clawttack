@@ -91,6 +91,18 @@ notChecked:
 20. **Treat symmetry as a tool, not the objective.**
    Symmetric wording is useful only when it improves decision quality. Do not force tidy paired phrasing if it obscures what actually matters for mergeability.
 
+21. **Blocker status is scope-qualified when necessary.**
+   If an issue is blocking only within a certain checked scope or judgment type, say that explicitly rather than implying global blocker status.
+
+22. **Ambiguous blocker labels need justification.**
+   If reasonable reviewers could disagree on blocker status, add a short `whyBlocking` note in the rationale or blocker list.
+
+23. **Verdict must visibly follow from blocker state.**
+   The rationale should explicitly connect blocker presence/absence within scope to the final judgment. Do not make readers infer the logic.
+
+24. **Explain blocker-status changes across refreshed reviews.**
+   If an issue moved from blocker to non-blocker (or vice versa), note why the classification changed: new ref, narrower/broader scope, or corrected stale objection.
+
 ## Scope-qualified verdict examples
 
 **Acceptable:**
@@ -176,7 +188,7 @@ If the answer is no, rewrite it.
 - Confidence/caveats: <short caveat sentence, if needed>.
 
 ### Rationale
-- <1–3 bullets tied only to reviewedRef + declared scope>
+- <1–3 bullets tied only to reviewedRef + declared scope, including explicit blocker-to-verdict linkage when relevant>
 ```
 
 ## Example — stale review corrected by live head
@@ -218,8 +230,8 @@ If the answer is no, rewrite it.
 
 ### Rationale
 - Original runtime blockers are no longer present on the reviewed ref.
-- Remaining issues are narrower and non-blocking within the checked scope.
-- Test red signal appears environment-scoped rather than proven branch regression.
+- No merge blockers were found within the checked `prHead/runtimeConsumers+docs+typecheck+tests` scope, so the branch is mergeable with caveats at that scope.
+- Remaining issues are non-blocking within the checked scope, while the test red signal appears environment-scoped rather than proven branch regression.
 ```
 
 ## Anti-prestige reminders
