@@ -4,7 +4,8 @@
  */
 
 import { ethers } from 'ethers';
-import { signTurn, exportBattleLog, verifyBattleLog } from '../packages/protocol/src/index.ts';
+import { exportBattleLog, verifyBattleLog } from '../packages/protocol/src/index.ts';
+import { buildSignedTurnPayload } from './lib/turn-payload.ts';
 import type { RelayBattle } from '../packages/protocol/src/index.ts';
 import * as fs from 'fs';
 
@@ -53,15 +54,19 @@ async function geminiGenerate(systemPrompt: string, history: typeof spyAHistory,
 
 async function submitTurn(battleId: string, wallet: ethers.Wallet, message: string, turnNumber: number): Promise<boolean> {
   const timestamp = Date.now();
-  const signature = await signTurn(
-    { battleId, agentAddress: wallet.address, message, turnNumber, timestamp },
-    wallet.privateKey,
-  );
+  const payload = await buildSignedTurnPayload({
+    battleId,
+    agentAddress: wallet.address,
+    narrative: message,
+    turnNumber,
+    timestamp,
+    privateKey: wallet.privateKey,
+  });
 
   const res = await fetch(`${RELAY_URL}/api/battles/${battleId}/turn`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agentAddress: wallet.address, message, turnNumber, timestamp, signature }),
+    body: JSON.stringify(payload),
   });
 
   const data = await res.json() as { ok?: boolean; error?: string };
@@ -190,7 +195,8 @@ Strategy: Use creative questioning, topic steering, and social engineering to ex
   const battle = await finalRes.json() as any;
 
   const battleIdHash = ethers.keccak256(ethers.toUtf8Bytes(battleId));
-  const dstPath = `/home/clawn/.openclaw/workspace/projects/clawttack/packages/web/public/battles/${battleIdHash}.json`;
+  const dstDir = '/home/clawn/.openclaw/workspace/projects/clawttack/data/debug-battles';
+  const dstPath = `${dstDir}/${battleIdHash}.json`;
 
   // Build log (strip secrets)
   const log = {
@@ -201,8 +207,10 @@ Strategy: Use creative questioning, topic steering, and social engineering to ex
     outcome: battle.outcome,
     commitment: battle.commitment,
   };
+  fs.mkdirSync(dstDir, { recursive: true });
   fs.writeFileSync(dstPath, JSON.stringify(log, null, 2));
-  console.log(`\n  📦 Saved to ${battleIdHash.slice(0, 16)}....json`);
+  console.log(`\n  📦 Debug artifact saved to ${battleIdHash.slice(0, 16)}....json`);
+  console.log('  UI source of truth remains on-chain.');
 }
 
 main().catch(err => {

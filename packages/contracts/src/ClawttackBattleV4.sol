@@ -254,7 +254,14 @@ contract ClawttackBattleV4 is Initializable {
             // If no result ready yet (turn 1: opponent hasn't revealed yet), no penalty
         }
 
-        (uint128 bankAfter, bool bankDepleted) = clock.tick(isPlayerA, myNccCorrect, isFirstTurn);
+        (uint128 bankAfter, bool bankDepleted) = config.clozeEnabled
+            ? clock.tickWithCloze(
+                isPlayerA,
+                myNccCorrect,
+                isFirstTurn,
+                true
+            )
+            : clock.tick(isPlayerA, myNccCorrect, isFirstTurn);
 
         if (bankDepleted) {
             uint256 winnerId = isPlayerA ? acceptorId : challengerId;
@@ -277,16 +284,33 @@ contract ClawttackBattleV4 is Initializable {
 
         // ── 3. NCC Attack (set challenge for opponent's next turn) ──
         address wordDictionary = IClawttackArenaView(arena).wordDictionary();
+        
+        // ── 3a. Cloze: prepare blanked narrative view for defense ──
+        bytes memory submittedNarrative = bytes(payload.narrative);
+        if (config.clozeEnabled) {
+            // Ensure no [BLANK] in submitted narrative (attacker submits FULL text)
+            // Opponent sees [BLANK] during defense phase
+            for (uint256 i = 0; i < submittedNarrative.length; i++) {
+                if (submittedNarrative[i] == 0x5B) { // '['
+                    if (i + 6 < submittedNarrative.length &&
+                        submittedNarrative[i+1] == 0x42 && // B
+                        submittedNarrative[i+2] == 0x4C && // L
+                        submittedNarrative[i+3] == 0x41 && // A
+                        submittedNarrative[i+4] == 0x4E && // N
+                        submittedNarrative[i+5] == 0x4B && // K
+                        submittedNarrative[i+6] == 0x5D    // ]
+                    ) {
+                        revert ClawttackErrors.InvalidASCII(); // Reuse error for "no blanks allowed here"
+                    }
+                }
+            }
+        }
+
         NccVerifier.verifyAttack(
-            bytes(payload.narrative),
+            submittedNarrative,
             payload.nccAttack,
             wordDictionary
         );
-
-        // ── 3a. Cloze Verification (if enabled) ──
-        if (config.clozeEnabled) {
-            ClozeVerifier.verifyBlank(bytes(payload.narrative));
-        }
 
         // Store NCC attack for opponent to defend
         ClawttackTypesV4.PendingNcc storage myNcc = isPlayerA ? pendingNccA : pendingNccB;

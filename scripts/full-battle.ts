@@ -11,9 +11,13 @@
  */
 
 import { ethers } from 'ethers';
-import { signTurn, exportBattleLog, verifyBattleLog } from '../packages/protocol/src/index.ts';
+import { exportBattleLog, verifyBattleLog } from '../packages/protocol/src/index.ts';
+import { buildSignedTurnPayload } from './lib/turn-payload.ts';
+import { formatProofBlock, type SettlementSource } from './lib/proof-block.ts';
 import type { RelayBattle } from '../packages/protocol/src/index.ts';
 import * as fs from 'fs';
+
+const RELAY_LOG_PATH = process.env.RELAY_LOG_PATH ?? '/tmp/claw-relay.log';
 
 const RELAY_URL = 'http://localhost:8787';
 const RPC_URL = 'https://sepolia.base.org';
@@ -111,15 +115,19 @@ async function geminiGenerate(systemPrompt: string, history: typeof attackerHist
 
 async function submitTurn(battleId: string, wallet: ethers.Wallet, message: string, turnNumber: number): Promise<boolean> {
   const timestamp = Date.now();
-  const signature = await signTurn(
-    { battleId, agentAddress: wallet.address, message, turnNumber, timestamp },
-    wallet.privateKey,
-  );
+  const payload = await buildSignedTurnPayload({
+    battleId,
+    agentAddress: wallet.address,
+    narrative: message,
+    turnNumber,
+    timestamp,
+    privateKey: wallet.privateKey,
+  });
 
   const res = await fetch(`${RELAY_URL}/api/battles/${battleId}/turn`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agentAddress: wallet.address, message, turnNumber, timestamp, signature }),
+    body: JSON.stringify(payload),
   });
 
   const data = await res.json() as { ok?: boolean; error?: string };
@@ -225,7 +233,7 @@ async function runBattle(): Promise<{ battleId: string; battle: any }> {
   return { battleId, battle };
 }
 
-async function settle(battleId: string, battle: any): Promise<string> {
+async function settle(battleId: string, battle: any): Promise<{ txHash: string; source: 'script_settled' | 'already_settled_by_other_path'; confirmations: number }> {
   console.log('');
   console.log('═══════════════════════════════════════════════════════');
   console.log('  ⛓️  PHASE 2: ON-CHAIN SETTLEMENT');
@@ -290,7 +298,7 @@ async function settle(battleId: string, battle: any): Promise<string> {
     const secretLower = SECRET.toLowerCase();
     const attackerFoundIt = battle.turns
       .filter((t: any) => t.role === 'attacker')
-      .some((t: any) => t.message.toLowerCase().includes(secretLower));
+      .some((t: any) => ((t.narrative ?? t.message ?? '') as string).toLowerCase().includes(secretLower));
 
     const agentAddresses = battle.agents.map((a: any) => a.address);
     const secretHash = ethers.keccak256(ethers.toUtf8Bytes(SECRET));
@@ -319,7 +327,8 @@ async function settle(battleId: string, battle: any): Promise<string> {
     const nonce = await signer.getNonce();
     const settleTx = await registry.settle(battleIdBytes, logHash, reveal, { gasLimit: 300_000, nonce });
     console.log(`  Settle tx: ${settleTx.hash}`);
-    const receipt = await settleTx.wait();
+    const confirmationDepth = 1;
+    const receipt = await settleTx.wait(confirmationDepth);
     console.log(`  ✅ Settled! Gas: ${receipt?.gasUsed.toString()}`);
 
     const winner = attackerFoundIt
@@ -327,26 +336,54 @@ async function settle(battleId: string, battle: any): Promise<string> {
       : battle.agents.find((a: any) => a.role === 'defender')?.name;
     console.log(`  🏆 Winner: ${winner}`);
 
-    return settleTx.hash;
+    console.log(`  Settlement source: script_settled (confirmations=${confirmationDepth})`);
+    return { txHash: settleTx.hash, source: 'script_settled', confirmations: confirmationDepth };
   } else {
     console.log('  Battle already exists on-chain');
-    return '';
+    console.log('  Settlement source: already_settled_by_other_path (script path skipped)');
+    return { txHash: '', source: 'already_settled_by_other_path', confirmations: 0 };
   }
+}
+
+function findRelaySettlementTx(battleId: string): string | null {
+  try {
+    const text = fs.readFileSync(RELAY_LOG_PATH, 'utf-8');
+    const lines = text.split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i] ?? '';
+      if (line.includes(`Settlement confirmed: ${battleId} → `)) {
+        const m = line.match(/→\s*(0x[a-fA-F0-9]{64})/);
+        if (m?.[1]) return m[1];
+      }
+    }
+  } catch {
+    // best-effort only
+  }
+  return null;
+}
+
+async function findRelaySettlementTxWithOneRetry(battleId: string): Promise<string | null> {
+  const first = findRelaySettlementTx(battleId);
+  if (first) return first;
+  await new Promise((r) => setTimeout(r, 1500));
+  return findRelaySettlementTx(battleId);
 }
 
 function publishLog(battleId: string) {
   console.log('');
   console.log('═══════════════════════════════════════════════════════');
-  console.log('  📦 PHASE 3: PUBLISH TO SITE');
+  console.log('  📦 PHASE 3: SAVE DEBUG ARTIFACT (NON-UI)');
   console.log('═══════════════════════════════════════════════════════');
 
   const battleIdBytes = ethers.keccak256(ethers.toUtf8Bytes(battleId));
   const srcPath = `/home/clawn/.openclaw/workspace/projects/clawttack/data/battles/${battleId}.json`;
-  const dstPath = `/home/clawn/.openclaw/workspace/projects/clawttack/packages/web/public/battles/${battleIdBytes}.json`;
-  
-  fs.mkdirSync('/home/clawn/.openclaw/workspace/projects/clawttack/packages/web/public/battles', { recursive: true });
+  const dstDir = '/home/clawn/.openclaw/workspace/projects/clawttack/data/debug-battles';
+  const dstPath = `${dstDir}/${battleIdBytes}.json`;
+
+  fs.mkdirSync(dstDir, { recursive: true });
   fs.copyFileSync(srcPath, dstPath);
-  console.log(`  Copied: ${battleIdBytes.slice(0, 16)}....json`);
+  console.log(`  Debug copy: ${battleIdBytes.slice(0, 16)}....json`);
+  console.log('  UI source of truth remains on-chain.');
 }
 
 async function main() {
@@ -364,16 +401,35 @@ async function main() {
   }
 
   const { battleId, battle } = await runBattle();
-  const settleTxHash = await settle(battleId, battle);
+  const relaySettles = process.env.AUTO_SETTLE === 'true';
+  const settlement = relaySettles
+    ? { txHash: '', source: 'relay_settled' as const, confirmations: 0 }
+    : await settle(battleId, battle);
+  if (relaySettles) {
+    console.log('  Settlement source: relay_settled (script settle skipped due to AUTO_SETTLE=true)');
+  }
   publishLog(battleId);
+
+  let finalTxHash = settlement.txHash;
+  if (!finalTxHash && settlement.source === 'relay_settled') {
+    finalTxHash = await findRelaySettlementTxWithOneRetry(battleId) ?? '';
+  }
+
+  const proofSource: SettlementSource = settlement.source;
+  const proofBlock = formatProofBlock({
+    battleId,
+    settlementSource: proofSource,
+    txHash: finalTxHash || undefined,
+    pendingProof: !finalTxHash,
+  });
 
   console.log('');
   console.log('═══════════════════════════════════════════════════════');
   console.log('  ✅ PIPELINE COMPLETE');
   console.log('═══════════════════════════════════════════════════════');
-  console.log(`  Battle: ${battleId}`);
-  if (settleTxHash) {
-    console.log(`  Tx: https://sepolia.basescan.org/tx/${settleTxHash}`);
+  console.log(proofBlock);
+  if (finalTxHash) {
+    console.log(`- explorer: https://sepolia.basescan.org/tx/${finalTxHash}`);
   }
   console.log('');
 }

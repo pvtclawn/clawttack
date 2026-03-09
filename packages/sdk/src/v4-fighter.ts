@@ -83,6 +83,21 @@ export interface V4FightResult {
   gasUsed: bigint;
 }
 
+interface PreflightToken {
+  turn: number;
+  payloadHash: `0x${string}`;
+  snapshotHash: `0x${string}`;
+  createdAtMs: number;
+}
+
+interface NccCheckpoint {
+  salt: `0x${string}`;
+  intendedIdx: 0 | 1 | 2 | 3;
+  sourceTurn: number;
+  sourceSequenceHash: `0x${string}`;
+  createdAtMs: number;
+}
+
 // ─── Minimal ABIs ───────────────────────────────────────────────────────
 
 const BATTLE_ABI = [
@@ -121,7 +136,7 @@ export class V4Fighter {
   private totalGasUsed: bigint = 0n;
 
   // NCC state tracking
-  private myPreviousNcc: { salt: `0x${string}`; intendedIdx: 0 | 1 | 2 | 3 } | null = null;
+  private myPreviousNcc: NccCheckpoint | null = null;
   private opponentLastNccAttack: NccAttack | null = null;
   private wordList: string[] | null = null;
 
@@ -132,6 +147,14 @@ export class V4Fighter {
 
   // Joker tracking
   private jokersRemaining: number = 0;
+
+  // Reaction-SLO tracking (per turn)
+  private ownedTurnDetectedAtMs = new Map<number, number>();
+  private lastPollAtMs = 0;
+  private maxObservedPollGapMs = 0;
+  private observedPollGapsMs: number[] = [];
+  private lastFallbackDedupeKey: string | null = null;
+  private turnRetryState = new Map<number, { attempts: number; nextAttemptAtMs: number }>();
 
   constructor(config: V4FighterConfig) {
     this.config = config;
@@ -187,12 +210,28 @@ export class V4Fighter {
     let lastProcessedTurn = -1;
     const startTime = Date.now();
 
+    // Backoff+jitter watcher state
+    let unchangedPolls = 0;
+    let lastSnapshot = '';
+
     while (Date.now() < deadline) {
       const state = await this.getBattleState();
+      const snapshot = `${state.phase}:${state.currentTurn}:${state.sequenceHash}`;
+      if (snapshot === lastSnapshot) {
+        unchangedPolls++;
+      } else {
+        unchangedPolls = 0;
+        lastSnapshot = snapshot;
+      }
 
       // Battle ended?
       if (state.phase === BattlePhase.Settled) {
         return this.buildResult(state, 'settled');
+      }
+
+      // Prune stale retry state for old turns
+      for (const turn of this.turnRetryState.keys()) {
+        if (turn < state.currentTurn) this.turnRetryState.delete(turn);
       }
 
       // Re-read firstMoverA once the battle is Active (it's set during acceptBattle)
@@ -207,31 +246,52 @@ export class V4Fighter {
       // Is it my turn?
       const isMyTurn = this.isMyTurn(state.currentTurn);
       if (isMyTurn && state.currentTurn > lastProcessedTurn) {
-        try {
-          await this.playTurn(state);
-          lastProcessedTurn = state.currentTurn; // Only mark done on success
-        } catch (err: any) {
-          const errMsg = String(err?.shortMessage ?? err?.message ?? err);
-          const errData = err?.data ?? err?.info?.error?.data ?? '';
-          if (errMsg.includes('TurnTooFast') || errMsg.includes('0xb3c15f40') || String(errData).includes('b3c15f40')) {
-            this.log(`  ⏳ Turn too fast — waiting for next block...`);
-            await this.sleep(4000); // Wait ~2 blocks
-          } else if (errMsg.includes('BattleNotActive') || errMsg.includes('0xf2592cf2') || String(errData).includes('f2592cf2')) {
-            this.log(`  ⏳ Battle not active yet — waiting for start block...`);
-            await this.sleep(4000);
-          } else if (errMsg.includes('reverted') && !errData) {
-            // Empty revert data — likely gas estimation issue, retry once
-            this.log(`  ⚠️ Empty revert — retrying in 4s...`);
-            await this.sleep(4000);
-          } else if (errMsg.includes('TargetWordMissing') || String(errData).includes('72bea98a') ||
-                     errMsg.includes('CandidateNotInNarrative') || String(errData).includes('71b895eb') ||
-                     errMsg.includes('InvalidPoisonWord') || String(errData).includes('3b3a5e43')) {
-            // Narrative validation failed — retry with a new narrative
-            this.log(`  🔄 Narrative rejected (${errMsg.includes('Target') ? 'target word missing' : errMsg.includes('Candidate') ? 'candidate not found' : 'poison word issue'}) — regenerating...`);
-            await this.sleep(2000);
-          } else {
-            this.log(`❌ Turn ${state.currentTurn} failed: ${errMsg} | data=${errData}`);
-            lastProcessedTurn = state.currentTurn; // Skip this turn on other errors
+        if (!this.ownedTurnDetectedAtMs.has(state.currentTurn)) {
+          this.ownedTurnDetectedAtMs.set(state.currentTurn, Date.now());
+        }
+        const retryState = this.turnRetryState.get(state.currentTurn);
+        if (retryState && Date.now() < retryState.nextAttemptAtMs) {
+          // Backoff window active for this turn; skip submit attempt this poll cycle
+        } else {
+          const turnReady = await this.isTurnSubmissionReady(state.currentTurn);
+          if (!turnReady) {
+            // Block-aware readiness gate: avoid known TurnTooFast first-attempt waste
+          } else try {
+            await this.playTurn(state);
+            lastProcessedTurn = state.currentTurn; // Only mark done on success
+            this.turnRetryState.delete(state.currentTurn);
+          } catch (err: any) {
+            const errMsg = String(err?.shortMessage ?? err?.message ?? err);
+            const errData = err?.data ?? err?.info?.error?.data ?? '';
+            this.log(JSON.stringify({
+              kind: 'reaction_slo',
+              status: 'abort',
+              battleAddress: this.config.battleAddress,
+              turn: Number(state.currentTurn),
+              t_detect_ms: this.ownedTurnDetectedAtMs.get(state.currentTurn) ?? null,
+              t_send_ms: null,
+              reason: errMsg,
+              reasonData: String(errData ?? ''),
+            }));
+            if (errMsg.includes('TurnTooFast') || errMsg.includes('0xb3c15f40') || String(errData).includes('b3c15f40')) {
+              this.log('  ⏳ Turn too fast — scheduling bounded retry...');
+              this.scheduleRetry(state.currentTurn, 4000);
+            } else if (errMsg.includes('BattleNotActive') || errMsg.includes('0xf2592cf2') || String(errData).includes('f2592cf2')) {
+              this.log('  ⏳ Battle not active yet — scheduling retry...');
+              this.scheduleRetry(state.currentTurn, 4000);
+            } else if (errMsg.includes('reverted') && !errData) {
+              this.log('  ⚠️ Empty revert — scheduling retry...');
+              this.scheduleRetry(state.currentTurn, 4000);
+            } else if (errMsg.includes('TargetWordMissing') || String(errData).includes('72bea98a') ||
+                       errMsg.includes('CandidateNotInNarrative') || String(errData).includes('71b895eb') ||
+                       errMsg.includes('InvalidPoisonWord') || String(errData).includes('3b3a5e43')) {
+              this.log(`  🔄 Narrative rejected (${errMsg.includes('Target') ? 'target word missing' : errMsg.includes('Candidate') ? 'candidate not found' : 'poison word issue'}) — scheduling regenerate retry...`);
+              this.scheduleRetry(state.currentTurn, 2500);
+            } else {
+              this.log(`❌ Turn ${state.currentTurn} failed: ${errMsg} | data=${errData}`);
+              lastProcessedTurn = state.currentTurn; // Skip this turn on other errors
+              this.turnRetryState.delete(state.currentTurn);
+            }
           }
         }
       }
@@ -252,7 +312,56 @@ export class V4Fighter {
         }
       }
 
-      await this.sleep(pollMs);
+      // Fallback readiness evidence (only when not in owned-turn window)
+      const nowPollMs = Date.now();
+      if (this.lastPollAtMs > 0) {
+        const gap = nowPollMs - this.lastPollAtMs;
+        this.maxObservedPollGapMs = Math.max(this.maxObservedPollGapMs, gap);
+        this.observedPollGapsMs.push(gap);
+        if (this.observedPollGapsMs.length > 500) this.observedPollGapsMs.shift();
+      }
+      this.lastPollAtMs = nowPollMs;
+
+      if (!isMyTurn) {
+        const intervalMs = 15 * 60 * 1000;
+        const bucket = Math.floor(this.lastPollAtMs / intervalMs);
+        const dedupeKey = `${this.config.battleAddress}:${snapshot}:${bucket}`;
+        if (this.lastFallbackDedupeKey !== dedupeKey) {
+          this.lastFallbackDedupeKey = dedupeKey;
+          const sorted = [...this.observedPollGapsMs].sort((a, b) => a - b);
+          const p95 = sorted.length ? sorted[Math.floor((sorted.length - 1) * 0.95)] : null;
+          const p99 = sorted.length ? sorted[Math.floor((sorted.length - 1) * 0.99)] : null;
+          this.log(JSON.stringify({
+            kind: 'reaction_slo',
+            sloEvidenceType: 'watcher_readiness_fallback',
+            reason: 'NO_OWNED_TURN_WINDOW',
+            battleAddress: this.config.battleAddress,
+            waitDurationSec: Math.max(0, Math.floor((Date.now() - startTime) / 1000)),
+            latestSnapshot: snapshot,
+            pollingMode: unchangedPolls < 3 ? 'fast' : 'backoff',
+            timeoutChecksActive: true,
+            lastPollAtMs: this.lastPollAtMs,
+            headLagBlocks: null,
+            p95PollGapMs: p95,
+            p99PollGapMs: p99,
+            maxPollGapMs: this.maxObservedPollGapMs,
+          }));
+        }
+      }
+
+      // Adaptive polling with capped exponential backoff + jitter.
+      // Keep timeout checks responsive by reducing delay as battle approaches deadline.
+      const backoffExp = Math.max(0, Math.min(3, unchangedPolls - 2));
+      const baseDelay = unchangedPolls < 3 ? pollMs : Math.min(30_000, pollMs * (2 ** backoffExp));
+
+      const msLeft = deadline - Date.now();
+      const timeoutAwareCap = msLeft < 120_000 ? 8_000 : 30_000;
+      const cappedDelay = Math.min(baseDelay, timeoutAwareCap);
+
+      const jitter = 0.8 + (Math.random() * 0.4); // ±20%
+      const nextDelay = Math.max(1000, Math.floor(cappedDelay * jitter));
+
+      await this.sleep(nextDelay);
     }
 
     // Fighter deadline reached — try to claim timeout before exiting
@@ -337,10 +446,21 @@ export class V4Fighter {
     // Build NCC defense (answer opponent's riddle)
     const nccDefense = createNccDefense(strategyResult.nccGuessIdx ?? 0);
 
-    // Build NCC reveal (reveal our previous commitment)
-    const nccReveal = state.currentTurn >= 2 && this.myPreviousNcc
-      ? createNccReveal(this.myPreviousNcc.salt, this.myPreviousNcc.intendedIdx)
-      : { salt: ethers.ZeroHash as `0x${string}`, intendedIdx: 0 };
+    // Build NCC reveal (reveal our previous commitment) with strict preflight invariants
+    const revealRequired = state.currentTurn >= 2;
+    let nccReveal = { salt: ethers.ZeroHash as `0x${string}`, intendedIdx: 0 };
+    if (revealRequired) {
+      if (!this.myPreviousNcc) {
+        throw new Error('REVEAL_PRECHECK_MISSING_CHECKPOINT');
+      }
+      const expectedSourceTurn = state.currentTurn - 2;
+      if (this.myPreviousNcc.sourceTurn !== expectedSourceTurn) {
+        throw new Error(
+          `REVEAL_PRECHECK_TURN_MISMATCH:${this.myPreviousNcc.sourceTurn}:${expectedSourceTurn}`,
+        );
+      }
+      nccReveal = createNccReveal(this.myPreviousNcc.salt, this.myPreviousNcc.intendedIdx);
+    }
 
     // Build payload
     // Solve VOP challenge
@@ -364,12 +484,90 @@ export class V4Fighter {
       nccReveal,
     };
 
-    // Submit transaction
-    const tx = await this.battle.submitTurn(payload);
-    const receipt = await tx.wait();
+    // Preflight-lock gate: freeze + simulate + hash equality before paid send
+    const lockedPayload = this.deepFreezePayload(payload);
+    const preflight = await this.preflightTurnPayload(lockedPayload, state);
+    const sendHash = this.canonicalPayloadHash(lockedPayload);
+    if (sendHash !== preflight.payloadHash) {
+      const reason = `PREFLIGHT_HASH_MISMATCH:${preflight.payloadHash}:${sendHash}`;
+      this.log(`  🛑 ${reason}`);
+      throw new Error(reason);
+    }
+
+    const now = Date.now();
+    const tokenTtlMs = 30_000;
+    if (now - preflight.createdAtMs > tokenTtlMs) {
+      const reason = `PREFLIGHT_TOKEN_EXPIRED:${now - preflight.createdAtMs}ms`;
+      this.log(`  🛑 ${reason}`);
+      throw new Error(reason);
+    }
+
+    const tSendMs = Date.now();
+
+    // Submit transaction (bounded fallback for transient reveal send failures)
+    let tx: ethers.ContractTransactionResponse;
+    let receipt: ethers.ContractTransactionReceipt;
+    try {
+      tx = await this.battle.submitTurn(lockedPayload);
+      receipt = await tx.wait();
+    } catch (err: any) {
+      const errMsg = String(err?.shortMessage ?? err?.message ?? err);
+      const errData = String(err?.data ?? err?.info?.error?.data ?? '');
+      const canFallback = revealRequired && this.isTransientSendError(errMsg, errData);
+      if (!canFallback) throw err;
+
+      const maxFallbackAttempts = Number(process.env.REVEAL_FALLBACK_MAX_ATTEMPTS ?? 3);
+      let recovered = false;
+      let lastErr: unknown = err;
+
+      this.log(`  ♻️ Reveal send transient failure — bounded fallback (max ${maxFallbackAttempts})...`);
+      for (let attempt = 1; attempt <= maxFallbackAttempts; attempt++) {
+        await this.sleep(1000 + (attempt * 500));
+
+        // Re-check reveal invariants before each fallback send
+        const liveState = await this.getBattleState();
+        const expectedSourceTurn = liveState.currentTurn - 2;
+        if (!this.myPreviousNcc || this.myPreviousNcc.sourceTurn !== expectedSourceTurn) {
+          throw new Error('REVEAL_FALLBACK_ABORT_PRECHECK');
+        }
+
+        try {
+          tx = await this.battle.submitTurn(lockedPayload);
+          receipt = await tx.wait();
+          recovered = true;
+          break;
+        } catch (fallbackErr: any) {
+          const fbMsg = String(fallbackErr?.shortMessage ?? fallbackErr?.message ?? fallbackErr);
+          const fbData = String(fallbackErr?.data ?? fallbackErr?.info?.error?.data ?? '');
+          const stillTransient = this.isTransientSendError(fbMsg, fbData);
+          lastErr = fallbackErr;
+          if (!stillTransient) break;
+        }
+      }
+
+      if (!recovered) throw lastErr;
+    }
+
     this.totalGasUsed += receipt.gasUsed;
 
     this.log(`  ✅ Submitted (gas: ${receipt.gasUsed}, tx: ${receipt.hash.slice(0, 14)}...)`);
+
+    const tDetectMs = this.ownedTurnDetectedAtMs.get(state.currentTurn) ?? null;
+    const tChangeSec = await this.getPreviousTurnChangeTimestampSec(state.currentTurn);
+    const tChangeMs = tChangeSec ? tChangeSec * 1000 : null;
+    this.log(JSON.stringify({
+      kind: 'reaction_slo',
+      status: 'success',
+      battleAddress: this.config.battleAddress,
+      turn: Number(state.currentTurn),
+      txHash: receipt.hash,
+      t_change_sec: tChangeSec,
+      t_detect_ms: tDetectMs,
+      t_send_ms: tSendMs,
+      detection_latency_ms: tChangeMs && tDetectMs ? (tDetectMs - tChangeMs) : null,
+      decision_latency_ms: tDetectMs ? (tSendMs - tDetectMs) : null,
+      reaction_latency_ms: tChangeMs ? (tSendMs - tChangeMs) : null,
+    }));
 
     // Track narrative history for continuity
     this.narrativeHistory.push(strategyResult.narrative);
@@ -382,8 +580,14 @@ export class V4Fighter {
       this.log(`  🃏 Joker used! Remaining: ${this.jokersRemaining}`);
     }
 
-    // Store our NCC salt + intendedIdx for next reveal
-    this.myPreviousNcc = { salt, intendedIdx };
+    // Store NCC checkpoint for next reveal
+    this.myPreviousNcc = {
+      salt,
+      intendedIdx,
+      sourceTurn: state.currentTurn,
+      sourceSequenceHash: state.sequenceHash,
+      createdAtMs: Date.now(),
+    };
     this.saveState();
   }
 
@@ -440,6 +644,43 @@ export class V4Fighter {
       intendedIdx,
     );
     return { nccAttack: fbAttack, salt: fbSalt, intendedIdx: fbIdx as 0 | 1 | 2 | 3 };
+  }
+
+  private async getPreviousTurnChangeTimestampSec(currentTurn: number): Promise<number | null> {
+    if (currentTurn === 0) return null;
+    try {
+      const filter = this.battle.filters.TurnSubmitted();
+      const events = await this.battle.queryFilter(filter, -300);
+      const prevTurn = currentTurn - 1;
+      for (let i = events.length - 1; i >= 0; i--) {
+        const ev = events[i] as ethers.EventLog;
+        const evTurn = Number(ev.args?.[2]);
+        if (evTurn === prevTurn) {
+          const block = await ev.getBlock();
+          return Number(block.timestamp);
+        }
+      }
+    } catch {
+      // best effort
+    }
+    return null;
+  }
+
+  private async isTurnSubmissionReady(currentTurn: number): Promise<boolean> {
+    if (currentTurn === 0) return true;
+
+    const prevTurnChangeSec = await this.getPreviousTurnChangeTimestampSec(currentTurn);
+    if (!prevTurnChangeSec) return true;
+
+    const minReadyMs = Number(process.env.TURN_READY_MIN_MS ?? 3200);
+    const elapsedMs = Date.now() - (prevTurnChangeSec * 1000);
+
+    if (elapsedMs < minReadyMs) {
+      this.log(`  ⏳ Turn ${currentTurn} not ready yet (${elapsedMs}ms < ${minReadyMs}ms) — hold submit`);
+      return false;
+    }
+
+    return true;
   }
 
   private async getOpponentLastNarrative(state: BattleStateV4): Promise<string> {
@@ -501,6 +742,85 @@ export class V4Fighter {
     };
   }
 
+  private canonicalPayloadHash(payload: TurnPayloadV4): `0x${string}` {
+    const stable = this.stableStringify(payload);
+    return ethers.keccak256(ethers.toUtf8Bytes(stable)) as `0x${string}`;
+  }
+
+  private stableStringify(value: unknown): string {
+    if (typeof value === 'bigint') return `{"__bigint__":"${value.toString()}"}`;
+    if (value === null || typeof value !== 'object') return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map(v => this.stableStringify(v)).join(',')}]`;
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj).sort();
+    return `{${keys.map(k => `${JSON.stringify(k)}:${this.stableStringify(obj[k])}`).join(',')}}`;
+  }
+
+  private deepFreezePayload(payload: TurnPayloadV4): TurnPayloadV4 {
+    // Clone to avoid freezing caller-owned objects
+    const cloned = structuredClone(payload) as TurnPayloadV4;
+    const freezeRec = (v: any): any => {
+      if (v && typeof v === 'object' && !Object.isFrozen(v)) {
+        for (const key of Object.keys(v)) freezeRec(v[key]);
+        Object.freeze(v);
+      }
+      return v;
+    };
+    return freezeRec(cloned);
+  }
+
+  private async preflightTurnPayload(payload: TurnPayloadV4, state: BattleStateV4): Promise<PreflightToken> {
+    const snapshotHash = ethers.keccak256(
+      ethers.toUtf8Bytes(`${state.phase}:${state.currentTurn}:${state.sequenceHash}`),
+    ) as `0x${string}`;
+    const payloadHash = this.canonicalPayloadHash(payload);
+
+    // Simulate exact call before paid submission
+    await this.battle.submitTurn.staticCall(payload);
+
+    // Re-check battle snapshot immediately after preflight to detect drift
+    const liveState = await this.getBattleState();
+    const liveSnapshotHash = ethers.keccak256(
+      ethers.toUtf8Bytes(`${liveState.phase}:${liveState.currentTurn}:${liveState.sequenceHash}`),
+    ) as `0x${string}`;
+    if (liveSnapshotHash !== snapshotHash) {
+      const reason = `PREFLIGHT_SNAPSHOT_DRIFT:${snapshotHash}:${liveSnapshotHash}`;
+      this.log(`  🛑 ${reason}`);
+      throw new Error(reason);
+    }
+
+    return {
+      turn: Number(state.currentTurn),
+      payloadHash,
+      snapshotHash,
+      createdAtMs: Date.now(),
+    };
+  }
+
+  private isTransientSendError(errMsg: string, errData: string): boolean {
+    if (errData && errData !== '0x') return false;
+    const msg = errMsg.toLowerCase();
+    if (msg.includes('revert')) return false;
+    return (
+      msg.includes('timeout') ||
+      msg.includes('network') ||
+      msg.includes('nonce') ||
+      msg.includes('underpriced') ||
+      msg.includes('replacement') ||
+      msg.includes('already known') ||
+      msg.includes('could not coalesce')
+    );
+  }
+
+  private scheduleRetry(turn: number, baseDelayMs: number): void {
+    const prev = this.turnRetryState.get(turn) ?? { attempts: 0, nextAttemptAtMs: 0 };
+    const attempts = prev.attempts + 1;
+    const backoff = Math.min(30_000, baseDelayMs * (2 ** Math.min(4, attempts - 1)));
+    const jitter = 0.85 + Math.random() * 0.3;
+    const nextAttemptAtMs = Date.now() + Math.floor(backoff * jitter);
+    this.turnRetryState.set(turn, { attempts, nextAttemptAtMs });
+  }
+
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
@@ -526,8 +846,13 @@ export class V4Fighter {
       const raw = fs.readFileSync(this.config.statePath, 'utf-8');
       const state = JSON.parse(raw);
       if (state.myPreviousNcc) {
-        this.myPreviousNcc = state.myPreviousNcc;
-        this.log('📂 Restored NCC state from checkpoint');
+        const cp = state.myPreviousNcc;
+        if (typeof cp.sourceTurn === 'number') {
+          this.myPreviousNcc = cp;
+          this.log('📂 Restored NCC state from checkpoint');
+        } else {
+          this.log('📂 Ignoring legacy NCC checkpoint without sourceTurn metadata');
+        }
       }
       if (state.totalGasUsed) {
         this.totalGasUsed = BigInt(state.totalGasUsed);

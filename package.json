@@ -18,10 +18,21 @@
     "battle": "bun ./scripts/full-battle.ts",
     "battle:settle": "bun ./scripts/settle.ts",
     "battle:demo": "bun ./scripts/demo-battle.ts",
-    "battle:ai": "bun ./scripts/ai-battle.ts"
+    "battle:ai": "bun ./scripts/ai-battle.ts",
+    "check:turn-payload": "bash ./scripts/check-turn-payloads.sh",
+    "metrics:resulttype-baseline": "bun ./scripts/resulttype-baseline.ts",
+    "model:collusion-matrix-scaffold": "bun ./scripts/collusion-matrix-scaffold.ts",
+    "model:degraded-policy-sweep-scaffold": "bun ./scripts/degraded-policy-sweep-scaffold.ts",
+    "model:robust-overlap-scaffold": "bun ./scripts/robust-overlap-scaffold.ts",
+    "incur:clawttack": "bun ./scripts/clawttack-incur.ts",
+    "submission:handoff-check": "bun ./scripts/validate-submission-handoff.ts",
+    "model:threshold-check": "bun ./scripts/check-model-thresholds.ts",
+    "model:policy-parity-check": "bun ./scripts/check-policy-version-parity.ts"
   },
   "dependencies": {
     "@vercel/og": "^0.9.0",
-    "@waku/sdk": "0.0.37-b7eabf5.0"
+    "@waku/sdk": "0.0.37-b7eabf5.0",
+    "ethers": "^6.16.0",
+    "incur": "^0.2.0"
   }
 }

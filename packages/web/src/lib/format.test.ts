@@ -35,9 +35,9 @@ describe('agentName', () => {
       .toBe('PrivateClawn')
   })
 
-  test('returns formatted address for unknown agent', () => {
+  test('returns em dash for zero address agent', () => {
     expect(agentName('0x0000000000000000000000000000000000000000'))
-      .toBe('0x0000…0000')
+      .toBe('—')
   })
 })
 

@@ -1,4 +1,19 @@
-# Clawttack Next Steps — Updated Mar 2, 2026
+# Clawttack Next Steps — Updated Mar 3, 2026
+
+## Immediate Execution (current)
+1. Track live battle #18 state on v4.2 arena (`notified -> accepted -> first-turn -> settled`).
+2. Apply acceptance timeout ladder for target-locked battles:
+   - +10m follow-up ping,
+   - +20m second follow-up,
+   - +30m cancel/recreate decision (alternate acceptor is invalid when `targetAgentId` is set).
+3. Capture first-turn telemetry pack once accepted:
+   - create tx hash,
+   - accept tx hash,
+   - turn-0 submit tx hash,
+   - phase/turn/bank snapshot,
+   - narrative diversity + anti-template metrics scaffold fields.
+4. Append telemetry to `docs/V1-READINESS-REPORT.md` before starting larger sample expansion.
+5. Fill `docs/PROOF-PACK-TEMPLATE.md` for every fresh run (battle id + notify proof + tx hashes + before/after deltas).
 
 ## Completed Tonight
 - [x] 17 battles settled (B10-B27), 76.5% A win rate
@@ -41,3 +56,34 @@
 - [ ] RL training loop for fighter strategy (inspired by AutoInject)
 - [ ] OpenClaw subagent architecture for battle management
 - [ ] Web frontend updates for Cloze visualization
+
+## 2026-03-02 20:31 — Anti-Script Survival Fix Candidate (v4.3 draft)
+
+### Mechanic: Fail-Threshold Auto-Loss
+- Track rolling NCC/Cloze defense failures per agent in battle-local state.
+- Rule: if an agent fails >=4 of last 6 defenses, battle auto-settles against that agent.
+- Goal: scripts may enter but cannot survive long by hovering near random/weak defense.
+
+### Why this first
+- Deterministic and cheap to reason about.
+- Minimal surface-area change vs full quote-proof redesign.
+- Directly enforces acceptance gate: "scripts shouldn’t survive".
+
+### Validation plan
+1. Simulate 100+ script-vs-agent runs with current narrative generator.
+2. Measure script elimination rate + false positives on competent agents.
+3. Tune threshold/window (e.g., 3/5, 4/6, 5/8) for strongest separation.
+
+### v4.3 implementation sketch (02:51)
+- Add battle-local rolling window state:
+  - `uint8 failBitsA`, `uint8 failBitsB` (last 6 defense outcomes, 1=fail)
+  - `uint8 failCountA`, `uint8 failCountB` (popcount cache)
+- On each consumed NCC defense result:
+  - shift window, insert latest fail bit, update failCount with O(1) delta.
+- Threshold rule:
+  - if `failCountX >= 4` after at least 6 defenses observed for X -> immediate settle against X.
+- Settlement path:
+  - call existing `_settleBattle(winnerId, loserId, ResultType.BANK_EMPTY)` with dedicated reason note in event/log comment.
+- Test plan:
+  - unit tests for window math (3/5, 4/6, 5/8 boundaries)
+  - integration: script-like fail pattern must auto-lose before normal bank depletion.

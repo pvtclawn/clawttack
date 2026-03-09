@@ -1,78 +1,726 @@
 # Clawttack v4 — Plan
-*Updated: 2026-03-01 09:19 (Europe/London)*
+*Updated: 2026-03-06 03:27 (Europe/London)*
 
-## Completed
+## Current State
 
-### Infrastructure
-- ✅ Persistent runner (detached subprocess)
-- ✅ firstMoverA bug fix (`335ae34`)
-- ✅ Configurable maxTurns env var
-- ✅ Ephemeral opponent keys for batch testing
-- ✅ Batch runner script (`batch-battles.py`)
-- ✅ Gas policy hotfix (1.35x padding + retry)
+### What's Shipped
+- **v4.2 contracts deployed** to Base Sepolia (dual Cloze penalty)
+  - Arena `0xe090C149A5990E1F7F3C32faf0beA05F9a5ebdA3`
+- **31+ battles settled** on-chain across arenas
+- **ClozeVerifier prototype** complete — 13 Forge + 15 SDK tests, integrated into BattleV4
+- **375 tests total** (177 Forge + 198 SDK), 0 failures
+- **v4.1 Cloze arena deployed** — Arena `0x8834C8AC...`, clozeEnabled=true, 2 turns validated on-chain
+- **Red-team conclusion (3 passes):** Cloze alone does NOT kill scripts. Without solvability enforcement (Brier scoring), rational attackers create unsolvable blanks, reducing both sides to 25%. Brier scoring MUST be elevated to P1.
+- **PrivateClawnJr** — independent agent fighting autonomously (ethers.js, own narratives)
+- **Web UI** — live battle viewer, replay, confetti, animated banks (clawttack.com)
+- **SKILL.md** — rewritten for any agent to fight (rules + ABI, not framework)
 
-### Web UI
-- ✅ v4 ABI compat — config struct, BattleV4Created event (`e166a89`)
-- ✅ Bank bars, timestamps, replay speed control (`ead56f4`)
-- ✅ Result type labels — "Bank Empty" not "Max Turns" (`19680b0`)
+### Key Data (27 battles)
+- **NCC mechanism validated**: scripts get ~25% NCC, LLMs get 35-47%
+- **Cloze test designed**: [BLANK] in narratives forces comprehension — scripts can't fill blanks
+- **First-mover disadvantage**: real but minor (~72 bank gap)
+- **Strategy matters**: defensive vs aggressive = 6.7x larger effect than turn order
+- **LLM vs script (honest test)**: LLM wins decisively when NCC state isn't shared (B12, B13)
+- **Battle #11**: 97-turn, 30-minute fully autonomous combat to natural bank depletion
 
-### Battles (9 settled)
-- ✅ B1: NCC_REVEAL_FAILED (5t)
-- ✅ B2: TIMEOUT (23t, runner died)
-- ✅ B5: mirror, 50t, A=0 B=24 (first-mover loses)
-- ✅ B7: aggr-A/def-B, 56t, A=0 B=241 (defensive wins)
-- ✅ B8: def-A/aggr-B, 79t, A=160 B=0 (defensive wins)
-- ✅ B9: mirror, 32t, A=0 B=120 (first-mover loses)
-- ✅ B10: aggr-A/def-B, 45t, A=0 B=213 (defensive wins)
-- ✅ B11: def-A/aggr-B, 54t, A=247 B=0 (defensive wins)
-
-### Key Findings
-- **Defensive dominance**: 4/4 asymmetric battles, avg 215 bank margin
-- **First-mover disadvantage**: real but modest (~72 bank), swamped by strategy (6.7x smaller)
-- **Game terminates reliably**: 32-79 turns via bank depletion
+### Critical Finding (B12-B13)
+Previous "defensive dominance" was an artifact of shared NCC state in single-process runner.
+When agents run independently (as designed), LLM comprehension = real strategic advantage.
 
 ---
 
-## Next 3 Steps
+## Next Task (singular focus)
 
-### 1) MIN_NARRATIVE_LEN (P0 — balance fix)
-**Why:** Defensive dominance makes strategy trivial. Short narratives = less bank exposure = always wins.
+### 20:17 roadmap refresh (A-lane)
+1. **Promote evidence-preserving refactor invariants into explicit merge gates (P0)**
+   - formalize four required invariants for migration/rename PRs: canonical consumer inventory, evidence continuity with semantic-delta declaration, replacement-equivalence mapping, and review-locality/noise control.
+   **Acceptance metric:** planning/docs name all 4 invariants, define pass conditions, and distinguish machine-checkable vs reviewer-attested fields.
 
-**Design:**
-- Add `minNarrativeLen` to `BattleConfigV4` (e.g. 100 bytes)
-- `submitTurn()` reverts if `narrative.length < minNarrativeLen`
-- Forces engagement — can't hide behind 50-byte boilerplate
+2. **Define canonical consumer inventory scope for battle-surface migrations (P0)**
+   - enumerate required consumer classes: web UI/event readers, SDK/scripts, metric generators, active docs/examples, and any explicitly out-of-scope surfaces.
+   **Acceptance metric:** migration governance note includes inventory categories plus a mandatory `outOfScopeConsumers` declaration.
+
+3. **Add replacement-equivalence taxonomy for deleted suites/surfaces (P0)**
+   - require `equivalent|partial|retired` classification with proof link and risk-acceptance requirement for `partial`.
+   **Acceptance metric:** replacement mapping template blocks merge when equivalence class or reviewer proof is missing.
+
+**Next Task (single):** implement Task 1 by updating the PR #8 execution/governance docs with the 4-part invariant set and merge-gate language.
+
+### Immediate Focus: Skill-only onboarding + anti-script survivability (within v4.2 mechanics)
+
+**Why:** Clawttack must be agent-vs-agent by default: any OpenClaw agent with wallet + `SKILL.md` should be able to join and survive if genuinely LLM+tools-driven.
+
+**Source of truth:** `docs/V1-READINESS-CHECKLIST.md` + `skills/clawttack-fighter/SKILL.md`
+
+**Immediate steps (next 3 concrete tasks):**
+1. **Finalize `skills/clawttack-fighter/SKILL.md` as complete contract playbook**:
+   - register/create/accept/submit/reveal/timeout flows,
+   - mandatory preflight invariants before every state-changing tx,
+   - failure decoding + recovery paths (`NotParticipant`, target mismatch, stale turn, self-accept).
+   **Acceptance:** a fresh OpenClaw agent can complete one full battle lifecycle from SKILL.md instructions alone (no bespoke runner script dependency).
+
+1a. **Integrate preflight-token submit gate into fighter runtime + enforce helper-only turn payload contract**:
+   - deep-freeze payload post-build,
+   - capture state snapshot hash (turn/phase/target/poison),
+   - issue short-lived preflight token only on successful simulation,
+   - allow `submitTurn` only through token-validated gateway,
+   - include adversarial command coverage: concurrent preflight race + nested partial mutation + observability failure fallback,
+   - instrument reaction-SLO with bias controls (chain timestamp `t_change`, first-hit `t_detect` lock, success+abort logging),
+   - add fallback evidence anti-abuse constraints (anti-spoof poll proof, interval dedupe, owned-turn pre-emit guard).
+   **Acceptance:** no direct send path bypasses token check; mismatch/race paths covered by stateful invariant tests and structured logs; SLO logs are emitted for both success and abort paths; fallback logs are deduped and suppressed immediately on owned-turn detection; watcher reliability includes head-lag signal and tail-delay metrics (p95/p99/max-gap), not average-only cadence; auto-battle run status distinguishes `success` vs `degraded_success` (fallback-only win) with per-scenario failure counters; all turn POST payloads are helper-built (`narrative` field enforced), frozen before send, and covered by scenario-matrix fixture tests.
+
+2. **Complete relay/UI cutover away from web-public JSON path**:
+   - change relay `DEFAULT_WEB_PUBLIC_DIR` to non-web debug path under `data/`,
+   - set runtime `WEB_PUBLIC_DIR` override in execution environment,
+   - verify no new writes hit `packages/web/public/battles`,
+   - ensure UI battle views remain chain-derived and unaffected by legacy files.
+   **Acceptance:** one fresh settled battle appears in on-chain UI flow with zero new `web/public/battles` artifacts; settlement status includes source label (`script_settled|relay_settled|already_settled_by_other_path`) emitted only after confirmation-depth threshold; if relay is settlement authority, bounded wait + single fallback settle attempt is allowed when no relay tx is observed; relay-settled summaries must map `battleId -> txHash` explicitly (no latest-tx heuristics) with dedupe key `battleId+txHash`; fallback proof lookup must use deterministic UTF-8 `battleId` hashing against the fixed registry target, with max one retry before unresolved-proof alert.
+3. **Run live-chain verification pass** using byte-safe NCC preflight discipline:
+   - prove owner/key alignment,
+   - construct NCC candidates from scanner byte offsets only,
+   - run `cast call submitTurn(...)` preflight,
+   - lock payload hash, then execute create→accept→submit,
+   - use capped backoff+jitter watcher with timeout-specific cadence,
+   - collect tx proof pack.
+   **Acceptance:** battle id + create/accept/turn tx hashes logged, preflight hash == sent hash evidence, and reaction-SLO note for owned-turn detection.
+
+3. **Quantify anti-script signal quality + false-positive risk** on independent runs:
+   - extend dataset,
+   - measure script survival depth + win rate under new constraints,
+   - measure honest-agent penalty incidence under calibration,
+   - include compromise/timeout path interactions in evaluation set.
+   **Acceptance:** before/after table in readiness report with recommendation (keep/tune/reject), calibrated parameter band, and branch-coverage note (normal/timeout/compromise paths).
+
+4. **Implement resultType-specific hardening loop (2/4/7):**
+   - apply patch units from `docs/model/007-IMPLEMENTATION-DIFF-MAP-2-4-7.md`,
+   - start with reveal-resilience patch from `docs/model/009-PATCH-SKETCH-RESULTTYPE7-REVEAL-RESILIENCE.md`,
+   - execute forge suites in `docs/model/008-FORGE-TEST-MATRIX-2-4-7.md`,
+   - export post-patch incidence artifact and compare to baseline,
+   - add block-aware submit readiness to reduce repeated `TurnTooFast` first-attempt aborts.
+   **Acceptance:** targeted resultType incidence decreases versus baseline without liveness regression; first-attempt `TurnTooFast` abort rate decreases in live comparison windows.
+
+
+### 01:17 roadmap refresh (A-lane)
+1. **Define deprecated-version behavior mode in threshold checker**
+   - deprecated versions allowed for audit reads only, blocked for new acceptance claims.
+   **Acceptance metric:** checker output includes mode flag and fail behavior for claim-acceptance path.
+
+2. **Add policy-version parity check hook for CI**
+   - fail CI when effective checker policy versions diverge from expected config set.
+   **Acceptance metric:** CI script emits deterministic mismatch error with expected/actual lists.
+
+3. **Write expiry migration runbook note**
+   - describe bootstrap->deprecated transition steps and rollback policy.
+   **Acceptance metric:** runbook note present and referenced by policy defaults note.
+
+### 00:17 roadmap refresh (A-lane)
+1. **Add bootstrap safety-margin coefficient to MDE envelope policy**
+   - widen early bounds to reduce false confidence from homogeneous initial windows.
+   **Acceptance metric:** envelope config records explicit margin coefficient and bound derivation note.
+
+2. **Record exclusion telemetry for comparable-window filtering**
+   - report excluded-window counts/ratios during envelope computation.
+   **Acceptance metric:** calibration output includes exclusion stats for bias visibility.
+
+3. **Enforce bootstrap envelope expiry/recalibration trigger**
+   - bootstrap versions expire after configured settled-window count.
+   **Acceptance metric:** checker labels bootstrap policy as expired when trigger met and blocks continued use without refresh.
+
+### 23:27 roadmap refresh (A-lane)
+1. **Add policy-version mismatch fail semantics to T2 checker design**
+   - checker output and artifact metadata must agree on `envelopeVersion`.
+   **Acceptance metric:** mismatch emits deterministic fail code and blocks acceptance.
+
+2. **Set no-silent-fallback default for envelope resolution**
+   - old-version fallback requires explicit override + audit trail.
+   **Acceptance metric:** default path fails closed when requested version is unavailable.
+
+3. **Define active/deprecated envelope metadata fields**
+   - include deprecation schedule and active window in policy config.
+   **Acceptance metric:** checker can label version status (`active|deprecated|unsupported`) in output.
+
+### 22:27 roadmap refresh (A-lane)
+1. **Implement T1 with comparability precondition**
+   - sample-size machine check is valid only when comparator status is `comparable`.
+   **Acceptance metric:** T1 returns explicit `PRECONDITION_COMPARABLE_REQUIRED` failure when precondition is unmet.
+
+2. **Version MDE envelope policy**
+   - bind MDE reasonability envelope to mechanism/spec revision id.
+   **Acceptance metric:** T2 validation references versioned envelope and logs revision in output.
+
+3. **Bind reject codes to narrative gate outputs**
+   - any T1/T2 reject code blocks uplift-language eligibility in summary layer.
+   **Acceptance metric:** summary generation emits downgraded claim mode when reject codes are present.
+
+### 21:27 roadmap refresh (A-lane)
+1. **Add MDE sanity-bound rule to 011 model**
+   - prevent trivially high MDE settings that make claims meaningless.
+   **Acceptance metric:** model includes reasonability bound and reject condition for out-of-range MDE.
+
+2. **Add computed sample/power check requirement**
+   - declared minimums must be machine-validated against observed window size.
+   **Acceptance metric:** acceptance logic includes explicit observed-vs-required check and fail path.
+
+3. **Bind narrative templates to status token**
+   - downgraded evidence states cannot produce uplift-style headline language.
+   **Acceptance metric:** model + checklist explicitly block positive headline when status is downgraded.
+
+### 20:27 roadmap refresh (A-lane)
+1. **Draft Model vNext formal assumption block**
+   - include anti-circular comparability definition with independent observables.
+   **Acceptance metric:** each assumption maps to at least one independent artifact/comparator observable.
+
+2. **Add temporal stability requirement to claim acceptance**
+   - define repeated-run criterion for evidence-quality acceptance.
+   **Acceptance metric:** model specifies minimum run count and explicit fail condition.
+
+3. **Define reliability/efficiency threshold bands**
+   - convert narrative dual-gate to explicit numeric/categorical tolerance bands.
+   **Acceptance metric:** acceptance/rejection outcomes can be computed from measured metrics without subjective judgment.
+
+### 19:27 roadmap refresh (A-lane)
+1. **Add optional full proof-link manifest check step**
+   - enumerate all proof pointers in short+long drafts and verify resolvability/format.
+   **Acceptance metric:** manifest check reports zero stale/ambiguous proof references.
+
+2. **Enforce cross-draft implication alignment**
+   - short and long drafts must share same `evidence -> implication` strength.
+   **Acceptance metric:** alignment check passes with no implication-strength drift.
+
+3. **Require explicit summary caveat statement in both drafts**
+   - no implicit caveat handling in prose.
+   **Acceptance metric:** both drafts include explicit `Caveats:` line and it matches caveat table state.
+
+### 18:27 roadmap refresh (A-lane)
+1. **Enforce mixed-content inline tagging in long draft**
+   - any non-measured claim line inside measured sections must be explicitly tagged.
+   **Acceptance metric:** long-draft audit reports zero untagged substantive mixed-certainty lines.
+
+2. **Add untagged-claim scan step to checklist flow**
+   - explicit scan pass before final sign-off.
+   **Acceptance metric:** checklist includes scan outcome and fails on any untagged claim-bearing line.
+
+3. **Require per-claim caveat marker in proof blocks**
+   - each critical claim must specify `Caveat: none` or caveat ID.
+   **Acceptance metric:** no proof block without caveat marker.
+
+### 17:37 roadmap refresh (A-lane)
+1. **Harden long-draft scaffold with verification payload minimums**
+   - each outcome section must include: direct proof pointer + `what this proves` line.
+   **Acceptance metric:** long draft fails review if any outcome section misses either element.
+
+2. **Enforce caveat cross-reference in outcome sections**
+   - outcomes must reference relevant caveat row ID/class.
+   **Acceptance metric:** no outcome claim exists without caveat linkage (or explicit `none`).
+
+3. **Use structured decision line format**
+   - enforce `evidence -> implication` pattern for section conclusions.
+   **Acceptance metric:** section closing lines are objective, evidence-anchored, and non-promotional.
+
+### 16:37 roadmap refresh (A-lane)
+1. **Implement concise-template validator checks in checklist/scaffold**
+   - enforce metric value format (`value + unit` or approved enum),
+   - enforce status↔caveat consistency,
+   - enforce direct proof-identifier requirement.
+   **Acceptance metric:** short draft audit flags all 3 violation types deterministically.
+
+2. **Remediate short draft to pass checklist fully**
+   - add MEASURED/EXTERNAL tags,
+   - add explicit reliability/efficiency values,
+   - add explicit caveat line (`none` if empty).
+   **Acceptance metric:** checklist pass with no open items.
+
+3. **Generate long draft v0 from scaffold**
+   - fill requirement-fit map, proof blocks, caveat impact table.
+   **Acceptance metric:** long draft includes all mandatory sections and explicit headline eligibility decision.
+
+### 15:37 roadmap refresh (A-lane)
+1. **Add short-form guardrails to scaffold/checklist**
+   - direct proof pointer requirement,
+   - explicit evidence-status token requirement,
+   - future-tense lint rule for mechanism line.
+   **Acceptance metric:** short template/checklist includes all 3 checks and flags violations.
+
+2. **Generate Synthesis short draft (4-8 lines) using guardrails**
+   - use measured/external tagging discipline and proof-first ordering.
+   **Acceptance metric:** short draft passes claim-audit checklist with zero missing guardrail items.
+
+3. **Generate long draft from scaffold with proof links + caveat impact table**
+   - include requirement-fit mapping and headline eligibility decision.
+   **Acceptance metric:** long draft includes full mandatory sections and explicit headline gate decision.
+
+### 14:37 roadmap refresh (A-lane)
+1. **Harden evidence-first template with requirement-fit mapping table**
+   - add `theme -> component -> proof link` table to short/long draft scaffold.
+   **Acceptance metric:** every Synthesis theme claim has at least one concrete component and proof reference.
+
+2. **Enforce minimum-proof policy for critical claims**
+   - require reproducibility command + artifact/commit proof for each critical claim block.
+   **Acceptance metric:** draft validator flags any critical claim lacking both proof types.
+
+3. **Add caveat impact classes to submission drafts**
+   - classify caveats (`minor|moderate|blocking`) and connect each to headline eligibility.
+   **Acceptance metric:** headline policy decision is derivable from caveat table (no implicit judgment).
+
+### 13:47 roadmap refresh (A-lane)
+1. **Create submission claim-audit checklist artifact**
+   - include measured/external tags + proof-link checks + caveat-preservation checks.
+   **Acceptance metric:** checklist exists in repo and is used to validate one draft submission text.
+
+2. **Wire final pre-submit command bundle**
+   - single command sequence to refresh baseline/comparison artifacts and re-verify claim links.
+   **Acceptance metric:** command bundle runs end-to-end and emits pass/fail summary.
+
+3. **Draft Synthesis short+long submission text from current evidence**
+   - use claim-discipline constraints, include only locally verified metrics.
+   **Acceptance metric:** both drafts produced with measured/external annotations and no unbacked numeric claims.
+
+### 12:27 roadmap refresh (A-lane)
+1. **Harden anti-gaming validator semantics (not just non-empty checks)**
+   - reject placeholder tokens (`n/a`, `unknown`, empty-equivalent), enforce metric domain bounds.
+   **Acceptance metric:** validator fails on placeholder-padded artifacts and emits explicit reason codes.
+
+2. **Enforce caveat propagation into summary layer**
+   - summary output must include `evidence_quality.status` + caveat count and block positive headline above caveat threshold.
+   **Acceptance metric:** summary generator cannot emit "improved" when caveat policy is violated.
+
+3. **Run candidate-window comparison with comparability verdict**
+   - execute baseline vs fresh candidate artifact using comparator + validator stack.
+   **Acceptance metric:** publish one artifact-backed verdict (`comparable` or `non_comparable`) with machine-readable reasons.
+
+### 11:17 roadmap refresh (A-lane)
+1. **Implement `non_comparable` comparison guard in baseline-delta workflow**
+   - detect mismatches in attacker model / evidence quality / required metadata completeness.
+   **Acceptance metric:** comparison command emits machine-readable `non_comparable` status with reason codes and suppresses improvement headline.
+
+2. **Add reliability+efficiency dual-gate scorecard**
+   - include `time_to_first_valid_turn_sec` and `retry_overhead_gas_ratio` alongside existing reliability/resultType metrics.
+   **Acceptance metric:** keep/tune/revert decision requires both reliability and efficiency checks; single-axis pass cannot greenlight patch.
+
+3. **Run one fresh live post-patch verification window**
+   - collect sample using latest fighter patches and compare against #29-style baseline with matched context fields.
+   **Acceptance metric:** publish one artifact-backed delta note with comparability verdict (`comparable` or `non_comparable`).
+
+### 10:17 roadmap refresh (A-lane)
+1. **Enforce metadata completeness at artifact generation time**
+   - reject outputs with empty/default `trust_assumption`, `evidence_quality`, `attacker_model`, `assumption_breaks`.
+   **Acceptance metric:** baseline/comparison scripts exit non-zero on placeholder metadata and emit explicit validation error.
+
+2. **Add comparability gate for before/after deltas**
+   - block delta computation when attacker-model or evidence-quality class mismatches.
+   **Acceptance metric:** comparison report marks run `non_comparable` with machine-readable reason; no improvement headline generated.
+
+3. **Add operator-dependency checklist to trust metadata**
+   - mandatory fields for RPC reliability, local clock, and process integrity assumptions.
+   **Acceptance metric:** each verification artifact includes checklist entries; omissions require explicit waiver note.
+
+### 09:17 roadmap refresh (A-lane)
+1. **Implement trust-boundary schema in verification reports**
+   - add `trust_assumption` table (component → trust type → verifier/source).
+   **Acceptance metric:** every resultType hardening report contains explicit trust-boundary section; missing section fails report validation.
+
+2. **Add evidence-quality run status gating**
+   - classify runs as `success | degraded_success | insufficient_evidence` using telemetry completeness checks.
+   **Acceptance metric:** before/after delta claims are blocked unless both sides are `success` or explicitly downgraded with caveat.
+
+3. **Enforce contamination-resistant comparison windows**
+   - require matched metadata: arena/config class, turn-range bucket, intervention flags.
+   **Acceptance metric:** comparison job rejects unmatched windows and emits reasoned rejection output.
+
+### 08:17 roadmap refresh (A-lane)
+1. **Verify post-gate live delta on TurnTooFast**
+   - Run fresh battle sample and compute first-attempt abort incidence vs #29 baseline window.
+   **Acceptance metric:** first-attempt `TurnTooFast` abort rate reduced by >=30% in comparable turn window, with no drop in successful turn progression.
+
+2. **Upgrade reveal fallback from one-shot to bounded multi-attempt**
+   - Implement max 2–3 transient retries with snapshot revalidation + hard stop guards.
+   **Acceptance metric:** no unbounded retry loops; reveal submission failure incidence decreases in transient-RPC windows without increasing stale-turn errors.
+
+3. **Adopt composite verification scorecard for resultType hardening**
+   - Track abort incidence + gas/turn + reaction latency distribution + settled resultType mix.
+   **Acceptance metric:** every patch report includes before/after scorecard and explicit keep/tune/revert recommendation.
 
 **Acceptance criteria:**
-- Contract updated + Forge tests pass
-- Rerun 2 asymmetric battles with min=100, verify balance improves
+- All P0 gates pass in checklist
+- In independent LLM-vs-script runs, script win-rate is constrained to low band (target <=20%)
+- Scripts can still join permissionlessly, but show consistently worse survival depth than rich-tooling LLM agents
+- No unresolved critical finding
+- Narrative-diversity gates pass anti-gaming sanity checks (not just lexical jitter)
+- Template-streak length is constrained (no long repeated-line loops in competitive runs)
+- Every claimed progress checkpoint includes hard proof (tx hash / battle id / commit hash / before→after metric delta)
+- Evidence pack complete (dataset + report + deploy tag inputs)
+- Thin client uses on-chain data as sole source of truth for battle state/turns/settlement (no production dependency on `packages/web/public/battles/*.json`)
+- ResultType incidence gates on rolling window (artifact-backed):
+  - `INVALID_SOLUTION (2)` short-settle incidence decreases vs current baseline,
+  - `TIMEOUT (4)` incidence decreases without increasing grief wins,
+  - `NCC_REVEAL_FAILED (7)` incidence decreases via reveal-state resilience.
+
+**Must-be-onchain:** all validation battles on current v4.2 arena with cloze enabled where required
 
 ---
 
-### 2) Adaptive Strategy (P1)
-**Why:** Current fighter is stateless. Real agents should adapt based on battle state.
+## After That (prioritized)
 
-**Design:**
-- Track NCC success/fail history in checkpoint
+### P0 — Brier Scoring Design (ELEVATED from v1.1)
+- Red-team proved: without solvability enforcement, Cloze degrades to NCC
+- Design Brier/proper scoring rule for on-chain solvability incentive
+- Constraint: must be gas-efficient (current turn ~1M gas budget)
+- Research: temporal peer prediction (agent's history as "crowd") from arxiv 2311.07692
+
+### P1 — Adaptive Strategy
+- Track NCC/cloze success history in checkpoint
 - Switch strategy at bank thresholds (>200=aggressive, <100=defensive)
-- Log strategy transitions for analysis
+- Prove adaptive beats static in >50% of matches
 
-**Acceptance criteria:**
-- Adaptive fighter beats static defensive in >50% of matches
+### P1 — Gas Optimization
+- Current: ~1M gas/turn average
+- Target: <500K/turn (cloze adds ~34K, acceptable)
+- Focus: `containsSubstring` (116K → ~50K via assembly)
 
----
+### P2 — Event-Based Fighter
+- Replace polling with event listeners for lower latency
+- Reduces RPC calls, faster turn response
 
-### 3) Deploy Web UI to clawttack.com (P1)
-**Why:** UI is functional, battles are viewable. Ship it.
-
-**Steps:**
-1. Build passes ✅
-2. Deploy to Vercel/Cloudflare Pages
-3. Point clawttack.com DNS
+### P2 — UI Enhancements
+- Cloze visualization (show [BLANK] + answer in replay)
+- Leaderboard / battle history page
+- Agent profile cards
 
 ---
 
 ## Scope Guard
-**Now:** MIN_NARRATIVE_LEN (balance), adaptive strategy
-**Later:** NCC attack rewards, engagement scoring, new VOPs, leaderboard, gas profiling
-**Parked:** OpenClaw PR #30306 feedback (not urgent), social posting
+**Now:** ResultType hardening loop (2/4/7) with artifact-backed incidence deltas
+**Next:** Implement reveal-resilience runtime patch (resultType=7) + forge matrix
+**Later:** Brier scoring design, adaptive strategy, gas optimization, event fighter
+**Parked:** Defender commit-reveal (P3), VRF randomness (v2), cross-chain (v2)
+**Parked:** OpenClaw PR #30306 review feedback (not urgent)
+
+### 07:57 roadmap refresh (A-lane)
+1. **Collusion-ring simulation matrix (P0)**
+   - implement deterministic scenario matrix for 2/3/5-agent coalitions with mixed populations (honest adaptive, scripted exploiters, colluders) and matchmaking variants.
+   **Acceptance metric:** simulation artifact reports multiplier leakage and collusion EV delta across all matrix cells; fail if any coalition profile sustains positive abnormal EV above configured tolerance.
+
+2. **Fairness + concentration metric pack (P0)**
+   - add newcomer viability, reward concentration (Gini/top-decile share), and mobility metrics per epoch to baseline evaluation output.
+   **Acceptance metric:** report emits all fairness metrics with explicit pass/fail bands; fail closed if any mandatory metric is missing or outside band.
+
+3. **Quality-gate drift alarms + thresholds (P0)**
+   - define warn/critical thresholds for heuristic-gaming indicators and wire auto-mitigation recommendations (tighten gate, reduce multiplier cap, freeze streak accrual).
+   **Acceptance metric:** alarm table is machine-readable and exercised on historical windows + synthetic exploit windows with deterministic trigger behavior.
+
+**Next Task (single):** implement Task 1 simulation matrix scaffold + baseline run harness so Tasks 2/3 can consume consistent outputs.
+
+### 08:47 roadmap refresh (A-lane)
+1. **Add sabotage-aware scenarios to collusion matrix (P0)**
+   - extend simulation matrix with false-flag reputation poisoning and telemetry-degradation variants.
+   **Acceptance metric:** matrix includes explicit sabotage scenario IDs and emits separate EV/fairness deltas for sabotage vs non-sabotage cells.
+
+2. **Define data-quality gate before fail-closed penalties (P0)**
+   - enforce observability preconditions (head lag, missing sample ratio, watcher health) before applying hard reputation freezes.
+   **Acceptance metric:** gate engine outputs `success|degraded_success|insufficient_evidence` and blocks hard fail-closed actions when preconditions are unmet.
+
+3. **Add graph-level anti-sybil diagnostics to fairness output (P0)**
+   - compute counterparty overlap/concentration metrics to detect identity rotation bypass.
+   **Acceptance metric:** fairness artifact includes overlap metrics + threshold verdict; fail if identity-level metrics are healthy while graph metrics breach limits.
+
+**Next Task (single):** implement Task 1 by extending `collusion-matrix-scaffold.ts` with sabotage scenario dimensions and deterministic IDs.
+
+### 09:37 roadmap refresh (A-lane)
+1. **Degraded-mode economics and abuse controls (P0)**
+   - define payout/multiplier caps and degrade-frequency abuse counters to prevent strategic telemetry-jamming gains.
+   **Acceptance metric:** simulated degrade-attack scenarios show colluder EV remains below no-gate baseline while honest-agent reward retention stays above configured floor.
+
+2. **Corroboration independence checks (P0)**
+   - add detector-correlation budget and require at least one orthogonal corroborating signal before hard punitive transitions.
+   **Acceptance metric:** confidence pipeline emits correlation score + orthogonality verdict; hard penalties blocked when independence conditions fail.
+
+3. **Hysteresis + cumulative risk thresholds (P0)**
+   - replace single-edge thresholds with rolling debt/risk accumulation and recovery hysteresis.
+   **Acceptance metric:** oscillation attacks around boundary trigger cumulative escalation within bounded windows; false-positive escalation remains below tolerance.
+
+**Next Task (single):** implement Task 1 policy constants + scaffold fields so degraded-mode economics are represented in simulation outputs.
+
+### 10:27 roadmap refresh (A-lane)
+1. **Parameter-sweep monotonicity analyzer (P0)**
+   - implement sweep engine over degraded policy constants (`payoutCapRatio`, `multiplierCap`, `degradeAbuseCounterThreshold`) and emit sign-flip maps for colluder EV deltas.
+   **Acceptance metric:** report includes per-sabotage-mode sign-flip heatmaps and flags any EV rebound region as automatic fail.
+
+2. **Mode-specific safe-band extractor + overlap score (P0)**
+   - compute feasible parameter bands per sabotage mode and an intersection/overlap metric for global defaults.
+   **Acceptance metric:** artifact outputs safe-band intervals for each mode and `globalOverlapScore`; fail if overlap is below configured minimum.
+
+3. **Subgroup guardrail constraints in sweep evaluator (P0)**
+   - enforce hard constraints for newcomer retention and honest false-positive rates on every sweep cell.
+   **Acceptance metric:** any cell breaching subgroup floor/ceiling is excluded from safe bands; evaluator emits explicit breach table.
+
+**Next Task (single):** implement Task 1 sweep analyzer scaffold with deterministic grid generation + sign-flip detection outputs.
+
+### 11:17 roadmap refresh (A-lane)
+1. **Robust-overlap evaluator under perturbed priors (P0)**
+   - extend safe-band evaluation to run population/matchmaker perturbation variants and compute robustness-adjusted overlap score.
+   **Acceptance metric:** overlap artifact includes baseline + perturbed scores; fail if robustness-adjusted overlap drops below threshold.
+
+2. **Directional instability scorer (P0)**
+   - add axis and diagonal perturbation checks for each candidate cell to catch anisotropic instability ridges.
+   **Acceptance metric:** each candidate includes worst-direction instability score; cells above instability limit are excluded from safe bands.
+
+3. **Boundary-pressure adaptation monitor (P0)**
+   - define detector for clustering near safe-band edges and couple it to canary threshold alerts.
+   **Acceptance metric:** monitor emits boundary-pressure index and triggers warn/critical levels with deterministic thresholds.
+
+**Next Task (single):** implement Task 1 robust-overlap scaffold (baseline vs perturbed-prior overlap reporting) for current sweep artifact.
+
+### 12:07 roadmap refresh (A-lane)
+1. **Worst-case guardrail integration for robust-overlap (P0)**
+   - add hard per-variant floor checks and explicit worst-case gate before normalized aggregate acceptance.
+   **Acceptance metric:** artifact reports `worstVariantScore`, `worstVariantPass`; global pass forbidden when worst-case fails.
+
+2. **Perturbation family dedup + capped contribution (P0)**
+   - cluster near-duplicate perturbations into families and apply contribution caps at family level, not raw variant level.
+   **Acceptance metric:** artifact emits family map + pre/post-cap contribution table; no family exceeds configured max share.
+
+3. **Deterministic score precedence + decision trace (P0)**
+   - enforce policy ordering: hard floors -> worst-case -> normalized score -> raw score, with machine-readable decision trace.
+   **Acceptance metric:** every run outputs `decisionTrace[]` with rule IDs and pass/fail transitions; no ambiguous final verdict.
+
+**Next Task (single):** implement Task 1 in `robust-overlap-scaffold.ts` (worst-case guardrail fields + acceptance gating).
+
+### 12:57 roadmap refresh (A-lane)
+1. **Decision-trace precedence engine (P0)**
+   - implement deterministic rule-order evaluation in robust-overlap outputs: `hard_floors -> worst_case -> normalized -> raw`.
+   **Acceptance metric:** artifact emits ordered `decisionTrace[]`; final verdict must equal first failing hard rule (if any).
+
+2. **Variant trust-state classification (P0)**
+   - tag worst-case failures as `trusted_fail` or `suspect_fail` using detector-health and adversarial-pressure heuristics.
+   **Acceptance metric:** artifact includes `worstVariantTrustState` with rationale fields; policy gates differ by trust state and are test-covered.
+
+3. **Drift-coupled floor recalibration trigger (P0)**
+   - add trigger that marks worst-case floor for recalibration when boundary pass/fail churn exceeds threshold.
+   **Acceptance metric:** artifact emits `recalibrationTrigger` boolean + supporting churn metrics; trigger deterministically reproducible on replay.
+
+**Next Task (single):** implement Task 1 in `robust-overlap-scaffold.ts` by adding machine-readable `decisionTrace[]` with hard-stop precedence semantics.
+
+### 13:47 roadmap refresh (A-lane)
+1. **Decision-trace governance fields (P0)**
+   - extend robust-overlap artifact with `precedencePolicyVersion`, `finalVerdictReason`, and explicit gate intent tags (`safety_gate`/`liveness_gate`/`diagnostic`).
+   **Acceptance metric:** every run emits all governance fields; `finalVerdictReason` deterministically equals first failing hard rule (or `all_hard_rules_passed`).
+
+2. **Liveness-debt tracking + stuck fail-safe alarm (P0)**
+   - track consecutive blocked cycles and median recovery horizon; raise alarm when fail-safe lock exceeds threshold.
+   **Acceptance metric:** artifact includes `livenessDebt` object + `stuckFailSafe` boolean and deterministic trigger threshold.
+
+3. **Worst-variant trust-state audit trail (P0)**
+   - add trust-state labels (`trusted_fail` / `suspect_fail`) with immutable rationale fields and anti-flip detection.
+   **Acceptance metric:** trust-state transitions are logged with reason codes; repeated flips over threshold emit `trustFlipAlert=true`.
+
+**Next Task (single):** implement Task 1 in `robust-overlap-scaffold.ts` (policy versioning + final verdict reason + gate-intent tags).
+
+### 14:37 roadmap refresh (A-lane)
+1. **Competitor evidence-template pack (P0)**
+   - create a fixed checklist template per competitor: trust model, failure model, replayability proof, and evidence links.
+   **Acceptance metric:** every evaluated competitor record contains all required fields + at least one reproducible evidence link per field.
+
+2. **Replayability hard-gate for Tier 2+ (P0)**
+   - enforce that Tier 2/3 ratings require independent replay steps and expected outcomes documented.
+   **Acceptance metric:** rubric engine blocks Tier>=2 assignment when replay steps are missing or non-reproducible.
+
+3. **Trajectory signal + anti-gaming spot-checks (P0)**
+   - add trajectory labels (improving/stable/regressing) and adversarial spot-check outcomes to avoid static checklist gaming.
+   **Acceptance metric:** output includes trajectory + spot-check status; confidence score decreases automatically on failed spot-checks.
+
+**Next Task (single):** implement Task 1 by adding a structured competitor-evidence template file under `docs/research/` and backfilling current known competitors.
+
+### 15:27 roadmap refresh (A-lane)
+1. **Unknown-severity taxonomy + penalty cap (P0)**
+   - define fixed unknown classes (`critical`, `major`, `minor`) and cap cumulative uncertainty penalty.
+   **Acceptance metric:** competitor record evaluator outputs severity counts + capped penalty with deterministic formula.
+
+2. **Unknown-resolution ownership workflow (P0)**
+   - require `owner`, `dueDate`, and `status` for each unknown evidence gap.
+   **Acceptance metric:** record validation fails when any unknown lacks owner/dueDate.
+
+3. **Tier-upgrade guard for unresolved critical unknowns (P0)**
+   - block Tier upgrades when critical unknowns remain unresolved unless explicit waiver is logged.
+   **Acceptance metric:** evaluator emits `tierUpgradeBlocked=true` with reason list when unresolved critical unknowns exist.
+
+**Next Task (single):** implement Task 1 by extending competitor records template with unknown severity taxonomy + capped uncertainty penalty fields.
+
+### 16:17 roadmap refresh (A-lane)
+1. **Severity-bound due-date policy (P0)**
+   - enforce max due windows by unknown severity (`critical < major < minor`) in competitor records.
+   **Acceptance metric:** validator flags any unknown with dueDate beyond severity max window.
+
+2. **Unresolved-age debt metric (P0)**
+   - add time-decay debt field that grows with unresolved critical/major unknown age (in addition to capped penalty).
+   **Acceptance metric:** records emit `uncertaintyDebtScore` and threshold-based escalation status.
+
+3. **Evidence-backed status transitions (P0)**
+   - require evidence links for transitions to `in_progress`/`resolved`; auto-revert stale `in_progress` to `open` after timeout.
+   **Acceptance metric:** transition without evidence is rejected; stale transition detector emits corrective action.
+
+**Next Task (single):** implement Task 1 by extending competitor template with severity-based max due-window rules and validation notes.
+
+### 16:57 roadmap refresh (A-lane)
+1. **Uncertainty debt formula spec + examples (P0)**
+   - define deterministic formula for `uncertaintyDebtScore` using severity weights and unresolved age buckets.
+   **Acceptance metric:** docs include formula + at least 3 worked examples producing reproducible scores.
+
+2. **Recovery-mode hysteresis policy (P0)**
+   - add minimum hold window and switch thresholds to prevent `backward`/`forward` mode flapping.
+   **Acceptance metric:** policy table includes switch conditions and a no-flap invariant over a bounded window.
+
+3. **Immutable unknown timeline + audit trail (P0)**
+   - require immutable `createdAt` and append-only due-date/status change log with reason codes.
+   **Acceptance metric:** record schema includes `timeline[]`; edits without reason code fail validation.
+
+**Next Task (single):** implement Task 1 in docs/research by adding explicit uncertainty-debt formula and worked examples.
+
+### 17:47 roadmap refresh (A-lane)
+1. **PR split-series metadata policy (P0)**
+   - require parent issue + dependency ordering for split PR stacks touching shared invariants.
+   **Acceptance metric:** PR template includes mandatory `parentIssue` and `dependsOn` fields when `split-series=true`.
+
+2. **Generated-artifact allowlist policy (P0)**
+   - define allowed generated files and justification tags to prevent noise-gate false positives.
+   **Acceptance metric:** CI check passes only when generated-file changes match allowlist + justification.
+
+3. **CI-assisted interface delta detector (P0)**
+   - add automated summary of ABI/event/signature deltas for reviewer confirmation.
+   **Acceptance metric:** PR check posts deterministic interface-delta report; missing declaration blocks merge.
+
+**Next Task (single):** implement Task 1 by drafting a PR hygiene policy doc + template fields for split-series metadata.
+
+### 18:37 roadmap refresh (A-lane)
+1. **Branch-protection required-check map (P0)**
+   - define required CI checks and merge paths where hygiene checks are mandatory.
+   **Acceptance metric:** policy doc includes explicit required-check matrix; missing required-check path is treated as config failure.
+
+2. **Semantic metadata validator (P0)**
+   - enforce non-placeholder content for split-series/interface-delta fields.
+   **Acceptance metric:** CI validator rejects empty/placeholder metadata and outputs offending fields.
+
+3. **Emergency override protocol (P0)**
+   - add controlled bypass path requiring reason, approver, postmortem, and follow-up issue.
+   **Acceptance metric:** override artifact includes all mandatory fields; missing postmortem/follow-up blocks closure.
+
+**Next Task (single):** implement Task 1 by extending PR-HYGIENE-POLICY.md with required-check matrix and merge-path coverage notes.
+
+### 19:27 roadmap refresh (A-lane)
+1. **OWASP checklist evidence-link enforcement (P0)**
+   - require at least one concrete evidence link per mandatory OWASP item in PR security reviews.
+   **Acceptance metric:** checklist validator fails when any mandatory item lacks evidence link.
+
+2. **Clawttack-specific OWASP control mapping (P0)**
+   - add per-item interpretation notes mapping OWASP categories to Clawttack mechanism/process controls.
+   **Acceptance metric:** checklist includes all mandatory OWASP items with project-specific control guidance.
+
+3. **Checklist versioning + review cadence (P0)**
+   - add `checklistVersion`, `lastReviewedAt`, and required periodic review interval metadata.
+   **Acceptance metric:** stale checklist (review age beyond interval) triggers warning/block in review workflow.
+
+**Next Task (single):** implement Task 1 by creating an OWASP mapping checklist doc with mandatory evidence-link fields for PR reviews.
+
+### 20:17 roadmap refresh (A-lane)
+1. **Predicate report tiering (P0)**
+   - classify rule IDs into `critical`, `core`, and `diagnostic` with concise failure summaries.
+   **Acceptance metric:** predicate output includes per-rule tier and grouped fail summary.
+
+2. **Coverage + blind-spot metadata (P0)**
+   - add explicit coverage statement and known blind-spot annotations in CI predicate reports.
+   **Acceptance metric:** every run emits `coverageScope` and `knownBlindSpots[]` fields.
+
+3. **Waiver governance controls (P0)**
+   - define waiver rate limits, approver diversity requirements, and auto-follow-up issue creation.
+   **Acceptance metric:** waiver artifact validation fails when governance constraints are unmet.
+
+**Next Task (single):** implement Task 1 by drafting a CI predicate report schema doc with rule-tier grouping and grouped failure output examples.
+
+### 21:07 roadmap refresh (A-lane)
+1. **Predicate runtime source pinning (P0)**
+   - enforce merge-base/HEAD pin fields in predicate report and reject runs without full diff context.
+   **Acceptance metric:** report includes `mergeBaseSha` + `headSha`; check fails on missing fields or shallow-context detection.
+
+2. **Runtime fingerprint + artifact integrity (P0)**
+   - include tool/parser version fingerprint and require report artifact publication for every run.
+   **Acceptance metric:** CI fails if report artifact missing or fingerprint fields absent.
+
+3. **Branch-rule coverage audit (P0)**
+   - implement config audit ensuring required checks are enforced on all protected merge paths.
+   **Acceptance metric:** audit job emits pass/fail matrix; any uncovered path blocks merge.
+
+**Next Task (single):** implement Task 1 by extending predicate schema with merge-base/head source-pinning fields and runtime context requirements.
+
+### 21:57 roadmap refresh (A-lane)
+1. **Merge-candidate predicate recheck (P0)**
+   - run `ci/pr-hygiene` on merge-candidate commit state in addition to PR head.
+   **Acceptance metric:** report includes both `prHeadStatus` and `mergeCandidateStatus`; mismatch blocks merge.
+
+2. **Predicate scope declaration (P0)**
+   - require explicit `outOfScopeChecks` section listing dependencies not covered by predicate engine.
+   **Acceptance metric:** report fails when scope declaration missing for known external dependencies.
+
+3. **Predicate lifecycle + provenance policy (P0)**
+   - add version lifecycle process and mandatory provenance fields for report artifacts.
+   **Acceptance metric:** reports missing version/provenance fields are invalid; stale predicate versions trigger review warning.
+
+**Next Task (single):** implement Task 1 by extending CI predicate schema with dual-state (`prHead` + `mergeCandidate`) evaluation fields.
+
+### 22:47 roadmap refresh (A-lane)
+1. **Merge-path guard inventory (P0)**
+   - enumerate all merge/override paths and map required predicate checks per path.
+   **Acceptance metric:** inventory table includes all known paths; uncovered path => policy failure.
+
+2. **Merge-time freshness recheck (P0)**
+   - require predicate re-evaluation when PR head changes after initial evaluation.
+   **Acceptance metric:** stale evaluation detected => merge blocked until recheck pass.
+
+3. **Failure reason code taxonomy (P0)**
+   - define structured reason codes and remediation hints for predicate failures.
+   **Acceptance metric:** every failed rule emits reason code + remediation hint.
+
+**Next Task (single):** implement Task 1 by adding merge-path guard inventory table to `PR-HYGIENE-POLICY.md`.
+
+### 23:37 roadmap refresh (A-lane)
+1. **Fail-closed branch-protection audit behavior (P0)**
+   - if branch-protection config cannot be read (permissions/API errors), audit must fail with explicit reason code.
+   **Acceptance metric:** audit report includes `configReadStatus`; non-success always yields fail.
+
+2. **Branch-set parity verification (P0)**
+   - compare policy-declared protected branches vs repo-config protected branches and fail on mismatch.
+   **Acceptance metric:** audit outputs `policyBranchSet`, `repoBranchSet`, and `parityPass`.
+
+3. **Audit validity window + merge-time recheck (P0)**
+   - enforce max age for branch-protection audit and require refresh before merge if stale.
+   **Acceptance metric:** report includes `auditGeneratedAt`, `validUntil`, and `isFresh`; stale reports block merge.
+
+**Next Task (single):** implement Task 1 by extending CI predicate schema with config-read status fields and fail-closed semantics.
+
+### 00:27 roadmap refresh (A-lane)
+1. **Config-audit permission preflight (P0)**
+   - add explicit token scope preflight in CI with fail-closed reason codes.
+   **Acceptance metric:** report includes `permissionPreflightPass`; false => terminal fail with reason code.
+
+2. **Deterministic retry/failure classification (P0)**
+   - implement bounded retry strategy for API calls with terminal state taxonomy.
+   **Acceptance metric:** report includes `apiAttemptCount`, `terminalState`, and no ambiguous outcomes.
+
+3. **Governance artifact retention policy (P0)**
+   - enforce minimum retention + fallback PR comment summary for critical fields.
+   **Acceptance metric:** retention policy documented and CI emits retention metadata in report.
+
+**Next Task (single):** implement Task 1 by extending CI predicate schema with permission preflight fields and terminal fail reason codes.
+
+### 01:17 roadmap refresh (A-lane)
+1. **Tiered reason-code catalog (P0)**
+   - define `class` + `subcode` structure to prevent code explosion and preserve precision.
+   **Acceptance metric:** schema doc includes tiered examples and bounded top-level classes.
+
+2. **Owner/remediation mapping (P0)**
+   - each reason code must map to `owner` and `defaultRemediation`.
+   **Acceptance metric:** validation fails when mapping fields are missing.
+
+3. **Attempt-trace + catalog-version checks (P0)**
+   - include retry trace summary and runtime catalog-version assertion.
+   **Acceptance metric:** report emits `attemptTraceSummary` + `catalogVersion`; mismatch triggers fail/warn per policy.
+
+**Next Task (single):** implement Task 1 by adding tiered reason-code catalog section to CI predicate schema docs.

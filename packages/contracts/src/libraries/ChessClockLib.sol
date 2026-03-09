@@ -23,6 +23,12 @@ library ChessClockLib {
     uint256 constant MAX_TURN_TIMEOUT   = 80;    // ~2.5 min max per turn
     uint256 constant BPS                = 10000;
 
+    // ─── Cloze Dual Penalty (anti-unsolvable-blank incentive) ────────────────
+    // When defender fails Cloze: defender eats NCC_FAIL_PENALTY, attacker eats CLOZE_ATTACKER_PENALTY.
+    // Incentivizes attacker to create solvable blanks (prefers 0 cost over -10).
+    // No cumulative tracking needed — works from turn 1.
+    uint256 constant CLOZE_ATTACKER_PENALTY = 10;  // blocks deducted from attacker when defender fails Cloze
+
     struct Clock {
         uint128 bankA;          // remaining blocks for agent A
         uint128 bankB;          // remaining blocks for agent B
@@ -60,6 +66,31 @@ library ChessClockLib {
         bool nccCorrect,
         bool isFirstTurn
     ) internal returns (uint128 bankAfter, bool bankDepleted) {
+        return _tick(self, isAgentA, nccCorrect, isFirstTurn, false);
+    }
+
+    /**
+     * @notice Processes a turn's timing with Cloze dual-penalty for Cloze-enabled battles.
+     * @dev When clozeEnabled and defender fails NCC, attacker also eats CLOZE_ATTACKER_PENALTY.
+     *      Incentivizes solvable blanks without any cumulative tracking.
+     */
+    function tickWithCloze(
+        Clock storage self,
+        bool isAgentA,
+        bool nccCorrect,
+        bool isFirstTurn,
+        bool clozeEnabled
+    ) internal returns (uint128 bankAfter, bool bankDepleted) {
+        return _tick(self, isAgentA, nccCorrect, isFirstTurn, clozeEnabled);
+    }
+
+    function _tick(
+        Clock storage self,
+        bool isAgentA,
+        bool nccCorrect,
+        bool isFirstTurn,
+        bool clozeEnabled
+    ) private returns (uint128 bankAfter, bool bankDepleted) {
         uint256 elapsed = block.number - self.lastTurnBlock;
         if (elapsed < MIN_TURN_INTERVAL) revert TurnTooFast();
 
@@ -105,7 +136,20 @@ library ChessClockLib {
             }
         }
 
-        // 4. Store
+        // 4. Cloze dual-penalty: when defender fails, attacker also bleeds.
+        //    Incentivizes attacker to create solvable blanks.
+        //    Defender fails → defender already paid NCC_FAIL_PENALTY above,
+        //    now attacker pays CLOZE_ATTACKER_PENALTY from THEIR bank.
+        if (clozeEnabled && !isFirstTurn && !nccCorrect) {
+            uint256 oppBank = isAgentA ? self.bankB : self.bankA;
+            if (oppBank > CLOZE_ATTACKER_PENALTY) {
+                _setBank(self, !isAgentA, uint128(oppBank - CLOZE_ATTACKER_PENALTY));
+            } else {
+                _setBank(self, !isAgentA, 0);
+            }
+        }
+
+        // 5. Store
         bankAfter = uint128(bank);
         _setBank(self, isAgentA, bankAfter);
         self.lastTurnBlock = uint64(block.number);

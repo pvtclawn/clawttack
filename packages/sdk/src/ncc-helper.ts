@@ -20,11 +20,36 @@ export interface BIP39Word {
 }
 
 /**
- * Find the byte offset of a word in a narrative (case-insensitive).
+ * Find the byte offset of a full-word match in a narrative (case-insensitive).
  * Returns -1 if not found.
+ *
+ * Note: returns BYTE offset (UTF-8), not JS char index.
  */
 export function findWordOffset(narrative: string, word: string): number {
-  return narrative.toLowerCase().indexOf(word.toLowerCase());
+  const narrativeLower = narrative.toLowerCase();
+  const wordLower = word.toLowerCase();
+
+  let from = 0;
+  while (from < narrativeLower.length) {
+    const idx = narrativeLower.indexOf(wordLower, from);
+    if (idx === -1) return -1;
+
+    const before = idx === 0 ? '' : narrativeLower[idx - 1];
+    const afterIdx = idx + wordLower.length;
+    const after = afterIdx >= narrativeLower.length ? '' : narrativeLower[afterIdx];
+
+    // Require word boundaries so "able" doesn't match inside "unable"
+    const beforeOk = before === '' || !/[a-z]/.test(before);
+    const afterOk = after === '' || !/[a-z]/.test(after);
+
+    if (beforeOk && afterOk) {
+      return new TextEncoder().encode(narrative.slice(0, idx)).length;
+    }
+
+    from = idx + 1;
+  }
+
+  return -1;
 }
 
 /**

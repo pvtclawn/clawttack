@@ -14,13 +14,14 @@ const LLM_MODEL = process.env.LLM_MODEL ?? 'z-ai/glm-4.5-air:free';
 // Gemini fallback
 let GEMINI_API_KEY: string | undefined;
 let GEMINI_URL: string | undefined;
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.1-pro-preview';
 try {
   const secrets = JSON.parse(readFileSync(`${process.env.HOME}/.config/pvtclawn/secrets.json`, 'utf-8'));
   GEMINI_API_KEY = secrets.GEMINI_API_KEY;
-  GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+  GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 } catch { /* no secrets file */ }
 
-async function callLLM(prompt: string, maxTokens = 300): Promise<string> {
+export async function callLLM(prompt: string, maxTokens = 300): Promise<string> {
   // Prefer OpenAI-compatible API
   if (OPENAI_API_KEY) {
     const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
@@ -196,6 +197,25 @@ Write ONLY the narrative text. No quotes, no labels, no meta-commentary.`;
   // Final target word check
   if (!targetRe.test(narrative)) {
     narrative = `${ctx.targetWord} ${narrative}`;
+    while (encoder.encode(narrative).length > maxBytes) {
+      narrative = narrative.replace(/\s+\S+\s*$/, '');
+    }
+  }
+
+  // Minimum length safety (on-chain LinguisticParser requires >= 64 chars)
+  const MIN_LEN = 64;
+  if (narrative.length < MIN_LEN) {
+    const contextFiller = ` ${ctx.targetWord} ${ctx.candidates.map(c => c.word).join(' ')} continue adaptive reasoning`;
+    while (narrative.length < MIN_LEN) narrative += contextFiller;
+    while (encoder.encode(narrative).length > maxBytes) {
+      narrative = narrative.replace(/\s+\S+\s*$/, '');
+    }
+  }
+
+  // Final pre-submit assertion after all transformations
+  if (narrative.length < MIN_LEN) {
+    const pad = ` ${ctx.targetWord} ${ctx.candidates[0]?.word ?? 'agent'}`;
+    while (narrative.length < MIN_LEN) narrative += pad;
     while (encoder.encode(narrative).length > maxBytes) {
       narrative = narrative.replace(/\s+\S+\s*$/, '');
     }

@@ -11,7 +11,7 @@
  */
 
 import { ethers } from 'ethers';
-import { signTurn } from '../packages/protocol/src/index.ts';
+import { buildSignedTurnPayload } from './lib/turn-payload.ts';
 import * as fs from 'fs';
 
 const RELAY_URL = process.env['RELAY_URL'] ?? 'http://localhost:8787';
@@ -68,21 +68,19 @@ async function geminiGenerate(systemPrompt: string, history: typeof attackerHist
 
 async function submitTurn(battleId: string, wallet: ethers.Wallet, message: string, turnNumber: number): Promise<boolean> {
   const timestamp = Date.now();
-  const signature = await signTurn(
-    { battleId, agentAddress: wallet.address, message, turnNumber, timestamp },
-    wallet.privateKey,
-  );
+  const payload = await buildSignedTurnPayload({
+    battleId,
+    agentAddress: wallet.address,
+    narrative: message,
+    turnNumber,
+    timestamp,
+    privateKey: wallet.privateKey,
+  });
 
   const res = await fetch(`${RELAY_URL}/api/battles/${battleId}/turn`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      agentAddress: wallet.address,
-      message,
-      turnNumber,
-      timestamp,
-      signature,
-    }),
+    body: JSON.stringify(payload),
   });
 
   const data = await res.json() as { ok?: boolean; error?: string };
