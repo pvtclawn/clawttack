@@ -18,17 +18,30 @@ import { ethers } from 'ethers';
 import { createNccAttack, createNccDefense, createNccReveal } from '../src/ncc-helper.ts';
 import { scanForBip39Words } from '../src/bip39-scanner.ts';
 import { solveHashPreimage } from '../src/vop-solver.ts';
-import { generateNarrative, defendNcc } from './llm-strategy.ts';
+import { defendNcc, generateNarrative, pickAttackPattern } from './llm-strategy.ts';
 import { createClozeAttack, solveCloze } from '../src/cloze-helper.ts';
 
 const DEFAULT_RPC = 'https://sepolia.base.org';
 const DEFAULT_DICT = '0x1A73B5dc7e056426e20642C3866CD14Ac74E8bF3'; // v4.1 Cloze arena dict
 const MAIN_KEY_PATH = `${process.env.HOME}/.foundry/keystores/clawn`;
-const BIP39 = [
+const BIP39_PATH = `${process.env.HOME}/.openclaw/workspace/projects/clawttack/packages/sdk/data/bip39-english.txt`;
+const BIP39_FALLBACK = [
   'abandon', 'ability', 'able', 'about', 'above', 'absent', 'absorb', 'abstract',
   'absurd', 'abuse', 'access', 'accident', 'account', 'accuse', 'achieve', 'acid',
   'acoustic', 'acquire', 'across', 'act',
 ];
+
+const BIP39 = (() => {
+  try {
+    const words = readFileSync(BIP39_PATH, 'utf8')
+      .split(/\r?\n/)
+      .map((w) => w.trim().toLowerCase())
+      .filter(Boolean);
+    return words.length >= 2048 ? words : BIP39_FALLBACK;
+  } catch {
+    return BIP39_FALLBACK;
+  }
+})();
 
 const TURN_TOO_FAST_SELECTOR = '0xb3c15f40';
 const BATTLE_NOT_ACTIVE_SELECTOR = '0xf2592cf2';
@@ -76,6 +89,61 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+const THEME_WORDS: Record<string, string[]> = {
+  'social-engineering': ['trust', 'proof', 'secret', 'token', 'verify', 'audit', 'social', 'key'],
+  'ctf-lure': ['puzzle', 'secret', 'token', 'ghost', 'matrix', 'code', 'trap', 'proof'],
+  'prompt-injection': ['inject', 'system', 'logic', 'memory', 'mimic', 'chaos', 'script', 'target'],
+  'dos-noise': ['panic', 'chaos', 'virus', 'network', 'flood', 'system', 'danger', 'memory'],
+};
+
+function buildSeedCandidates(
+  attackKind: keyof typeof THEME_WORDS,
+  targetWord: string,
+  poisonWord: string,
+  turn: number,
+  rng: () => number,
+): { word: string; index: number }[] {
+  const themePool = THEME_WORDS[attackKind] ?? THEME_WORDS['social-engineering'];
+  const fillerPool = BIP39.filter((word) => !themePool.includes(word));
+  const selected: string[] = [];
+
+  const pushUnique = (word: string): void => {
+    if (
+      selected.length < 4 &&
+      word !== targetWord &&
+      word !== poisonWord &&
+      !selected.includes(word)
+    ) {
+      selected.push(word);
+    }
+  };
+
+  for (let i = 0; i < themePool.length && selected.length < 4; i++) {
+    pushUnique(themePool[(turn + i) % themePool.length]);
+  }
+
+  while (selected.length < 4) {
+    const idx = Math.floor(rng() * fillerPool.length);
+    pushUnique(fillerPool[idx]);
+  }
+
+  return selected.map((word, index) => ({ word, index }));
+}
+
+function shouldUseJoker(params: {
+  turn: number;
+  attackKind: string;
+  myBank: bigint;
+  opponentBank: bigint;
+  jokersRemaining: number;
+}): boolean {
+  if (params.jokersRemaining <= 0) return false;
+  if (params.turn <= 1) return true;
+  if (params.attackKind === 'ctf-lure' || params.attackKind === 'prompt-injection') return true;
+  if (params.myBank < 120n || params.opponentBank < 120n) return true;
+  return params.turn % 7 === 0;
+}
+
 interface TurnData {
   salt: `0x${string}`;
   intendedIdx: 0 | 1 | 2 | 3;
@@ -90,6 +158,7 @@ interface TurnResult {
   bankB: bigint;
   targetWord: string;
   nccGuessCorrect: boolean;
+  clozeUsed: boolean;
   vopAttempts: number;
   txHash: string;
 }
@@ -102,6 +171,7 @@ interface SerializedTurnResult {
   bankB: string;
   targetWord: string;
   nccGuessCorrect: boolean;
+  clozeUsed: boolean;
   vopAttempts: number;
   txHash: string;
 }
@@ -115,6 +185,10 @@ interface RunnerCheckpoint {
     A?: TurnData;
     B?: TurnData;
   };
+  opponentLastNarrative?: string | null;
+  opponentBlankNarrative?: string | null;
+  recentNarrativesA?: string[];
+  recentNarrativesB?: string[];
   results: SerializedTurnResult[];
   updatedAt: number;
 }
@@ -126,6 +200,10 @@ function defaultCheckpoint(battle: string, seed: number): RunnerCheckpoint {
     lastProcessedTurn: null,
     lastSubmitBlock: null,
     prevNcc: {},
+    opponentLastNarrative: null,
+    opponentBlankNarrative: null,
+    recentNarrativesA: [],
+    recentNarrativesB: [],
     results: [],
     updatedAt: Date.now(),
   };
@@ -182,6 +260,8 @@ const BATTLE_ABI = [
   'function currentVopParams() view returns (bytes)',
   'function startBlock() view returns (uint32)',
   'function firstMoverA() view returns (bool)',
+  'function jokersRemainingA() view returns (uint8)',
+  'function jokersRemainingB() view returns (uint8)',
   'function config() view returns (uint256 stake, uint32 warmupBlocks, uint256 targetAgentId, uint8 maxJokers, bool clozeEnabled)',
 ];
 
@@ -214,6 +294,11 @@ async function submitWithRetry(
       const isTurnTooFast = data.includes(TURN_TOO_FAST_SELECTOR);
       const isBattleNotActive = data.includes(BATTLE_NOT_ACTIVE_SELECTOR);
       const status0 = isStatusZeroRevert(err);
+      const errMsg = String(err?.message ?? '').toLowerCase();
+      const isReplacementUnderpriced =
+        errMsg.includes('replacement transaction underpriced') ||
+        errMsg.includes('replacement fee too low') ||
+        err?.code === 'REPLACEMENT_UNDERPRICED';
 
       if ((isTurnTooFast || isBattleNotActive) && attempt < maxAttempts) {
         const waitMs = isBattleNotActive ? attempt * 8000 : attempt * 6000;
@@ -226,6 +311,13 @@ async function submitWithRetry(
       if (status0 && attempt < maxAttempts) {
         const waitMs = attempt * 5000;
         console.log(`⏳ status=0 execution revert; retrying with gas bump in ${waitMs}ms (attempt ${attempt}/${maxAttempts})`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+
+      if (isReplacementUnderpriced && attempt < maxAttempts) {
+        const waitMs = attempt * 6000;
+        console.log(`⏳ replacement underpriced/fee too low; retrying in ${waitMs}ms (attempt ${attempt}/${maxAttempts})`);
         await new Promise((r) => setTimeout(r, waitMs));
         continue;
       }
@@ -320,12 +412,35 @@ async function main() {
     const targetWord = await dict.word(targetIdx);
     const poisonWord = await battleRead.poisonWord();
     const vopParams = await battleRead.currentVopParams();
+    const jokersRemaining = Number(
+      isAgentA ? await battleRead.jokersRemainingA() : await battleRead.jokersRemainingB(),
+    );
 
     console.log(`🎮 ${agent}'s turn`);
     console.log(`🎯 Target: "${targetWord}" (idx=${targetIdx}), Poison: "${poisonWord}"`);
 
     const strategy = isAgentA ? strategyA : strategyB;
-    console.log(`📋 Strategy: ${strategy}`);
+    const agentName = isAgentA ? 'PrivateClawn' : 'PrivateClawnJr';
+    const attackPattern = pickAttackPattern(agentName, Number(turn));
+    const recentNarratives = isAgentA
+      ? checkpoint.recentNarrativesA ?? []
+      : checkpoint.recentNarrativesB ?? [];
+    const baseCandidates = buildSeedCandidates(
+      attackPattern.kind,
+      targetWord,
+      poisonWord,
+      Number(turn),
+      rng,
+    );
+    const useJoker = shouldUseJoker({
+      turn: Number(turn),
+      attackKind: attackPattern.kind,
+      myBank: (isAgentA ? bankA : bankB) as bigint,
+      opponentBank: (isAgentA ? bankB : bankA) as bigint,
+      jokersRemaining,
+    });
+
+    console.log(`📋 Strategy: ${strategy} | attack=${attackPattern.kind} | joker=${useJoker ? 'yes' : 'no'} (${jokersRemaining} left)`);
 
     // Narrative varies by strategy
     let narrative: string;
@@ -334,17 +449,18 @@ async function main() {
 
     if (strategy === 'llm') {
       // REAL LLM: Generate narrative via Gemini
-      const agentName = isAgentA ? 'PrivateClawn' : 'PrivateClawnJr';
-      // Pre-generate BIP39 candidates for the LLM to include
-      const baseCandidates = BIP39.filter(w => w !== targetWord && w !== poisonWord).slice(0, 4);
       narrative = await generateNarrative({
         targetWord,
         poisonWord,
         opponentNarrative: opponentLastNarrative,
-        candidates: baseCandidates.map((w, i) => ({ word: w, index: i })),
+        candidates: baseCandidates,
         turnNumber: Number(turn),
         agentName,
         isFirstTurn: Number(turn) === 0,
+        recentNarratives,
+        useJoker,
+        myBank: Number(isAgentA ? bankA : bankB),
+        opponentBank: Number(isAgentA ? bankB : bankA),
       });
       console.log(`  🤖 LLM narrative: "${narrative.slice(0, 80)}..."`);
     } else if (strategy === 'aggressive') {
@@ -503,7 +619,7 @@ async function main() {
       nccReveal: reveal,
     };
 
-    const { hash, gasUsed, blockNumber } = await submitWithRetry(battle, payload, 3);
+    const { hash, gasUsed, blockNumber } = await submitWithRetry(battle, payload, 5);
 
     const [, newTurn, newBankA, newBankB] = await battleRead.getBattleState();
     console.log(`✅ Gas=${gasUsed} | nextTurn=${newTurn} | banks=${newBankA}/${newBankB}`);
@@ -532,6 +648,11 @@ async function main() {
     checkpoint.prevNcc = prevNcc;
     checkpoint.opponentLastNarrative = narrative; // Save for opponent's LLM context
     checkpoint.opponentBlankNarrative = clozeBlankNarrative; // SDK-side cloze blank for defense
+    if (isAgentA) {
+      checkpoint.recentNarrativesA = [...(checkpoint.recentNarrativesA ?? []), narrative].slice(-3);
+    } else {
+      checkpoint.recentNarrativesB = [...(checkpoint.recentNarrativesB ?? []), narrative].slice(-3);
+    }
     checkpoint.results = toSerialized(results);
     checkpoint.lastProcessedTurn = Number(turn);
     checkpoint.lastSubmitBlock = blockNumber;

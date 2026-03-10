@@ -30,11 +30,14 @@ WARMUP_WAIT_SEC = int(os.getenv('CLAWTTACK_WARMUP_WAIT_SEC', '35'))
 STAKE_WEI = int(os.getenv('CLAWTTACK_STAKE_WEI', '1000000000000000'))  # 0.001 ether
 WARMUP_BLOCKS = int(os.getenv('CLAWTTACK_WARMUP_BLOCKS', '15'))
 TARGET_AGENT_ID = int(os.getenv('CLAWTTACK_TARGET_AGENT_ID', '0'))
-MAX_JOKERS = int(os.getenv('CLAWTTACK_MAX_JOKERS', '0'))
-CLOZE_ENABLED = os.getenv('CLAWTTACK_CLOZE_ENABLED', 'false').lower() in ('1', 'true', 'yes')
+MAX_JOKERS = int(os.getenv('CLAWTTACK_MAX_JOKERS', '2'))
+CLOZE_ENABLED = os.getenv('CLAWTTACK_CLOZE_ENABLED', 'true').lower() in ('1', 'true', 'yes')
 STRATEGY_A = os.getenv('CLAWTTACK_STRATEGY_A', 'llm')
 STRATEGY_B = os.getenv('CLAWTTACK_STRATEGY_B', 'llm')
 BATTLE_TIMEOUT_SEC = int(os.getenv('CLAWTTACK_BATTLE_TIMEOUT_SEC', '1500'))
+OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', 'https://openrouter.ai/api/v1')
+OPENAI_MODEL = os.getenv('LLM_MODEL', 'google/gemini-2.5-flash-lite')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 
 def fail(msg: str) -> None:
@@ -67,21 +70,31 @@ def cast_call(to: str, sig: str, *args: str) -> str:
     return run(cmd).stdout.strip()
 
 
-def cast_send_account(account: str, to: str, sig: str, *args: str, value_wei: int = 0, timeout: int = 120) -> str:
-    cmd = [
-        CAST, 'send', to, sig, *args,
-        '--rpc-url', RPC,
-        '--account', account,
-        '--password', WALLET_PASSWORD,
-        '--gas-limit', '3000000',
-    ]
-    if value_wei > 0:
-        cmd += ['--value', str(value_wei)]
-    proc = run(cmd, timeout=timeout, check=False)
-    output = (proc.stdout or '') + (proc.stderr or '')
-    if proc.returncode != 0 or 'status               1' not in output:
-        raise RuntimeError(output.strip())
-    return output
+def cast_send_account(account: str, to: str, sig: str, *args: str, value_wei: int = 0, timeout: int = 120, retries: int = 3) -> str:
+    last_output = ''
+    for attempt in range(1, retries + 1):
+        cmd = [
+            CAST, 'send', to, sig, *args,
+            '--rpc-url', RPC,
+            '--account', account,
+            '--password', WALLET_PASSWORD,
+            '--gas-limit', '3000000',
+        ]
+        if value_wei > 0:
+            cmd += ['--value', str(value_wei)]
+        proc = run(cmd, timeout=timeout, check=False)
+        output = (proc.stdout or '') + (proc.stderr or '')
+        last_output = output.strip()
+        if proc.returncode == 0 and 'status               1' in output:
+            return output
+
+        retryable = 'replacement transaction underpriced' in output.lower() or 'nonce' in output.lower()
+        if retryable and attempt < retries:
+            time.sleep(5 * attempt)
+            continue
+        raise RuntimeError(last_output)
+
+    raise RuntimeError(last_output)
 
 
 def get_account_address(account: str) -> str:
@@ -131,6 +144,8 @@ def create_battle(challenger_id: int) -> tuple[int, str]:
     config = f'({STAKE_WEI},{WARMUP_BLOCKS},{TARGET_AGENT_ID},{MAX_JOKERS},{str(CLOZE_ENABLED).lower()})'
     total_value = STAKE_WEI + creation_fee
 
+    before_count = parse_uint(cast_call(ARENA, 'battlesCount()(uint256)'))
+
     cast_send_account(
         'clawn',
         ARENA,
@@ -143,6 +158,13 @@ def create_battle(challenger_id: int) -> tuple[int, str]:
     )
 
     battle_id = parse_uint(cast_call(ARENA, 'battlesCount()(uint256)'))
+    if battle_id <= before_count:
+        # Graceful fallback for noisy nonce/mempool behavior
+        time.sleep(2)
+        battle_id = parse_uint(cast_call(ARENA, 'battlesCount()(uint256)'))
+        if battle_id <= before_count:
+            raise RuntimeError('createBattle did not increase battlesCount')
+
     battle_addr_raw = cast_call(ARENA, 'battles(uint256)(address)', str(battle_id))
     battle_addr = extract_address(battle_addr_raw)
     if not battle_addr:
@@ -151,17 +173,34 @@ def create_battle(challenger_id: int) -> tuple[int, str]:
     return battle_id, battle_addr
 
 
+def battle_phase(battle_addr: str) -> int:
+    state_raw = cast_call(battle_addr, 'getBattleState()(uint8,uint32,uint128,uint128,bytes32,uint256)')
+    return parse_uint(state_raw)
+
+
 def accept_battle(battle_addr: str, acceptor_id: int) -> None:
+    if battle_phase(battle_addr) == 1:
+        return
+
     secret_hash = '0x' + secrets.token_hex(32)
-    cast_send_account(
-        'clawnjr',
-        battle_addr,
-        'acceptBattle(uint256,bytes32)',
-        str(acceptor_id),
-        secret_hash,
-        value_wei=STAKE_WEI,
-        timeout=180,
-    )
+    for attempt in range(1, 4):
+        try:
+            cast_send_account(
+                'clawnjr',
+                battle_addr,
+                'acceptBattle(uint256,bytes32)',
+                str(acceptor_id),
+                secret_hash,
+                value_wei=STAKE_WEI,
+                timeout=180,
+            )
+            return
+        except Exception:
+            if battle_phase(battle_addr) == 1:
+                return
+            if attempt == 3:
+                raise
+            time.sleep(4 * attempt)
 
 
 def run_battle_loop(battle_addr: str, opponent_key: str, seed: int, battle_id: int) -> int:
@@ -178,7 +217,11 @@ def run_battle_loop(battle_addr: str, opponent_key: str, seed: int, battle_id: i
         'CLAWTTACK_STRATEGY_A': STRATEGY_A,
         'CLAWTTACK_STRATEGY_B': STRATEGY_B,
         'CLAWTTACK_CHECKPOINT_PATH': str(checkpoint_path),
+        'OPENAI_BASE_URL': OPENAI_BASE_URL,
+        'LLM_MODEL': OPENAI_MODEL,
     })
+    if OPENAI_API_KEY:
+        env['OPENAI_API_KEY'] = OPENAI_API_KEY
 
     with log_path.open('w') as log_file:
         proc = subprocess.run(
@@ -206,6 +249,9 @@ if __name__ == '__main__':
     if not WALLET_PASSWORD:
         fail('WALLET_PASSWORD missing in secrets.json')
 
+    # Prefer explicit OPENAI_API_KEY; otherwise use OpenRouter key for OpenAI-compatible API.
+    OPENAI_API_KEY = OPENAI_API_KEY or secrets_data.get('OPENAI_API_KEY') or secrets_data.get('OPENROUTER_API_KEY')
+
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -225,7 +271,8 @@ if __name__ == '__main__':
     print(f'  Clawn: id={clawn_id}, addr={clawn_addr}')
     print(f'  ClawnJr: id={jr_id}, addr={jr_addr}')
     print(f'  Strategy: A={STRATEGY_A}, B={STRATEGY_B}')
-    print(f'  Battles: {MAX_BATTLES} | stake={STAKE_WEI} wei | warmup={WARMUP_BLOCKS} blocks')
+    print(f'  Battles: {MAX_BATTLES} | stake={STAKE_WEI} wei | warmup={WARMUP_BLOCKS} blocks | jokers={MAX_JOKERS} | cloze={CLOZE_ENABLED}')
+    print(f'  LLM: model={OPENAI_MODEL} | base={OPENAI_BASE_URL}')
 
     success = 0
     for i in range(MAX_BATTLES):
