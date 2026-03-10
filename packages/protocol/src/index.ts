@@ -34,3 +34,4 @@ export * from './conditional-commitment-schedule.ts';
 export * from './coupling-budget.ts';
 export * from './feedback-cadence-budget.ts';
 export * from './identity-evidence-admission.ts';
+export * from './single-writer-fencing.ts';
