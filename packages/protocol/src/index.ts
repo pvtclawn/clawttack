@@ -46,3 +46,4 @@ export * from './verification-claim-interaction-task1.ts';
 export * from './verification-claim-view-consistency-task1.ts';
 export * from './verification-claim-global-observability-task1.ts';
 export * from './verification-claim-delivery-semantics-task1.ts';
+export * from './verification-claim-local-authority-task1.ts';
