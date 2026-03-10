@@ -51,3 +51,4 @@ export * from './verification-claim-serializability-task1.ts';
 export * from './verification-claim-system-model-task1.ts';
 export * from './verification-claim-model-intent-task1.ts';
 export * from './verification-claim-synchrony-regime-task1.ts';
+export * from './verification-claim-failure-model-task1.ts';
