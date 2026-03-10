@@ -1,123 +1,257 @@
 #!/usr/bin/env python3
-"""Batch battle runner — creates, accepts, and plays multiple v4 battles sequentially."""
-import json, os, subprocess, sys, time, secrets
+"""Autonomous Clawttack batch runner (LLM vs LLM by default).
 
-SDK_DIR = '/home/clawn/.openclaw/workspace/projects/clawttack/packages/sdk'
-RESULTS_DIR = '/home/clawn/.openclaw/workspace/projects/clawttack/battle-results'
-ARENA = '0xFe8Bfd37D941e22d3E21258e2b3D143435Ba793f'
-RPC = 'https://sepolia.base.org'
-CAST = os.path.expanduser('~/.foundry/bin/cast')
+Creates battles on the configured Arena, accepts with ClawnJr,
+and runs `scripts/battle-loop.ts` for each match.
+"""
 
-secrets_data = json.load(open(os.path.expanduser('~/.config/pvtclawn/secrets.json')))
-WALLET_PW = secrets_data['WALLET_PASSWORD']
-OPP_KEY = open('/tmp/batch_opponent_key').read().strip()
+from __future__ import annotations
 
-# Battle configs: (strategy_a, strategy_b, seed)
-BATTLES = [
-    ('default', 'default', '30001'),    # mirror baseline, new seed
-    ('aggressive', 'defensive', '30002'),  # aggr vs def
-    ('defensive', 'aggressive', '30003'),  # def vs aggr (swap)
-    ('aggressive', 'aggressive', '30004'), # both aggressive
-    ('defensive', 'defensive', '30005'),   # both defensive
-]
+import json
+import os
+import re
+import secrets
+import subprocess
+import sys
+import time
+from pathlib import Path
 
-def cast_send(to, sig, args, key_type='account', key='clawn', value=None):
-    cmd = [CAST, 'send', to, sig] + args + ['--rpc-url', RPC]
-    if key_type == 'account':
-        cmd += ['--account', key, '--password', WALLET_PW]
-    else:
-        cmd += ['--private-key', key]
-    if value:
-        cmd += ['--value', value]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    if result.returncode != 0:
-        print(f'  ERROR: {result.stderr[:200]}')
-        return None
-    return result.stdout
+SDK_DIR = Path(__file__).resolve().parents[1]
+PROJECT_DIR = SDK_DIR.parent.parent
+RESULTS_DIR = PROJECT_DIR / 'battle-results'
+CHECKPOINT_DIR = RESULTS_DIR / 'checkpoints'
+CAST = str(Path.home() / '.foundry' / 'bin' / 'cast')
 
-def extract_clone_addr(output):
-    """Extract first address from cast send logs."""
-    import re
-    matches = re.findall(r'"address":"(0x[0-9a-f]+)"', output)
-    return matches[0] if matches else None
+RPC = os.getenv('CLAWTTACK_RPC', 'https://sepolia.base.org')
+ARENA = os.getenv('CLAWTTACK_ARENA', '0x2ab05eab902db3fda647b3ec798c2d28c7489b7e')
+MAX_BATTLES = int(os.getenv('CLAWTTACK_BATCH_BATTLES', '32'))
+MAX_TURNS = int(os.getenv('CLAWTTACK_MAX_TURNS', '80'))
+WARMUP_WAIT_SEC = int(os.getenv('CLAWTTACK_WARMUP_WAIT_SEC', '35'))
+STAKE_WEI = int(os.getenv('CLAWTTACK_STAKE_WEI', '1000000000000000'))  # 0.001 ether
+WARMUP_BLOCKS = int(os.getenv('CLAWTTACK_WARMUP_BLOCKS', '15'))
+TARGET_AGENT_ID = int(os.getenv('CLAWTTACK_TARGET_AGENT_ID', '0'))
+MAX_JOKERS = int(os.getenv('CLAWTTACK_MAX_JOKERS', '0'))
+CLOZE_ENABLED = os.getenv('CLAWTTACK_CLOZE_ENABLED', 'false').lower() in ('1', 'true', 'yes')
+STRATEGY_A = os.getenv('CLAWTTACK_STRATEGY_A', 'llm')
+STRATEGY_B = os.getenv('CLAWTTACK_STRATEGY_B', 'llm')
+BATTLE_TIMEOUT_SEC = int(os.getenv('CLAWTTACK_BATTLE_TIMEOUT_SEC', '1500'))
 
-for i, (strat_a, strat_b, seed) in enumerate(BATTLES):
-    print(f'\n{"="*60}')
-    print(f'Battle {i+1}/{len(BATTLES)}: {strat_a} A vs {strat_b} B (seed={seed})')
-    print(f'{"="*60}')
 
-    # Create battle
-    secret = '0x' + secrets.token_hex(32)
-    output = cast_send(
+def fail(msg: str) -> None:
+    print(f'❌ {msg}')
+    sys.exit(1)
+
+
+def run(cmd: list[str], *, timeout: int = 60, env: dict[str, str] | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
+    if check and proc.returncode != 0:
+        raise RuntimeError((proc.stderr or proc.stdout or 'command failed').strip())
+    return proc
+
+
+def extract_address(text: str) -> str | None:
+    match = re.search(r'0x[a-fA-F0-9]{40}', text)
+    return match.group(0) if match else None
+
+
+def parse_uint(text: str) -> int:
+    token_match = re.search(r'0x[a-fA-F0-9]+|\d+', text.strip())
+    if not token_match:
+        raise ValueError(f'Cannot parse uint from: {text!r}')
+    token = token_match.group(0)
+    return int(token, 16) if token.startswith('0x') else int(token)
+
+
+def cast_call(to: str, sig: str, *args: str) -> str:
+    cmd = [CAST, 'call', to, sig, *args, '--rpc-url', RPC]
+    return run(cmd).stdout.strip()
+
+
+def cast_send_account(account: str, to: str, sig: str, *args: str, value_wei: int = 0, timeout: int = 120) -> str:
+    cmd = [
+        CAST, 'send', to, sig, *args,
+        '--rpc-url', RPC,
+        '--account', account,
+        '--password', WALLET_PASSWORD,
+        '--gas-limit', '3000000',
+    ]
+    if value_wei > 0:
+        cmd += ['--value', str(value_wei)]
+    proc = run(cmd, timeout=timeout, check=False)
+    output = (proc.stdout or '') + (proc.stderr or '')
+    if proc.returncode != 0 or 'status               1' not in output:
+        raise RuntimeError(output.strip())
+    return output
+
+
+def get_account_address(account: str) -> str:
+    cmd = [CAST, 'wallet', 'address', '--account', account, '--password', WALLET_PASSWORD]
+    out = run(cmd).stdout.strip()
+    addr = extract_address(out)
+    if not addr:
+        raise RuntimeError(f'Could not resolve address for account={account}')
+    return addr.lower()
+
+
+def decrypt_keystore_key(account: str) -> str:
+    cmd = [CAST, 'wallet', 'decrypt-keystore', account, '--unsafe-password', WALLET_PASSWORD]
+    out = run(cmd).stdout.strip()
+    key_match = re.search(r'0x[a-fA-F0-9]{64}', out)
+    if not key_match:
+        raise RuntimeError(f'Could not decrypt private key for account={account}')
+    return key_match.group(0)
+
+
+def find_agent_id(owner_addr: str) -> int | None:
+    agents_count = parse_uint(cast_call(ARENA, 'agentsCount()(uint256)'))
+    for idx in range(1, agents_count + 1):
+        raw = cast_call(ARENA, 'agents(uint256)(address,uint32,uint32,uint32)', str(idx))
+        owner = extract_address(raw)
+        if owner and owner.lower() == owner_addr:
+            return idx
+    return None
+
+
+def ensure_registered(account: str, owner_addr: str) -> int:
+    existing = find_agent_id(owner_addr)
+    if existing is not None:
+        return existing
+
+    registration_fee = parse_uint(cast_call(ARENA, 'agentRegistrationFee()(uint256)'))
+    cast_send_account(account, ARENA, 'registerAgent()', value_wei=registration_fee)
+    new_id = find_agent_id(owner_addr)
+    if new_id is None:
+        raise RuntimeError(f'Failed to register agent for account={account}')
+    return new_id
+
+
+def create_battle(challenger_id: int) -> tuple[int, str]:
+    creation_fee = parse_uint(cast_call(ARENA, 'battleCreationFee()(uint256)'))
+    secret_hash = '0x' + secrets.token_hex(32)
+    config = f'({STAKE_WEI},{WARMUP_BLOCKS},{TARGET_AGENT_ID},{MAX_JOKERS},{str(CLOZE_ENABLED).lower()})'
+    total_value = STAKE_WEI + creation_fee
+
+    cast_send_account(
+        'clawn',
         ARENA,
         'createBattle(uint256,(uint256,uint32,uint256,uint8,bool),bytes32)',
-        ['1', '(1000000000000000,15,0,0)', secret],
-        value='0.001ether'
+        str(challenger_id),
+        config,
+        secret_hash,
+        value_wei=total_value,
+        timeout=180,
     )
-    if not output:
-        print('  Failed to create battle, skipping')
-        continue
 
-    battle_addr = extract_clone_addr(output)
+    battle_id = parse_uint(cast_call(ARENA, 'battlesCount()(uint256)'))
+    battle_addr_raw = cast_call(ARENA, 'battles(uint256)(address)', str(battle_id))
+    battle_addr = extract_address(battle_addr_raw)
     if not battle_addr:
-        print('  Could not find clone address, skipping')
-        continue
-    print(f'  Created: {battle_addr}')
+        raise RuntimeError('Could not resolve cloned battle address')
 
-    # Accept battle
-    secret2 = '0x' + secrets.token_hex(32)
-    output = cast_send(
+    return battle_id, battle_addr
+
+
+def accept_battle(battle_addr: str, acceptor_id: int) -> None:
+    secret_hash = '0x' + secrets.token_hex(32)
+    cast_send_account(
+        'clawnjr',
         battle_addr,
         'acceptBattle(uint256,bytes32)',
-        ['5', secret2],
-        key_type='private', key=OPP_KEY,
-        value='0.001ether'
+        str(acceptor_id),
+        secret_hash,
+        value_wei=STAKE_WEI,
+        timeout=180,
     )
-    if not output:
-        print('  Failed to accept battle, skipping')
-        continue
-    print(f'  Accepted')
 
-    # Wait for warmup period (15 blocks × 2s = ~30s)
-    print(f'  Waiting 35s for warmup...')
-    time.sleep(35)
 
-    # Run battle
-    log_path = f'{RESULTS_DIR}/batch-{seed}.log'
-    cp_path = f'{RESULTS_DIR}/checkpoints/batch-{seed}.json'
+def run_battle_loop(battle_addr: str, opponent_key: str, seed: int, battle_id: int) -> int:
+    log_path = RESULTS_DIR / f'batch-{battle_id}-{seed}.log'
+    checkpoint_path = CHECKPOINT_DIR / f'batch-{battle_id}-{seed}.json'
+
     env = os.environ.copy()
     env.update({
         'CLAWTTACK_BATTLE': battle_addr,
-        'CLAWTTACK_OPPONENT_PRIVATE_KEY': OPP_KEY,
-        'CLAWTTACK_SEED': seed,
-        'CLAWTTACK_MAX_TURNS': '80',
-        'CLAWTTACK_STRATEGY_A': strat_a,
-        'CLAWTTACK_STRATEGY_B': strat_b,
-        'CLAWTTACK_CHECKPOINT_PATH': cp_path,
-        'WALLET_PASSWORD': WALLET_PW,
+        'CLAWTTACK_OPPONENT_PRIVATE_KEY': opponent_key,
+        'CLAWTTACK_RPC': RPC,
+        'CLAWTTACK_SEED': str(seed),
+        'CLAWTTACK_MAX_TURNS': str(MAX_TURNS),
+        'CLAWTTACK_STRATEGY_A': STRATEGY_A,
+        'CLAWTTACK_STRATEGY_B': STRATEGY_B,
+        'CLAWTTACK_CHECKPOINT_PATH': str(checkpoint_path),
     })
 
-    print(f'  Running ({strat_a} vs {strat_b})...')
-    with open(log_path, 'w') as f:
-        result = subprocess.run(
+    with log_path.open('w') as log_file:
+        proc = subprocess.run(
             ['bun', 'run', 'scripts/battle-loop.ts'],
-            env=env, stdout=f, stderr=subprocess.STDOUT,
-            cwd=SDK_DIR, timeout=600  # 10 min max per battle
+            cwd=SDK_DIR,
+            env=env,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            timeout=BATTLE_TIMEOUT_SEC,
         )
-    print(f'  Exit code: {result.returncode}')
 
-    # Quick summary from log
+    return proc.returncode
+
+
+if __name__ == '__main__':
+    if not Path(CAST).exists():
+        fail(f'cast not found at {CAST}')
+
+    secrets_path = Path.home() / '.config' / 'pvtclawn' / 'secrets.json'
+    if not secrets_path.exists():
+        fail(f'Missing secrets file: {secrets_path}')
+
+    secrets_data = json.loads(secrets_path.read_text())
+    WALLET_PASSWORD = secrets_data.get('WALLET_PASSWORD')
+    if not WALLET_PASSWORD:
+        fail('WALLET_PASSWORD missing in secrets.json')
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+
     try:
-        with open(log_path) as f:
-            lines = f.readlines()
-        for line in lines[-5:]:
-            line = line.strip()
-            if 'BATTLE RESULTS' in line or 'Total' in line or 'Battle ended' in line or 'Banks:' in line:
-                print(f'  {line}')
-    except:
-        pass
+        clawn_addr = get_account_address('clawn')
+        jr_addr = get_account_address('clawnjr')
+        jr_private_key = decrypt_keystore_key('clawnjr')
 
-    time.sleep(2)  # Brief pause between battles
+        clawn_id = ensure_registered('clawn', clawn_addr)
+        jr_id = ensure_registered('clawnjr', jr_addr)
+    except Exception as exc:
+        fail(f'Agent setup failed: {exc}')
 
-print(f'\n{"="*60}')
-print('Batch complete!')
+    print('🦞 Clawttack autonomous batch runner')
+    print(f'  Arena: {ARENA}')
+    print(f'  RPC: {RPC}')
+    print(f'  Clawn: id={clawn_id}, addr={clawn_addr}')
+    print(f'  ClawnJr: id={jr_id}, addr={jr_addr}')
+    print(f'  Strategy: A={STRATEGY_A}, B={STRATEGY_B}')
+    print(f'  Battles: {MAX_BATTLES} | stake={STAKE_WEI} wei | warmup={WARMUP_BLOCKS} blocks')
+
+    success = 0
+    for i in range(MAX_BATTLES):
+        seed = int(time.time()) + i
+        print(f'\n{"="*64}')
+        print(f'Battle {i + 1}/{MAX_BATTLES} | seed={seed}')
+
+        try:
+            battle_id, battle_addr = create_battle(clawn_id)
+            print(f'  Created battle #{battle_id}: {battle_addr}')
+
+            accept_battle(battle_addr, jr_id)
+            print('  Accepted by ClawnJr')
+
+            print(f'  Waiting warmup ~{WARMUP_WAIT_SEC}s ...')
+            time.sleep(WARMUP_WAIT_SEC)
+
+            code = run_battle_loop(battle_addr, jr_private_key, seed, battle_id)
+            print(f'  battle-loop exit code: {code}')
+            if code == 0:
+                success += 1
+        except subprocess.TimeoutExpired:
+            print('  ⚠️ battle-loop timed out; continuing to next battle')
+        except Exception as exc:
+            print(f'  ⚠️ battle failed: {exc}')
+
+        time.sleep(2)
+
+    print(f'\n✅ Batch complete: {success}/{MAX_BATTLES} finished with exit code 0')
