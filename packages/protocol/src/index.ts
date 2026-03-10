@@ -38,3 +38,4 @@ export * from './single-writer-fencing.ts';
 export * from './nonce-pipeline.ts';
 export * from './nonce-reservation-lifecycle.ts';
 export * from './verification-claim-caveat-quality.ts';
+export * from './verification-claim-triangulation-task1.ts';
