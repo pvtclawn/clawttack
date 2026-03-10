@@ -39,3 +39,4 @@ export * from './nonce-pipeline.ts';
 export * from './nonce-reservation-lifecycle.ts';
 export * from './verification-claim-caveat-quality.ts';
 export * from './verification-claim-triangulation-task1.ts';
+export * from './verification-claim-trace-task1.ts';
