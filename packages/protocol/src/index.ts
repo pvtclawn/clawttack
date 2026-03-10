@@ -48,3 +48,4 @@ export * from './verification-claim-global-observability-task1.ts';
 export * from './verification-claim-delivery-semantics-task1.ts';
 export * from './verification-claim-local-authority-task1.ts';
 export * from './verification-claim-serializability-task1.ts';
+export * from './verification-claim-system-model-task1.ts';
