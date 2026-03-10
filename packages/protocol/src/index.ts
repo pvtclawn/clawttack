@@ -36,3 +36,4 @@ export * from './feedback-cadence-budget.ts';
 export * from './identity-evidence-admission.ts';
 export * from './single-writer-fencing.ts';
 export * from './nonce-pipeline.ts';
+export * from './nonce-reservation-lifecycle.ts';
