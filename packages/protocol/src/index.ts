@@ -44,3 +44,4 @@ export * from './verification-claim-safety-liveness-task1.ts';
 export * from './verification-claim-responsiveness-task1.ts';
 export * from './verification-claim-interaction-task1.ts';
 export * from './verification-claim-view-consistency-task1.ts';
+export * from './verification-claim-global-observability-task1.ts';
