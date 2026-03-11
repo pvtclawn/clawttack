@@ -66,3 +66,4 @@ export * from './timeout-bucket-commutativity-task1.ts';
 export * from './timeout-bucket-monotonic-knowledge-task1.ts';
 export * from './timeout-safety-priority-task1.ts';
 export * from './tactic-evidence-task1.ts';
+export * from './tactic-screen-task1.ts';
