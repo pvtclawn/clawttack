@@ -69,3 +69,4 @@ export * from './tactic-evidence-task1.ts';
 export * from './tactic-screen-task1.ts';
 export * from './tactic-hypothesis-task1.ts';
 export * from './tactic-escalation-task1.ts';
+export * from './tactic-routing-task1.ts';
