@@ -71,3 +71,4 @@ export * from './tactic-hypothesis-task1.ts';
 export * from './tactic-escalation-task1.ts';
 export * from './tactic-routing-task1.ts';
 export * from './tactic-output-task1.ts';
+export * from './tactic-output-public-task1.ts';
