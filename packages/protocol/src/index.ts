@@ -73,3 +73,4 @@ export * from './tactic-routing-task1.ts';
 export * from './tactic-output-task1.ts';
 export * from './tactic-output-public-task1.ts';
 export * from './tactic-output-contract-task1.ts';
+export * from './tactic-output-view-task1.ts';
