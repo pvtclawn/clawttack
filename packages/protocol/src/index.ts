@@ -58,3 +58,4 @@ export * from './batch-runner-idempotence-task1.ts';
 export * from './batch-runner-timeout-suspicion-task1.ts';
 export * from './timeout-evidence-context-task1.ts';
 export * from './timeout-clock-source-task1.ts';
+export * from './timeout-causal-ordering-task1.ts';
