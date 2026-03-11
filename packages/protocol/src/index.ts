@@ -61,3 +61,4 @@ export * from './timeout-clock-source-task1.ts';
 export * from './timeout-causal-ordering-task1.ts';
 export * from './timeout-logical-order-normalization-task1.ts';
 export * from './timeout-order-equivalence-task1.ts';
+export * from './timeout-replay-equivalence-task1.ts';
