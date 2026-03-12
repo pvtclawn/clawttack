@@ -61,6 +61,8 @@ describe('tactic output capability runtime freshness task1', () => {
     decision: 'allow',
   }
 
+  const authoritySource = 'witness-cache-a'
+
   const validAuthority: TacticOutputCapabilityRuntimeFreshnessWriterAuthority = {
     scopeKey: baseScopeKey,
     writerId: 'runner-a',
@@ -449,6 +451,7 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'witness lost',
       authorityEpoch: 7,
+      authoritySource,
       uncertaintyClass: 'missing',
       uncertaintyEpoch: 1,
     })
@@ -480,6 +483,7 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'partition detected',
       authorityEpoch: 7,
+      authoritySource,
       uncertaintyClass: 'timeout-suspected',
       uncertaintyEpoch: 2,
     })
@@ -512,6 +516,7 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'witness lost',
       authorityEpoch: 7,
+      authoritySource,
       uncertaintyClass: 'stale',
       uncertaintyEpoch: 7,
     })
@@ -521,6 +526,7 @@ describe('tactic output capability runtime freshness task1', () => {
       witness: {
         scopeKey: baseScopeKey,
         authorityEpoch: 7,
+        authoritySource,
       },
     })
 
@@ -542,6 +548,7 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'witness lost',
       authorityEpoch: 7,
+      authoritySource,
       uncertaintyClass: 'missing',
       uncertaintyEpoch: 1,
     })
@@ -551,6 +558,7 @@ describe('tactic output capability runtime freshness task1', () => {
       witness: {
         scopeKey: baseScopeKey,
         authorityEpoch: 12,
+        authoritySource,
       },
     })
 
@@ -581,6 +589,7 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'witness unavailable',
       authorityEpoch: 7,
+      authoritySource,
       uncertaintyClass: 'missing',
       uncertaintyEpoch: 3,
     })
@@ -616,6 +625,7 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'conflicting authority evidence',
       authorityEpoch: 7,
+      authoritySource,
       uncertaintyClass: 'conflicting',
       uncertaintyEpoch: 11,
     })
@@ -627,6 +637,35 @@ describe('tactic output capability runtime freshness task1', () => {
     expect(state?.sealed).toBe(true)
     expect(state?.uncertaintyClass).toBe('conflicting')
     expect(state?.uncertaintyEpoch).toBe(11)
+    expect(state?.committedAuthorityEpoch).toBe(7)
+    expect(state?.authoritySource).toBe(authoritySource)
+  })
+
+  it('rejects a fake newer epoch without valid provenance', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-sealed-'))
+    const sealFilePath = join(tempDir, 'sealed.json')
+    const sealStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({ filePath: sealFilePath })
+    sealStore.load()
+    sealStore.sealScope({
+      scopeKey: baseScopeKey,
+      sealReason: 'witness timeout',
+      authorityEpoch: 7,
+      authoritySource,
+      uncertaintyClass: 'timeout-suspected',
+      uncertaintyEpoch: 9,
+    })
+
+    const result = sealStore.unsealScope({
+      scopeKey: baseScopeKey,
+      witness: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        authoritySource: 'forged-cache-b',
+      },
+    })
+
+    expect(result).toEqual({ unsealed: false, reason: 'invalid-authority-provenance' })
+    expect(sealStore.isSealed(baseScopeKey)).toBe(true)
   })
 
   it('does not let a generic stale witness clear contradictory state', () => {
@@ -638,6 +677,7 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'conflicting authority evidence',
       authorityEpoch: 7,
+      authoritySource,
       uncertaintyClass: 'conflicting',
       uncertaintyEpoch: 11,
     })
@@ -647,11 +687,52 @@ describe('tactic output capability runtime freshness task1', () => {
       witness: {
         scopeKey: baseScopeKey,
         authorityEpoch: 8,
+        authoritySource,
       },
     })
 
     expect(result).toEqual({ unsealed: false, reason: 'stale-authority-witness' })
     expect(sealStore.isSealed(baseScopeKey)).toBe(true)
+  })
+
+  it('preserves contradiction context even with a newer epoch until explicitly resolved', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-sealed-'))
+    const sealFilePath = join(tempDir, 'sealed.json')
+    const sealStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({ filePath: sealFilePath })
+    sealStore.load()
+    sealStore.sealScope({
+      scopeKey: baseScopeKey,
+      sealReason: 'conflicting authority evidence',
+      authorityEpoch: 7,
+      authoritySource,
+      uncertaintyClass: 'conflicting',
+      uncertaintyEpoch: 11,
+    })
+
+    const unresolved = sealStore.unsealScope({
+      scopeKey: baseScopeKey,
+      witness: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        authoritySource,
+      },
+    })
+
+    expect(unresolved).toEqual({ unsealed: false, reason: 'unresolved-contradiction' })
+    expect(sealStore.isSealed(baseScopeKey)).toBe(true)
+
+    const resolved = sealStore.unsealScope({
+      scopeKey: baseScopeKey,
+      witness: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        authoritySource,
+        resolvedUncertaintyClass: 'conflicting',
+      },
+    })
+
+    expect(resolved).toEqual({ unsealed: true, reason: 'pass' })
+    expect(sealStore.isSealed(baseScopeKey)).toBe(false)
   })
 
   it('invalidates stale admitted work after uncertainty epoch advances', () => {
@@ -672,6 +753,7 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'witness timeout',
       authorityEpoch: 7,
+      authoritySource,
       uncertaintyClass: 'timeout-suspected',
       uncertaintyEpoch: 1,
     })

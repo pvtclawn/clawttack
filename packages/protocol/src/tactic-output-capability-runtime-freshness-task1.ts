@@ -85,6 +85,8 @@ export interface TacticOutputCapabilityRuntimeFreshnessWriterAuthority {
 export interface TacticOutputCapabilityRuntimeFreshnessAuthorityWitness {
   scopeKey: string
   authorityEpoch: number
+  authoritySource: string
+  resolvedUncertaintyClass?: TacticOutputCapabilityRuntimeFreshnessUncertaintyClass
 }
 
 export interface TacticOutputCapabilityRuntimeFreshnessFencedAppendResult {
@@ -142,8 +144,9 @@ export interface TacticOutputCapabilityRuntimeFreshnessSealedScopeState {
   sealed: boolean
   sealReason: string
   uncertaintyClass: TacticOutputCapabilityRuntimeFreshnessUncertaintyClass
-  lastAuthorityEpoch: number
+  committedAuthorityEpoch: number
   uncertaintyEpoch: number
+  authoritySource: string
   sealedAt: string
 }
 
@@ -160,6 +163,7 @@ export interface TacticOutputCapabilityRuntimeFreshnessFileBackedStoreOptions {
 export interface TacticOutputCapabilityRuntimeFreshnessSealedScopeStore {
   isSealed(scopeKey: string): boolean
   getUncertaintyEpoch(scopeKey: string): number
+  getCommittedAuthorityEpoch(scopeKey: string): number
   getScopeState(scopeKey: string): TacticOutputCapabilityRuntimeFreshnessSealedScopeState | undefined
 }
 
@@ -169,6 +173,7 @@ export interface TacticOutputCapabilityRuntimeFreshnessMutableSealedScopeStore
     scopeKey: string
     sealReason: string
     authorityEpoch: number
+    authoritySource: string
     uncertaintyClass: TacticOutputCapabilityRuntimeFreshnessUncertaintyClass
     uncertaintyEpoch: number
   }): void
@@ -177,7 +182,13 @@ export interface TacticOutputCapabilityRuntimeFreshnessMutableSealedScopeStore
     witness: TacticOutputCapabilityRuntimeFreshnessAuthorityWitness | null | undefined
   }): {
     unsealed: boolean
-    reason: 'pass' | 'missing-authority-witness' | 'stale-authority-witness' | 'witness-scope-mismatch'
+    reason:
+      | 'pass'
+      | 'missing-authority-witness'
+      | 'stale-authority-witness'
+      | 'witness-scope-mismatch'
+      | 'invalid-authority-provenance'
+      | 'unresolved-contradiction'
   }
 }
 
@@ -186,7 +197,7 @@ type LockStateLike = SubmitFencingInput['lockState']
 const CLAIM_DIGEST_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/claim-digest'
 const RESULT_ARTIFACT_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/result'
 const LEDGER_RECORD_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/ledger-record'
-const SEALED_SCOPE_FILE_SCHEMA_VERSION = 2
+const SEALED_SCOPE_FILE_SCHEMA_VERSION = 3
 const LEDGER_SCHEMA_VERSION = 2
 const UNFENCED_WRITER_ID = 'unfenced'
 const UNFENCED_WRITER_TOKEN = 0
@@ -413,6 +424,11 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore
     return this.#states.get(normalizeScopeKey(scopeKey))?.uncertaintyEpoch ?? 0
   }
 
+  getCommittedAuthorityEpoch(scopeKey: string): number {
+    this.assertLoaded()
+    return this.#states.get(normalizeScopeKey(scopeKey))?.committedAuthorityEpoch ?? 0
+  }
+
   getScopeState(scopeKey: string): TacticOutputCapabilityRuntimeFreshnessSealedScopeState | undefined {
     this.assertLoaded()
     const state = this.#states.get(normalizeScopeKey(scopeKey))
@@ -423,6 +439,7 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore
     scopeKey: string
     sealReason: string
     authorityEpoch: number
+    authoritySource: string
     uncertaintyClass: TacticOutputCapabilityRuntimeFreshnessUncertaintyClass
     uncertaintyEpoch: number
   }): void {
@@ -431,6 +448,7 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore
       scopeKey: input.scopeKey,
       sealReason: input.sealReason,
       authorityEpoch: input.authorityEpoch,
+      authoritySource: input.authoritySource,
       uncertaintyClass: input.uncertaintyClass,
       uncertaintyEpoch: input.uncertaintyEpoch,
       sealedAt: this.#now(),
@@ -444,7 +462,13 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore
     witness: TacticOutputCapabilityRuntimeFreshnessAuthorityWitness | null | undefined
   }): {
     unsealed: boolean
-    reason: 'pass' | 'missing-authority-witness' | 'stale-authority-witness' | 'witness-scope-mismatch'
+    reason:
+      | 'pass'
+      | 'missing-authority-witness'
+      | 'stale-authority-witness'
+      | 'witness-scope-mismatch'
+      | 'invalid-authority-provenance'
+      | 'unresolved-contradiction'
   } {
     this.assertLoaded()
 
@@ -463,15 +487,28 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore
       return { unsealed: false, reason: 'witness-scope-mismatch' }
     }
 
-    const requiredEpoch = Math.max(current.lastAuthorityEpoch, current.uncertaintyEpoch)
+    if (witness.authoritySource !== current.authoritySource) {
+      return { unsealed: false, reason: 'invalid-authority-provenance' }
+    }
+
+    const requiredEpoch = Math.max(current.committedAuthorityEpoch, current.uncertaintyEpoch)
     if (witness.authorityEpoch <= requiredEpoch) {
       return { unsealed: false, reason: 'stale-authority-witness' }
+    }
+
+    if (
+      (current.uncertaintyClass === 'conflicting'
+        || current.uncertaintyClass === 'epoch-regression'
+        || current.uncertaintyClass === 'scope-mismatch')
+      && witness.resolvedUncertaintyClass !== current.uncertaintyClass
+    ) {
+      return { unsealed: false, reason: 'unresolved-contradiction' }
     }
 
     this.#states.set(normalizedScopeKey, {
       ...current,
       sealed: false,
-      lastAuthorityEpoch: witness.authorityEpoch,
+      committedAuthorityEpoch: witness.authorityEpoch,
     })
     this.persist()
     return { unsealed: true, reason: 'pass' }
@@ -582,6 +619,8 @@ const normalizeAuthorityWitness = (
 ): TacticOutputCapabilityRuntimeFreshnessAuthorityWitness => ({
   scopeKey: normalizeScopeKey(witness.scopeKey),
   authorityEpoch: witness.authorityEpoch,
+  authoritySource: normalizeToken(witness.authoritySource),
+  resolvedUncertaintyClass: witness.resolvedUncertaintyClass,
 })
 
 const createLedgerChecksum = (record: Omit<TacticOutputCapabilityRuntimeFreshnessLedgerRecord, 'checksum'>): `0x${string}` => sha256({
@@ -687,6 +726,7 @@ const createSealedScopeState = (input: {
   scopeKey: string
   sealReason: string
   authorityEpoch: number
+  authoritySource: string
   uncertaintyClass: TacticOutputCapabilityRuntimeFreshnessUncertaintyClass
   uncertaintyEpoch: number
   sealedAt: string
@@ -695,8 +735,9 @@ const createSealedScopeState = (input: {
   sealed: true,
   sealReason: normalizeToken(input.sealReason),
   uncertaintyClass: input.uncertaintyClass,
-  lastAuthorityEpoch: input.authorityEpoch,
+  committedAuthorityEpoch: input.authorityEpoch,
   uncertaintyEpoch: input.uncertaintyEpoch,
+  authoritySource: normalizeToken(input.authoritySource),
   sealedAt: input.sealedAt,
 })
 
@@ -708,8 +749,9 @@ const validateSealedScopeState = (
     || typeof state.sealed !== 'boolean'
     || typeof state.sealReason !== 'string'
     || typeof state.uncertaintyClass !== 'string'
-    || typeof state.lastAuthorityEpoch !== 'number'
+    || typeof state.committedAuthorityEpoch !== 'number'
     || typeof state.uncertaintyEpoch !== 'number'
+    || typeof state.authoritySource !== 'string'
     || typeof state.sealedAt !== 'string'
   ) {
     throw new Error('Freshness sealed-scope state shape is invalid')
@@ -720,8 +762,9 @@ const validateSealedScopeState = (
     sealed: state.sealed,
     sealReason: normalizeToken(state.sealReason),
     uncertaintyClass: state.uncertaintyClass as TacticOutputCapabilityRuntimeFreshnessUncertaintyClass,
-    lastAuthorityEpoch: state.lastAuthorityEpoch,
+    committedAuthorityEpoch: state.committedAuthorityEpoch,
     uncertaintyEpoch: state.uncertaintyEpoch,
+    authoritySource: normalizeToken(state.authoritySource),
     sealedAt: state.sealedAt,
   }
 }
