@@ -227,12 +227,71 @@ export interface TacticOutputCapabilityRuntimeFreshnessMutableSealedScopeStore
   }
 }
 
+export type TacticOutputCapabilityRuntimeFreshnessResumeBarrierDecision =
+  | 'pass'
+  | 'missing-recovery-snapshot'
+  | 'mixed-snapshot-stale'
+  | 'authority-source-mismatch'
+
+export interface TacticOutputCapabilityRuntimeFreshnessResumeQuarantineState {
+  scopeKey: string
+  quarantined: boolean
+  quarantineReason: string
+  quarantineEpoch: number
+  quarantineGeneration: number
+  authoritySource: string
+  quarantinedAt: string
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessResumeQuarantineFile {
+  schemaVersion: number
+  states: TacticOutputCapabilityRuntimeFreshnessResumeQuarantineState[]
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessResumeWorkItem {
+  scopeKey: string
+  observedAuthorityEpoch: number
+  observedRenewalGeneration: number
+  observedAuthoritySource: string
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessRecoverySnapshot {
+  scopeKey: string
+  authorityEpoch: number
+  renewalGeneration: number
+  authoritySource: string
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessResumeQuarantineStore {
+  isQuarantined(scopeKey: string): boolean
+  getScopeState(scopeKey: string): TacticOutputCapabilityRuntimeFreshnessResumeQuarantineState | undefined
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessMutableResumeQuarantineStore
+  extends TacticOutputCapabilityRuntimeFreshnessResumeQuarantineStore {
+  quarantineScope(input: {
+    scopeKey: string
+    quarantineReason: string
+    authorityEpoch: number
+    renewalGeneration: number
+    authoritySource: string
+  }): void
+  releaseScopeIfCurrent(input: {
+    workItem: TacticOutputCapabilityRuntimeFreshnessResumeWorkItem
+    snapshot: TacticOutputCapabilityRuntimeFreshnessRecoverySnapshot | null | undefined
+  }): {
+    released: boolean
+    reason: TacticOutputCapabilityRuntimeFreshnessResumeBarrierDecision
+  }
+}
+
 type LockStateLike = SubmitFencingInput['lockState']
 
 const CLAIM_DIGEST_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/claim-digest'
 const RESULT_ARTIFACT_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/result'
 const LEDGER_RECORD_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/ledger-record'
 const SEALED_SCOPE_FILE_SCHEMA_VERSION = 3
+const RESUME_QUARANTINE_FILE_SCHEMA_VERSION = 1
 const LEDGER_SCHEMA_VERSION = 2
 const UNFENCED_WRITER_ID = 'unfenced'
 const UNFENCED_WRITER_TOKEN = 0
@@ -565,6 +624,120 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore
   }
 }
 
+export class FileBackedTacticOutputCapabilityRuntimeFreshnessResumeQuarantineStore
+  implements TacticOutputCapabilityRuntimeFreshnessMutableResumeQuarantineStore {
+  readonly #filePath: string
+  readonly #now: () => string
+  readonly #states = new Map<string, TacticOutputCapabilityRuntimeFreshnessResumeQuarantineState>()
+  #loaded = false
+
+  constructor(options: TacticOutputCapabilityRuntimeFreshnessFileBackedStoreOptions) {
+    this.#filePath = options.filePath
+    this.#now = options.now ?? (() => new Date().toISOString())
+  }
+
+  load(): void {
+    this.#states.clear()
+
+    if (!existsSync(this.#filePath)) {
+      this.#loaded = true
+      return
+    }
+
+    const raw = readFileSync(this.#filePath, 'utf8')
+    if (raw.length === 0) {
+      this.#loaded = true
+      return
+    }
+
+    const parsed = JSON.parse(raw) as Partial<TacticOutputCapabilityRuntimeFreshnessResumeQuarantineFile>
+    if (parsed.schemaVersion !== RESUME_QUARANTINE_FILE_SCHEMA_VERSION || !Array.isArray(parsed.states)) {
+      throw new Error('Freshness resume-quarantine file shape is invalid')
+    }
+
+    for (const entry of parsed.states) {
+      const state = validateResumeQuarantineState(entry)
+      this.#states.set(state.scopeKey, state)
+    }
+
+    this.#loaded = true
+  }
+
+  isQuarantined(scopeKey: string): boolean {
+    this.assertLoaded()
+    return this.#states.get(normalizeScopeKey(scopeKey))?.quarantined === true
+  }
+
+  getScopeState(scopeKey: string): TacticOutputCapabilityRuntimeFreshnessResumeQuarantineState | undefined {
+    this.assertLoaded()
+    const state = this.#states.get(normalizeScopeKey(scopeKey))
+    return state === undefined ? undefined : { ...state }
+  }
+
+  quarantineScope(input: {
+    scopeKey: string
+    quarantineReason: string
+    authorityEpoch: number
+    renewalGeneration: number
+    authoritySource: string
+  }): void {
+    this.assertLoaded()
+    const state = createResumeQuarantineState({
+      scopeKey: input.scopeKey,
+      quarantineReason: input.quarantineReason,
+      authorityEpoch: input.authorityEpoch,
+      renewalGeneration: input.renewalGeneration,
+      authoritySource: input.authoritySource,
+      quarantinedAt: this.#now(),
+    })
+    this.#states.set(state.scopeKey, state)
+    this.persist()
+  }
+
+  releaseScopeIfCurrent(input: {
+    workItem: TacticOutputCapabilityRuntimeFreshnessResumeWorkItem
+    snapshot: TacticOutputCapabilityRuntimeFreshnessRecoverySnapshot | null | undefined
+  }): { released: boolean, reason: TacticOutputCapabilityRuntimeFreshnessResumeBarrierDecision } {
+    this.assertLoaded()
+    const decision = evaluateTacticOutputCapabilityRuntimeFreshnessResumeBarrier({
+      workItem: input.workItem,
+      snapshot: input.snapshot,
+    })
+
+    if (decision !== 'pass') {
+      return { released: false, reason: decision }
+    }
+
+    const workItem = normalizeResumeWorkItem(input.workItem)
+    const snapshot = normalizeRecoverySnapshot(input.snapshot!)
+    this.#states.set(workItem.scopeKey, {
+      scopeKey: workItem.scopeKey,
+      quarantined: false,
+      quarantineReason: 'released',
+      quarantineEpoch: snapshot.authorityEpoch,
+      quarantineGeneration: snapshot.renewalGeneration,
+      authoritySource: snapshot.authoritySource,
+      quarantinedAt: this.#now(),
+    })
+    this.persist()
+    return { released: true, reason: 'pass' }
+  }
+
+  private persist(): void {
+    const file: TacticOutputCapabilityRuntimeFreshnessResumeQuarantineFile = {
+      schemaVersion: RESUME_QUARANTINE_FILE_SCHEMA_VERSION,
+      states: Array.from(this.#states.values()).sort((a, b) => a.scopeKey.localeCompare(b.scopeKey)),
+    }
+    writeFileSync(this.#filePath, `${stableStringify(file)}\n`)
+  }
+
+  private assertLoaded(): void {
+    if (!this.#loaded) {
+      throw new Error('Freshness resume-quarantine store must be loaded before use')
+    }
+  }
+}
+
 const stableStringify = (value: unknown): string => {
   if (value === null) return 'null'
   if (typeof value === 'number' || typeof value === 'boolean') return JSON.stringify(value)
@@ -757,6 +930,67 @@ const validateLedgerRecord = (
   return normalizedRecord
 }
 
+const normalizeResumeWorkItem = (
+  workItem: TacticOutputCapabilityRuntimeFreshnessResumeWorkItem,
+): TacticOutputCapabilityRuntimeFreshnessResumeWorkItem => ({
+  scopeKey: normalizeScopeKey(workItem.scopeKey),
+  observedAuthorityEpoch: workItem.observedAuthorityEpoch,
+  observedRenewalGeneration: workItem.observedRenewalGeneration,
+  observedAuthoritySource: normalizeToken(workItem.observedAuthoritySource),
+})
+
+const normalizeRecoverySnapshot = (
+  snapshot: TacticOutputCapabilityRuntimeFreshnessRecoverySnapshot,
+): TacticOutputCapabilityRuntimeFreshnessRecoverySnapshot => ({
+  scopeKey: normalizeScopeKey(snapshot.scopeKey),
+  authorityEpoch: snapshot.authorityEpoch,
+  renewalGeneration: snapshot.renewalGeneration,
+  authoritySource: normalizeToken(snapshot.authoritySource),
+})
+
+const createResumeQuarantineState = (input: {
+  scopeKey: string
+  quarantineReason: string
+  authorityEpoch: number
+  renewalGeneration: number
+  authoritySource: string
+  quarantinedAt: string
+}): TacticOutputCapabilityRuntimeFreshnessResumeQuarantineState => ({
+  scopeKey: normalizeScopeKey(input.scopeKey),
+  quarantined: true,
+  quarantineReason: normalizeToken(input.quarantineReason),
+  quarantineEpoch: input.authorityEpoch,
+  quarantineGeneration: input.renewalGeneration,
+  authoritySource: normalizeToken(input.authoritySource),
+  quarantinedAt: input.quarantinedAt,
+})
+
+const validateResumeQuarantineState = (
+  state: Partial<TacticOutputCapabilityRuntimeFreshnessResumeQuarantineState>,
+): TacticOutputCapabilityRuntimeFreshnessResumeQuarantineState => {
+  if (
+    typeof state.scopeKey !== 'string'
+    || typeof state.quarantined !== 'boolean'
+    || typeof state.quarantineReason !== 'string'
+    || typeof state.quarantineEpoch !== 'number'
+    || typeof state.quarantineGeneration !== 'number'
+    || typeof state.authoritySource !== 'string'
+    || typeof state.quarantinedAt !== 'string'
+  ) {
+    throw new Error('Freshness resume-quarantine state shape is invalid')
+  }
+
+  return {
+    scopeKey: normalizeScopeKey(state.scopeKey),
+    quarantined: state.quarantined,
+    quarantineReason: normalizeToken(state.quarantineReason),
+    quarantineEpoch: state.quarantineEpoch,
+    quarantineGeneration: state.quarantineGeneration,
+    authoritySource: normalizeToken(state.authoritySource),
+    quarantinedAt: state.quarantinedAt,
+  }
+}
+
 const createSealedScopeState = (input: {
   scopeKey: string
   sealReason: string
@@ -827,6 +1061,37 @@ export const computeTacticOutputCapabilityRuntimeClaimDigestTask1 = (
     actionKind: normalizedClaim.actionKind,
     actionPayload: normalizedClaim.actionPayload,
   })
+}
+
+export const evaluateTacticOutputCapabilityRuntimeFreshnessResumeBarrier = (
+  input: {
+    workItem: TacticOutputCapabilityRuntimeFreshnessResumeWorkItem
+    snapshot: TacticOutputCapabilityRuntimeFreshnessRecoverySnapshot | null | undefined
+  },
+): TacticOutputCapabilityRuntimeFreshnessResumeBarrierDecision => {
+  if (!input.snapshot) {
+    return 'missing-recovery-snapshot'
+  }
+
+  const workItem = normalizeResumeWorkItem(input.workItem)
+  const snapshot = normalizeRecoverySnapshot(input.snapshot)
+
+  if (workItem.scopeKey !== snapshot.scopeKey) {
+    return 'mixed-snapshot-stale'
+  }
+
+  if (workItem.observedAuthoritySource !== snapshot.authoritySource) {
+    return 'authority-source-mismatch'
+  }
+
+  if (
+    workItem.observedAuthorityEpoch !== snapshot.authorityEpoch
+    || workItem.observedRenewalGeneration !== snapshot.renewalGeneration
+  ) {
+    return 'mixed-snapshot-stale'
+  }
+
+  return 'pass'
 }
 
 export const evaluateTacticOutputCapabilityRuntimeFreshnessLeaseGuard = (

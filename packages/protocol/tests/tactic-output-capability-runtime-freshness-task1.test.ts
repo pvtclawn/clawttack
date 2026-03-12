@@ -7,8 +7,10 @@ import {
   buildTacticOutputCapabilityRuntimeFreshnessScopeKey,
   computeTacticOutputCapabilityRuntimeClaimDigestTask1,
   evaluateTacticOutputCapabilityRuntimeFreshnessLeaseGuard,
+  evaluateTacticOutputCapabilityRuntimeFreshnessResumeBarrier,
   evaluateTacticOutputCapabilityRuntimeFreshnessTask1,
   FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore,
+  FileBackedTacticOutputCapabilityRuntimeFreshnessResumeQuarantineStore,
   FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore,
   InMemoryTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore,
   type TacticOutputCapabilityRuntimeFreshnessClaim,
@@ -910,5 +912,158 @@ describe('tactic output capability runtime freshness task1', () => {
     })
 
     expect(result).toBe('allow')
+  })
+
+  it('preserves resume quarantine across restart', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-resume-'))
+    const filePath = join(tempDir, 'resume.json')
+
+    const firstStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessResumeQuarantineStore({
+      filePath,
+      now: () => '2026-03-12T22:17:00.000Z',
+    })
+    firstStore.load()
+    firstStore.quarantineScope({
+      scopeKey: baseScopeKey,
+      quarantineReason: 'pause detected',
+      authorityEpoch: 12,
+      renewalGeneration: 6,
+      authoritySource,
+    })
+
+    const secondStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessResumeQuarantineStore({ filePath })
+    secondStore.load()
+
+    expect(secondStore.isQuarantined(baseScopeKey)).toBe(true)
+    expect(secondStore.getScopeState(baseScopeKey)?.authoritySource).toBe(authoritySource)
+  })
+
+  it('denies mixed-snapshot resume release deterministically', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-resume-'))
+    const filePath = join(tempDir, 'resume.json')
+    const store = new FileBackedTacticOutputCapabilityRuntimeFreshnessResumeQuarantineStore({ filePath })
+    store.load()
+    store.quarantineScope({
+      scopeKey: baseScopeKey,
+      quarantineReason: 'restart revalidation',
+      authorityEpoch: 12,
+      renewalGeneration: 6,
+      authoritySource,
+    })
+
+    const result = store.releaseScopeIfCurrent({
+      workItem: {
+        scopeKey: baseScopeKey,
+        observedAuthorityEpoch: 12,
+        observedRenewalGeneration: 6,
+        observedAuthoritySource: authoritySource,
+      },
+      snapshot: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 13,
+        renewalGeneration: 7,
+        authoritySource,
+      },
+    })
+
+    expect(result).toEqual({ released: false, reason: 'mixed-snapshot-stale' })
+    expect(store.isQuarantined(baseScopeKey)).toBe(true)
+  })
+
+  it('denies resume release on authority provenance mismatch', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-resume-'))
+    const filePath = join(tempDir, 'resume.json')
+    const store = new FileBackedTacticOutputCapabilityRuntimeFreshnessResumeQuarantineStore({ filePath })
+    store.load()
+    store.quarantineScope({
+      scopeKey: baseScopeKey,
+      quarantineReason: 'restart revalidation',
+      authorityEpoch: 12,
+      renewalGeneration: 6,
+      authoritySource,
+    })
+
+    const result = store.releaseScopeIfCurrent({
+      workItem: {
+        scopeKey: baseScopeKey,
+        observedAuthorityEpoch: 12,
+        observedRenewalGeneration: 6,
+        observedAuthoritySource: authoritySource,
+      },
+      snapshot: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 6,
+        authoritySource: 'other-source',
+      },
+    })
+
+    expect(result).toEqual({ released: false, reason: 'authority-source-mismatch' })
+    expect(store.isQuarantined(baseScopeKey)).toBe(true)
+  })
+
+  it('releases quarantined work only when the current recovery snapshot matches', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-resume-'))
+    const filePath = join(tempDir, 'resume.json')
+    const store = new FileBackedTacticOutputCapabilityRuntimeFreshnessResumeQuarantineStore({ filePath })
+    store.load()
+    store.quarantineScope({
+      scopeKey: baseScopeKey,
+      quarantineReason: 'restart revalidation',
+      authorityEpoch: 12,
+      renewalGeneration: 6,
+      authoritySource,
+    })
+
+    const result = store.releaseScopeIfCurrent({
+      workItem: {
+        scopeKey: baseScopeKey,
+        observedAuthorityEpoch: 12,
+        observedRenewalGeneration: 6,
+        observedAuthoritySource: authoritySource,
+      },
+      snapshot: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 6,
+        authoritySource,
+      },
+    })
+
+    expect(result).toEqual({ released: true, reason: 'pass' })
+    expect(store.isQuarantined(baseScopeKey)).toBe(false)
+  })
+
+  it('does not implicitly drain quarantined work without explicit release', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-resume-'))
+    const filePath = join(tempDir, 'resume.json')
+    const store = new FileBackedTacticOutputCapabilityRuntimeFreshnessResumeQuarantineStore({ filePath })
+    store.load()
+    store.quarantineScope({
+      scopeKey: baseScopeKey,
+      quarantineReason: 'restart revalidation',
+      authorityEpoch: 12,
+      renewalGeneration: 6,
+      authoritySource,
+    })
+
+    const state = store.getScopeState(baseScopeKey)
+    expect(state?.quarantined).toBe(true)
+    expect(state?.quarantineEpoch).toBe(12)
+    expect(state?.quarantineGeneration).toBe(6)
+  })
+
+  it('pure resume barrier denies missing recovery snapshot', () => {
+    const result = evaluateTacticOutputCapabilityRuntimeFreshnessResumeBarrier({
+      workItem: {
+        scopeKey: baseScopeKey,
+        observedAuthorityEpoch: 12,
+        observedRenewalGeneration: 6,
+        observedAuthoritySource: authoritySource,
+      },
+      snapshot: undefined,
+    })
+
+    expect(result).toBe('missing-recovery-snapshot')
   })
 })
