@@ -8,6 +8,7 @@ import {
   computeTacticOutputCapabilityRuntimeClaimDigestTask1,
   evaluateTacticOutputCapabilityRuntimeFreshnessTask1,
   FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore,
+  FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore,
   InMemoryTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore,
   type TacticOutputCapabilityRuntimeFreshnessClaim,
   type TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
@@ -69,6 +70,18 @@ describe('tactic output capability runtime freshness task1', () => {
       ownerId: 'runner-a',
       activeToken: 7,
       tokenFloor: 7,
+    },
+  }
+
+  const advancedAuthority: TacticOutputCapabilityRuntimeFreshnessWriterAuthority = {
+    scopeKey: baseScopeKey,
+    writerId: 'runner-a',
+    heldToken: 8,
+    lockState: {
+      scopeKey: baseScopeKey,
+      ownerId: 'runner-a',
+      activeToken: 8,
+      tokenFloor: 8,
     },
   }
 
@@ -420,5 +433,139 @@ describe('tactic output capability runtime freshness task1', () => {
     })
 
     expect(second.decision).toBe('duplicate')
+  })
+
+  it('denies authoritative append while a scope is sealed', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-sealed-'))
+    const ledgerFilePath = join(tempDir, 'consumed.jsonl')
+    const sealFilePath = join(tempDir, 'sealed.json')
+    const digest = computeTacticOutputCapabilityRuntimeClaimDigestTask1(baseClaim)
+
+    const ledgerStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath: ledgerFilePath })
+    const sealStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({ filePath: sealFilePath })
+    ledgerStore.load()
+    sealStore.load()
+    sealStore.sealScope({
+      scopeKey: baseScopeKey,
+      sealReason: 'witness lost',
+      authorityEpoch: 7,
+    })
+
+    const result = ledgerStore.markConsumedWithAuthorityWhileUnsealed(digest, baseMetadata, validAuthority, sealStore)
+
+    expect(result).toEqual({ appended: false, reason: 'sealed-scope' })
+    expect(ledgerStore.has(digest)).toBe(false)
+  })
+
+  it('preserves sealed state across restart and keeps append denied', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-sealed-'))
+    const ledgerFilePath = join(tempDir, 'consumed.jsonl')
+    const sealFilePath = join(tempDir, 'sealed.json')
+    const digest = computeTacticOutputCapabilityRuntimeClaimDigestTask1(baseClaim)
+
+    const firstSealStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({
+      filePath: sealFilePath,
+      now: () => '2026-03-12T20:22:00.000Z',
+    })
+    firstSealStore.load()
+    firstSealStore.sealScope({
+      scopeKey: baseScopeKey,
+      sealReason: 'partition detected',
+      authorityEpoch: 7,
+    })
+
+    const secondSealStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({ filePath: sealFilePath })
+    secondSealStore.load()
+
+    const ledgerStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath: ledgerFilePath })
+    ledgerStore.load()
+
+    const result = ledgerStore.markConsumedWithAuthorityWhileUnsealed(digest, baseMetadata, validAuthority, secondSealStore)
+
+    expect(secondSealStore.isSealed(baseScopeKey)).toBe(true)
+    expect(result).toEqual({ appended: false, reason: 'sealed-scope' })
+    expect(ledgerStore.has(digest)).toBe(false)
+  })
+
+  it('denies unseal for a stale witness', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-sealed-'))
+    const sealFilePath = join(tempDir, 'sealed.json')
+    const sealStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({ filePath: sealFilePath })
+    sealStore.load()
+    sealStore.sealScope({
+      scopeKey: baseScopeKey,
+      sealReason: 'witness lost',
+      authorityEpoch: 7,
+    })
+
+    const result = sealStore.unsealScope({
+      scopeKey: baseScopeKey,
+      witness: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 7,
+      },
+    })
+
+    expect(result).toEqual({ unsealed: false, reason: 'stale-authority-witness' })
+    expect(sealStore.isSealed(baseScopeKey)).toBe(true)
+  })
+
+  it('allows fresh matching witness to unseal and restore authoritative append', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-sealed-'))
+    const ledgerFilePath = join(tempDir, 'consumed.jsonl')
+    const sealFilePath = join(tempDir, 'sealed.json')
+    const digest = computeTacticOutputCapabilityRuntimeClaimDigestTask1(baseClaim)
+
+    const ledgerStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath: ledgerFilePath })
+    const sealStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({ filePath: sealFilePath })
+    ledgerStore.load()
+    sealStore.load()
+    sealStore.sealScope({
+      scopeKey: baseScopeKey,
+      sealReason: 'witness lost',
+      authorityEpoch: 7,
+    })
+
+    const unseal = sealStore.unsealScope({
+      scopeKey: baseScopeKey,
+      witness: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 8,
+      },
+    })
+
+    const append = ledgerStore.markConsumedWithAuthorityWhileUnsealed(digest, baseMetadata, advancedAuthority, sealStore)
+
+    expect(unseal).toEqual({ unsealed: true, reason: 'pass' })
+    expect(sealStore.isSealed(baseScopeKey)).toBe(false)
+    expect(append).toEqual({ appended: true, reason: 'pass' })
+  })
+
+  it('does not fail open when witness is missing', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-sealed-'))
+    const ledgerFilePath = join(tempDir, 'consumed.jsonl')
+    const sealFilePath = join(tempDir, 'sealed.json')
+    const digest = computeTacticOutputCapabilityRuntimeClaimDigestTask1(baseClaim)
+
+    const ledgerStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath: ledgerFilePath })
+    const sealStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({ filePath: sealFilePath })
+    ledgerStore.load()
+    sealStore.load()
+    sealStore.sealScope({
+      scopeKey: baseScopeKey,
+      sealReason: 'witness unavailable',
+      authorityEpoch: 7,
+    })
+
+    const unseal = sealStore.unsealScope({
+      scopeKey: baseScopeKey,
+      witness: undefined,
+    })
+    const append = ledgerStore.markConsumedWithAuthorityWhileUnsealed(digest, baseMetadata, validAuthority, sealStore)
+
+    expect(unseal).toEqual({ unsealed: false, reason: 'missing-authority-witness' })
+    expect(sealStore.isSealed(baseScopeKey)).toBe(true)
+    expect(append).toEqual({ appended: false, reason: 'sealed-scope' })
+    expect(ledgerStore.has(digest)).toBe(false)
   })
 })

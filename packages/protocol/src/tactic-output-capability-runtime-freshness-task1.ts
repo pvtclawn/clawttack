@@ -1,4 +1,4 @@
-import { closeSync, existsSync, fsyncSync, openSync, readFileSync, writeSync } from 'node:fs'
+import { closeSync, existsSync, fsyncSync, openSync, readFileSync, writeFileSync, writeSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 
 import {
@@ -17,6 +17,13 @@ export type TacticOutputCapabilityRuntimeFreshnessDecision =
   | 'stale-turn'
   | 'stale-context'
   | 'dependency-invalid'
+
+export type TacticOutputCapabilityRuntimeFreshnessRefusalReason =
+  | SubmitFencingReason
+  | 'sealed-scope'
+  | 'missing-authority-witness'
+  | 'stale-authority-witness'
+  | 'witness-scope-mismatch'
 
 export interface TacticOutputCapabilityRuntimeFreshnessClaim {
   schemaVersion: number
@@ -65,9 +72,14 @@ export interface TacticOutputCapabilityRuntimeFreshnessWriterAuthority {
   lockState: LockStateLike
 }
 
+export interface TacticOutputCapabilityRuntimeFreshnessAuthorityWitness {
+  scopeKey: string
+  authorityEpoch: number
+}
+
 export interface TacticOutputCapabilityRuntimeFreshnessFencedAppendResult {
   appended: boolean
-  reason: SubmitFencingReason
+  reason: TacticOutputCapabilityRuntimeFreshnessRefusalReason
 }
 
 export interface TacticOutputCapabilityRuntimeFreshnessFencedConsumedDigestStore
@@ -76,6 +88,12 @@ export interface TacticOutputCapabilityRuntimeFreshnessFencedConsumedDigestStore
     digest: `0x${string}`,
     metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
     authority: TacticOutputCapabilityRuntimeFreshnessWriterAuthority,
+  ): TacticOutputCapabilityRuntimeFreshnessFencedAppendResult
+  markConsumedWithAuthorityWhileUnsealed(
+    digest: `0x${string}`,
+    metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
+    authority: TacticOutputCapabilityRuntimeFreshnessWriterAuthority,
+    sealedScopes: TacticOutputCapabilityRuntimeFreshnessSealedScopeStore,
   ): TacticOutputCapabilityRuntimeFreshnessFencedAppendResult
 }
 
@@ -108,9 +126,42 @@ export interface TacticOutputCapabilityRuntimeFreshnessLedgerRecord {
   checksum: `0x${string}`
 }
 
+export interface TacticOutputCapabilityRuntimeFreshnessSealedScopeState {
+  scopeKey: string
+  sealed: boolean
+  sealReason: string
+  lastAuthorityEpoch: number
+  sealedAt: string
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessSealedScopeFile {
+  schemaVersion: number
+  states: TacticOutputCapabilityRuntimeFreshnessSealedScopeState[]
+}
+
 export interface TacticOutputCapabilityRuntimeFreshnessFileBackedStoreOptions {
   filePath: string
   now?: () => string
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessSealedScopeStore {
+  isSealed(scopeKey: string): boolean
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessMutableSealedScopeStore
+  extends TacticOutputCapabilityRuntimeFreshnessSealedScopeStore {
+  sealScope(input: {
+    scopeKey: string
+    sealReason: string
+    authorityEpoch: number
+  }): void
+  unsealScope(input: {
+    scopeKey: string
+    witness: TacticOutputCapabilityRuntimeFreshnessAuthorityWitness | null | undefined
+  }): {
+    unsealed: boolean
+    reason: 'pass' | 'missing-authority-witness' | 'stale-authority-witness' | 'witness-scope-mismatch'
+  }
 }
 
 type LockStateLike = SubmitFencingInput['lockState']
@@ -118,6 +169,7 @@ type LockStateLike = SubmitFencingInput['lockState']
 const CLAIM_DIGEST_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/claim-digest'
 const RESULT_ARTIFACT_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/result'
 const LEDGER_RECORD_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/ledger-record'
+const SEALED_SCOPE_FILE_SCHEMA_VERSION = 1
 const LEDGER_SCHEMA_VERSION = 2
 const UNFENCED_WRITER_ID = 'unfenced'
 const UNFENCED_WRITER_TOKEN = 0
@@ -229,6 +281,21 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore
     return { appended: true, reason: 'pass' }
   }
 
+  markConsumedWithAuthorityWhileUnsealed(
+    digest: `0x${string}`,
+    metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
+    authority: TacticOutputCapabilityRuntimeFreshnessWriterAuthority,
+    sealedScopes: TacticOutputCapabilityRuntimeFreshnessSealedScopeStore,
+  ): TacticOutputCapabilityRuntimeFreshnessFencedAppendResult {
+    this.assertLoaded()
+
+    if (sealedScopes.isSealed(metadata.scopeKey)) {
+      return { appended: false, reason: 'sealed-scope' }
+    }
+
+    return this.markConsumedWithAuthority(digest, metadata, authority)
+  }
+
   private appendDurably(
     digest: `0x${string}`,
     metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
@@ -265,6 +332,116 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore
   private assertLoaded(): void {
     if (!this.#loaded) {
       throw new Error('Freshness ledger must be loaded before use')
+    }
+  }
+}
+
+export class FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore
+  implements TacticOutputCapabilityRuntimeFreshnessMutableSealedScopeStore {
+  readonly #filePath: string
+  readonly #now: () => string
+  readonly #states = new Map<string, TacticOutputCapabilityRuntimeFreshnessSealedScopeState>()
+  #loaded = false
+
+  constructor(options: TacticOutputCapabilityRuntimeFreshnessFileBackedStoreOptions) {
+    this.#filePath = options.filePath
+    this.#now = options.now ?? (() => new Date().toISOString())
+  }
+
+  load(): void {
+    this.#states.clear()
+
+    if (!existsSync(this.#filePath)) {
+      this.#loaded = true
+      return
+    }
+
+    const raw = readFileSync(this.#filePath, 'utf8')
+    if (raw.length === 0) {
+      this.#loaded = true
+      return
+    }
+
+    const parsed = JSON.parse(raw) as Partial<TacticOutputCapabilityRuntimeFreshnessSealedScopeFile>
+    if (parsed.schemaVersion !== SEALED_SCOPE_FILE_SCHEMA_VERSION || !Array.isArray(parsed.states)) {
+      throw new Error('Freshness sealed-scope file shape is invalid')
+    }
+
+    for (const entry of parsed.states) {
+      const state = validateSealedScopeState(entry)
+      this.#states.set(state.scopeKey, state)
+    }
+
+    this.#loaded = true
+  }
+
+  isSealed(scopeKey: string): boolean {
+    this.assertLoaded()
+    const state = this.#states.get(normalizeScopeKey(scopeKey))
+    return state?.sealed === true
+  }
+
+  sealScope(input: {
+    scopeKey: string
+    sealReason: string
+    authorityEpoch: number
+  }): void {
+    this.assertLoaded()
+    const state = createSealedScopeState({
+      scopeKey: input.scopeKey,
+      sealReason: input.sealReason,
+      authorityEpoch: input.authorityEpoch,
+      sealedAt: this.#now(),
+    })
+    this.#states.set(state.scopeKey, state)
+    this.persist()
+  }
+
+  unsealScope(input: {
+    scopeKey: string
+    witness: TacticOutputCapabilityRuntimeFreshnessAuthorityWitness | null | undefined
+  }): {
+    unsealed: boolean
+    reason: 'pass' | 'missing-authority-witness' | 'stale-authority-witness' | 'witness-scope-mismatch'
+  } {
+    this.assertLoaded()
+
+    const normalizedScopeKey = normalizeScopeKey(input.scopeKey)
+    const current = this.#states.get(normalizedScopeKey)
+    if (!current?.sealed) {
+      return { unsealed: true, reason: 'pass' }
+    }
+
+    if (!input.witness) {
+      return { unsealed: false, reason: 'missing-authority-witness' }
+    }
+
+    const witness = normalizeAuthorityWitness(input.witness)
+    if (witness.scopeKey !== normalizedScopeKey) {
+      return { unsealed: false, reason: 'witness-scope-mismatch' }
+    }
+
+    if (witness.authorityEpoch <= current.lastAuthorityEpoch) {
+      return { unsealed: false, reason: 'stale-authority-witness' }
+    }
+
+    this.#states.delete(normalizedScopeKey)
+    this.persist()
+    return { unsealed: true, reason: 'pass' }
+  }
+
+  private persist(): void {
+    const file: TacticOutputCapabilityRuntimeFreshnessSealedScopeFile = {
+      schemaVersion: SEALED_SCOPE_FILE_SCHEMA_VERSION,
+      states: Array.from(this.#states.values()).sort((a, b) => a.scopeKey.localeCompare(b.scopeKey)),
+    }
+
+    writeFileSync(this.#filePath, `${stableStringify(file)}\n`)
+  }
+
+  private assertLoaded(): void {
+    if (!this.#loaded) {
+      throw new Error('Freshness sealed-scope store must be loaded before use')
     }
   }
 }
@@ -351,6 +528,13 @@ const normalizeWriterAuthority = (
         activeToken: authority.lockState.activeToken,
         tokenFloor: authority.lockState.tokenFloor,
       },
+})
+
+const normalizeAuthorityWitness = (
+  witness: TacticOutputCapabilityRuntimeFreshnessAuthorityWitness,
+): TacticOutputCapabilityRuntimeFreshnessAuthorityWitness => ({
+  scopeKey: normalizeScopeKey(witness.scopeKey),
+  authorityEpoch: witness.authorityEpoch,
 })
 
 const createLedgerChecksum = (record: Omit<TacticOutputCapabilityRuntimeFreshnessLedgerRecord, 'checksum'>): `0x${string}` => sha256({
@@ -450,6 +634,41 @@ const validateLedgerRecord = (
   }
 
   return normalizedRecord
+}
+
+const createSealedScopeState = (input: {
+  scopeKey: string
+  sealReason: string
+  authorityEpoch: number
+  sealedAt: string
+}): TacticOutputCapabilityRuntimeFreshnessSealedScopeState => ({
+  scopeKey: normalizeScopeKey(input.scopeKey),
+  sealed: true,
+  sealReason: normalizeToken(input.sealReason),
+  lastAuthorityEpoch: input.authorityEpoch,
+  sealedAt: input.sealedAt,
+})
+
+const validateSealedScopeState = (
+  state: Partial<TacticOutputCapabilityRuntimeFreshnessSealedScopeState>,
+): TacticOutputCapabilityRuntimeFreshnessSealedScopeState => {
+  if (
+    typeof state.scopeKey !== 'string'
+    || typeof state.sealed !== 'boolean'
+    || typeof state.sealReason !== 'string'
+    || typeof state.lastAuthorityEpoch !== 'number'
+    || typeof state.sealedAt !== 'string'
+  ) {
+    throw new Error('Freshness sealed-scope state shape is invalid')
+  }
+
+  return {
+    scopeKey: normalizeScopeKey(state.scopeKey),
+    sealed: state.sealed,
+    sealReason: normalizeToken(state.sealReason),
+    lastAuthorityEpoch: state.lastAuthorityEpoch,
+    sealedAt: state.sealedAt,
+  }
 }
 
 export const buildTacticOutputCapabilityRuntimeFreshnessScopeKey = (input: {
