@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import {
   buildTacticOutputCapabilityRuntimeFreshnessScopeKey,
   computeTacticOutputCapabilityRuntimeClaimDigestTask1,
+  evaluateTacticOutputCapabilityRuntimeFreshnessLeaseGuard,
   evaluateTacticOutputCapabilityRuntimeFreshnessTask1,
   FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore,
   FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore,
@@ -13,6 +14,7 @@ import {
   type TacticOutputCapabilityRuntimeFreshnessClaim,
   type TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
   type TacticOutputCapabilityRuntimeFreshnessState,
+  type TacticOutputCapabilityRuntimeFreshnessTimerPolicy,
   type TacticOutputCapabilityRuntimeFreshnessWriterAuthority,
 } from '../src/tactic-output-capability-runtime-freshness-task1.ts'
 
@@ -62,6 +64,13 @@ describe('tactic output capability runtime freshness task1', () => {
   }
 
   const authoritySource = 'witness-cache-a'
+
+  const timerPolicy: TacticOutputCapabilityRuntimeFreshnessTimerPolicy = {
+    suspicionTimeoutMs: 5_000,
+    renewalWindowMs: 2_000,
+    pauseRevalidateThresholdMs: 3_000,
+    leaseGraceWindowMs: 500,
+  }
 
   const validAuthority: TacticOutputCapabilityRuntimeFreshnessWriterAuthority = {
     scopeKey: baseScopeKey,
@@ -791,5 +800,115 @@ describe('tactic output capability runtime freshness task1', () => {
 
     expect(result).toEqual({ appended: false, reason: 'missing-uncertainty-epoch' })
     expect(ledgerStore.has(digest)).toBe(false)
+  })
+
+  it('exposes explicit timer parameters for the lease contract', () => {
+    expect(timerPolicy).toEqual({
+      suspicionTimeoutMs: 5_000,
+      renewalWindowMs: 2_000,
+      pauseRevalidateThresholdMs: 3_000,
+      leaseGraceWindowMs: 500,
+    })
+  })
+
+  it('ignores wall-clock jumps for authoritative lease decisions', () => {
+    const a = evaluateTacticOutputCapabilityRuntimeFreshnessLeaseGuard({
+      expectedScopeKey: baseScopeKey,
+      expectedAuthoritySource: authoritySource,
+      timerPolicy,
+      currentRenewalGeneration: 4,
+      observedRenewalGeneration: 4,
+      monotonicElapsedSinceAdmissionMs: 1_000,
+      monotonicElapsedSinceRenewalMs: 1_500,
+      wallClockObservedAtMs: 1_000,
+      wallClockNowMs: 2_000,
+      witness: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 4,
+        authoritySource,
+      },
+    })
+
+    const b = evaluateTacticOutputCapabilityRuntimeFreshnessLeaseGuard({
+      expectedScopeKey: baseScopeKey,
+      expectedAuthoritySource: authoritySource,
+      timerPolicy,
+      currentRenewalGeneration: 4,
+      observedRenewalGeneration: 4,
+      monotonicElapsedSinceAdmissionMs: 1_000,
+      monotonicElapsedSinceRenewalMs: 1_500,
+      wallClockObservedAtMs: 999_999_999,
+      wallClockNowMs: 10,
+      witness: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 4,
+        authoritySource,
+      },
+    })
+
+    expect(a).toBe('allow')
+    expect(b).toBe('allow')
+  })
+
+  it('denies stale lease replay through an older renewal generation', () => {
+    const result = evaluateTacticOutputCapabilityRuntimeFreshnessLeaseGuard({
+      expectedScopeKey: baseScopeKey,
+      expectedAuthoritySource: authoritySource,
+      timerPolicy,
+      currentRenewalGeneration: 5,
+      observedRenewalGeneration: 4,
+      monotonicElapsedSinceAdmissionMs: 1_000,
+      monotonicElapsedSinceRenewalMs: 1_000,
+      witness: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 4,
+        authoritySource,
+      },
+    })
+
+    expect(result).toBe('stale-renewal-generation')
+  })
+
+  it('denies post-pause stale work that exceeds the revalidation threshold', () => {
+    const result = evaluateTacticOutputCapabilityRuntimeFreshnessLeaseGuard({
+      expectedScopeKey: baseScopeKey,
+      expectedAuthoritySource: authoritySource,
+      timerPolicy,
+      currentRenewalGeneration: 5,
+      observedRenewalGeneration: 5,
+      monotonicElapsedSinceAdmissionMs: 3_001,
+      monotonicElapsedSinceRenewalMs: 1_000,
+      witness: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 5,
+        authoritySource,
+      },
+    })
+
+    expect(result).toBe('pause-revalidation-required')
+  })
+
+  it('allows protected append when the renewal generation is current and fresh', () => {
+    const result = evaluateTacticOutputCapabilityRuntimeFreshnessLeaseGuard({
+      expectedScopeKey: baseScopeKey,
+      expectedAuthoritySource: authoritySource,
+      timerPolicy,
+      currentRenewalGeneration: 6,
+      observedRenewalGeneration: 6,
+      monotonicElapsedSinceAdmissionMs: 500,
+      monotonicElapsedSinceRenewalMs: 1_000,
+      witness: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 6,
+        authoritySource,
+      },
+    })
+
+    expect(result).toBe('allow')
   })
 })

@@ -35,6 +35,41 @@ export type TacticOutputCapabilityRuntimeFreshnessRefusalReason =
   | 'missing-uncertainty-epoch'
   | 'stale-uncertainty-epoch'
 
+export type TacticOutputCapabilityRuntimeFreshnessLeaseGuardDecision =
+  | 'allow'
+  | 'missing-renewal-generation'
+  | 'stale-renewal-generation'
+  | 'pause-revalidation-required'
+  | 'witness-scope-mismatch'
+  | 'invalid-authority-provenance'
+
+export interface TacticOutputCapabilityRuntimeFreshnessTimerPolicy {
+  suspicionTimeoutMs: number
+  renewalWindowMs: number
+  pauseRevalidateThresholdMs: number
+  leaseGraceWindowMs: number
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessLeaseWitness {
+  scopeKey: string
+  authorityEpoch: number
+  renewalGeneration: number
+  authoritySource: string
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessLeaseGuardInput {
+  expectedScopeKey: string
+  expectedAuthoritySource: string
+  timerPolicy: TacticOutputCapabilityRuntimeFreshnessTimerPolicy
+  currentRenewalGeneration: number
+  observedRenewalGeneration: number | null | undefined
+  monotonicElapsedSinceAdmissionMs: number
+  monotonicElapsedSinceRenewalMs: number
+  wallClockObservedAtMs?: number
+  wallClockNowMs?: number
+  witness?: TacticOutputCapabilityRuntimeFreshnessLeaseWitness | null
+}
+
 export interface TacticOutputCapabilityRuntimeFreshnessClaim {
   schemaVersion: number
   battleId: string
@@ -792,6 +827,62 @@ export const computeTacticOutputCapabilityRuntimeClaimDigestTask1 = (
     actionKind: normalizedClaim.actionKind,
     actionPayload: normalizedClaim.actionPayload,
   })
+}
+
+export const evaluateTacticOutputCapabilityRuntimeFreshnessLeaseGuard = (
+  input: TacticOutputCapabilityRuntimeFreshnessLeaseGuardInput,
+): TacticOutputCapabilityRuntimeFreshnessLeaseGuardDecision => {
+  const expectedScopeKey = normalizeScopeKey(input.expectedScopeKey)
+  const expectedAuthoritySource = normalizeToken(input.expectedAuthoritySource)
+
+  const timerPolicy: TacticOutputCapabilityRuntimeFreshnessTimerPolicy = {
+    suspicionTimeoutMs: input.timerPolicy.suspicionTimeoutMs,
+    renewalWindowMs: input.timerPolicy.renewalWindowMs,
+    pauseRevalidateThresholdMs: input.timerPolicy.pauseRevalidateThresholdMs,
+    leaseGraceWindowMs: input.timerPolicy.leaseGraceWindowMs,
+  }
+
+  if (input.observedRenewalGeneration === null || input.observedRenewalGeneration === undefined) {
+    return 'missing-renewal-generation'
+  }
+
+  if (input.observedRenewalGeneration !== input.currentRenewalGeneration) {
+    return 'stale-renewal-generation'
+  }
+
+  if (input.monotonicElapsedSinceAdmissionMs > timerPolicy.pauseRevalidateThresholdMs) {
+    return 'pause-revalidation-required'
+  }
+
+  if (
+    input.monotonicElapsedSinceRenewalMs
+    > timerPolicy.suspicionTimeoutMs + timerPolicy.leaseGraceWindowMs
+  ) {
+    return 'stale-renewal-generation'
+  }
+
+  if (input.witness) {
+    const witness: TacticOutputCapabilityRuntimeFreshnessLeaseWitness = {
+      scopeKey: normalizeScopeKey(input.witness.scopeKey),
+      authorityEpoch: input.witness.authorityEpoch,
+      renewalGeneration: input.witness.renewalGeneration,
+      authoritySource: normalizeToken(input.witness.authoritySource),
+    }
+
+    if (witness.scopeKey !== expectedScopeKey) {
+      return 'witness-scope-mismatch'
+    }
+
+    if (witness.authoritySource !== expectedAuthoritySource) {
+      return 'invalid-authority-provenance'
+    }
+
+    if (witness.renewalGeneration !== input.currentRenewalGeneration) {
+      return 'stale-renewal-generation'
+    }
+  }
+
+  return 'allow'
 }
 
 export const evaluateTacticOutputCapabilityRuntimeFreshnessTask1 = (
