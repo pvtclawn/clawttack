@@ -75,3 +75,4 @@ export * from './tactic-output-public-task1.ts';
 export * from './tactic-output-contract-task1.ts';
 export * from './tactic-output-view-task1.ts';
 export * from './tactic-output-capability-task1.ts';
+export * from './tactic-output-capability-context-task1.ts';
