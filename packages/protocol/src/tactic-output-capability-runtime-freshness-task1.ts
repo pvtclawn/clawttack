@@ -1,3 +1,4 @@
+import { closeSync, existsSync, fsyncSync, openSync, readFileSync, writeSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 
 import type { TacticOutputCapabilityContextScope } from './tactic-output-capability-context-task1.ts'
@@ -33,16 +34,19 @@ export interface TacticOutputCapabilityRuntimeFreshnessState {
   dependencyValid: boolean
 }
 
+export interface TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata {
+  battleId: string
+  runId: string
+  turnIndex: number
+  contextVersion: number
+  decision: TacticOutputCapabilityRuntimeFreshnessDecision
+}
+
 export interface TacticOutputCapabilityRuntimeFreshnessConsumedDigestStore {
   has(digest: `0x${string}`): boolean
   markConsumed(
     digest: `0x${string}`,
-    metadata: {
-      battleId: string
-      runId: string
-      turnIndex: number
-      decision: TacticOutputCapabilityRuntimeFreshnessDecision
-    },
+    metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
   ): void
 }
 
@@ -61,9 +65,30 @@ export interface TacticOutputCapabilityRuntimeFreshnessTask1Result {
   artifactHash: `0x${string}`
 }
 
+export interface TacticOutputCapabilityRuntimeFreshnessLedgerRecord {
+  schemaVersion: number
+  digest: `0x${string}`
+  battleId: string
+  runId: string
+  turnIndex: number
+  contextVersion: number
+  timestamp: string
+  checksum: `0x${string}`
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessFileBackedStoreOptions {
+  filePath: string
+  now?: () => string
+}
+
+const CLAIM_DIGEST_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/claim-digest'
+const RESULT_ARTIFACT_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/result'
+const LEDGER_RECORD_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/ledger-record'
+const LEDGER_SCHEMA_VERSION = 1
+
 export class InMemoryTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore
   implements TacticOutputCapabilityRuntimeFreshnessConsumedDigestStore {
-  readonly #digests = new Map<`0x${string}`, { battleId: string; runId: string; turnIndex: number; decision: TacticOutputCapabilityRuntimeFreshnessDecision }>()
+  readonly #digests = new Map<`0x${string}`, TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata>()
 
   has(digest: `0x${string}`): boolean {
     return this.#digests.has(digest)
@@ -71,9 +96,94 @@ export class InMemoryTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore
 
   markConsumed(
     digest: `0x${string}`,
-    metadata: { battleId: string; runId: string; turnIndex: number; decision: TacticOutputCapabilityRuntimeFreshnessDecision },
+    metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
   ): void {
     this.#digests.set(digest, metadata)
+  }
+}
+
+export class FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore
+  implements TacticOutputCapabilityRuntimeFreshnessConsumedDigestStore {
+  readonly #filePath: string
+  readonly #now: () => string
+  readonly #digests = new Map<`0x${string}`, TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata>()
+  #loaded = false
+
+  constructor(options: TacticOutputCapabilityRuntimeFreshnessFileBackedStoreOptions) {
+    this.#filePath = options.filePath
+    this.#now = options.now ?? (() => new Date().toISOString())
+  }
+
+  load(): void {
+    this.#digests.clear()
+
+    if (!existsSync(this.#filePath)) {
+      this.#loaded = true
+      return
+    }
+
+    const raw = readFileSync(this.#filePath, 'utf8')
+    if (raw.length === 0) {
+      this.#loaded = true
+      return
+    }
+
+    if (!raw.endsWith('\n')) {
+      throw new Error('Freshness ledger has trailing partial record')
+    }
+
+    const lines = raw.split('\n').filter((line) => line.length > 0)
+    for (const line of lines) {
+      const parsed = JSON.parse(line) as Partial<TacticOutputCapabilityRuntimeFreshnessLedgerRecord>
+      const record = validateLedgerRecord(parsed)
+      this.#digests.set(record.digest, {
+        battleId: record.battleId,
+        runId: record.runId,
+        turnIndex: record.turnIndex,
+        contextVersion: record.contextVersion,
+        decision: 'allow',
+      })
+    }
+
+    this.#loaded = true
+  }
+
+  has(digest: `0x${string}`): boolean {
+    this.assertLoaded()
+    return this.#digests.has(digest)
+  }
+
+  markConsumed(
+    digest: `0x${string}`,
+    metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
+  ): void {
+    this.assertLoaded()
+
+    const record = createLedgerRecord({
+      digest,
+      battleId: metadata.battleId,
+      runId: metadata.runId,
+      turnIndex: metadata.turnIndex,
+      contextVersion: metadata.contextVersion,
+      timestamp: this.#now(),
+    })
+    const line = `${stableStringify(record)}\n`
+
+    const fd = openSync(this.#filePath, 'a')
+    try {
+      writeSync(fd, line)
+      fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+
+    this.#digests.set(digest, metadata)
+  }
+
+  private assertLoaded(): void {
+    if (!this.#loaded) {
+      throw new Error('Freshness ledger must be loaded before use')
+    }
   }
 }
 
@@ -130,13 +240,94 @@ const normalizeRuntime = (
   dependencyValid: runtime.dependencyValid,
 })
 
+const createLedgerChecksum = (record: Omit<TacticOutputCapabilityRuntimeFreshnessLedgerRecord, 'checksum'>): `0x${string}` => sha256({
+  domain: LEDGER_RECORD_DOMAIN,
+  schemaVersion: record.schemaVersion,
+  digest: record.digest,
+  battleId: record.battleId,
+  runId: record.runId,
+  turnIndex: record.turnIndex,
+  contextVersion: record.contextVersion,
+  timestamp: record.timestamp,
+})
+
+const createLedgerRecord = (input: {
+  digest: `0x${string}`
+  battleId: string
+  runId: string
+  turnIndex: number
+  contextVersion: number
+  timestamp: string
+}): TacticOutputCapabilityRuntimeFreshnessLedgerRecord => {
+  const baseRecord = {
+    schemaVersion: LEDGER_SCHEMA_VERSION,
+    digest: input.digest,
+    battleId: normalizeToken(input.battleId),
+    runId: normalizeToken(input.runId),
+    turnIndex: input.turnIndex,
+    contextVersion: input.contextVersion,
+    timestamp: input.timestamp,
+  } satisfies Omit<TacticOutputCapabilityRuntimeFreshnessLedgerRecord, 'checksum'>
+
+  return {
+    ...baseRecord,
+    checksum: createLedgerChecksum(baseRecord),
+  }
+}
+
+const validateLedgerRecord = (
+  record: Partial<TacticOutputCapabilityRuntimeFreshnessLedgerRecord>,
+): TacticOutputCapabilityRuntimeFreshnessLedgerRecord => {
+  if (record.schemaVersion !== LEDGER_SCHEMA_VERSION) {
+    throw new Error('Freshness ledger schema version mismatch')
+  }
+  if (
+    typeof record.digest !== 'string'
+    || typeof record.battleId !== 'string'
+    || typeof record.runId !== 'string'
+    || typeof record.turnIndex !== 'number'
+    || typeof record.contextVersion !== 'number'
+    || typeof record.timestamp !== 'string'
+    || typeof record.checksum !== 'string'
+  ) {
+    throw new Error('Freshness ledger record shape is invalid')
+  }
+
+  const normalizedRecord: TacticOutputCapabilityRuntimeFreshnessLedgerRecord = {
+    schemaVersion: record.schemaVersion,
+    digest: record.digest as `0x${string}`,
+    battleId: normalizeToken(record.battleId),
+    runId: normalizeToken(record.runId),
+    turnIndex: record.turnIndex,
+    contextVersion: record.contextVersion,
+    timestamp: record.timestamp,
+    checksum: record.checksum as `0x${string}`,
+  }
+
+  const expectedChecksum = createLedgerChecksum({
+    schemaVersion: normalizedRecord.schemaVersion,
+    digest: normalizedRecord.digest,
+    battleId: normalizedRecord.battleId,
+    runId: normalizedRecord.runId,
+    turnIndex: normalizedRecord.turnIndex,
+    contextVersion: normalizedRecord.contextVersion,
+    timestamp: normalizedRecord.timestamp,
+  })
+
+  if (normalizedRecord.checksum !== expectedChecksum) {
+    throw new Error('Freshness ledger checksum mismatch')
+  }
+
+  return normalizedRecord
+}
+
 export const computeTacticOutputCapabilityRuntimeClaimDigestTask1 = (
   claim: TacticOutputCapabilityRuntimeFreshnessClaim,
 ): `0x${string}` => {
   const normalizedClaim = normalizeClaim(claim)
 
   return sha256({
-    domain: 'clawttack/tactic-output-capability-runtime-freshness-task1/claim-digest',
+    domain: CLAIM_DIGEST_DOMAIN,
     schemaVersion: normalizedClaim.schemaVersion,
     battleId: normalizedClaim.battleId,
     side: normalizedClaim.side,
@@ -181,6 +372,7 @@ export const evaluateTacticOutputCapabilityRuntimeFreshnessTask1 = (
       battleId: normalizedRuntime.battleId,
       runId: normalizedRuntime.runId,
       turnIndex: normalizedRuntime.turnIndex,
+      contextVersion: normalizedRuntime.contextVersion,
       decision,
     })
   }
@@ -191,7 +383,7 @@ export const evaluateTacticOutputCapabilityRuntimeFreshnessTask1 = (
     normalizedClaim,
     normalizedRuntime,
     artifactHash: sha256({
-      domain: 'clawttack/tactic-output-capability-runtime-freshness-task1/result',
+      domain: RESULT_ARTIFACT_DOMAIN,
       decision,
       claimDigest,
       normalizedClaim,
