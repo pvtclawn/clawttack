@@ -76,12 +76,12 @@ describe('tactic output capability runtime freshness task1', () => {
   const advancedAuthority: TacticOutputCapabilityRuntimeFreshnessWriterAuthority = {
     scopeKey: baseScopeKey,
     writerId: 'runner-a',
-    heldToken: 8,
+    heldToken: 12,
     lockState: {
       scopeKey: baseScopeKey,
       ownerId: 'runner-a',
-      activeToken: 8,
-      tokenFloor: 8,
+      activeToken: 12,
+      tokenFloor: 12,
     },
   }
 
@@ -449,9 +449,17 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'witness lost',
       authorityEpoch: 7,
+      uncertaintyClass: 'missing',
+      uncertaintyEpoch: 1,
     })
 
-    const result = ledgerStore.markConsumedWithAuthorityWhileUnsealed(digest, baseMetadata, validAuthority, sealStore)
+    const result = ledgerStore.markConsumedWithAuthorityWhileUnsealed(
+      digest,
+      baseMetadata,
+      validAuthority,
+      sealStore,
+      sealStore.getUncertaintyEpoch(baseScopeKey),
+    )
 
     expect(result).toEqual({ appended: false, reason: 'sealed-scope' })
     expect(ledgerStore.has(digest)).toBe(false)
@@ -472,6 +480,8 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'partition detected',
       authorityEpoch: 7,
+      uncertaintyClass: 'timeout-suspected',
+      uncertaintyEpoch: 2,
     })
 
     const secondSealStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({ filePath: sealFilePath })
@@ -480,7 +490,13 @@ describe('tactic output capability runtime freshness task1', () => {
     const ledgerStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath: ledgerFilePath })
     ledgerStore.load()
 
-    const result = ledgerStore.markConsumedWithAuthorityWhileUnsealed(digest, baseMetadata, validAuthority, secondSealStore)
+    const result = ledgerStore.markConsumedWithAuthorityWhileUnsealed(
+      digest,
+      baseMetadata,
+      validAuthority,
+      secondSealStore,
+      secondSealStore.getUncertaintyEpoch(baseScopeKey),
+    )
 
     expect(secondSealStore.isSealed(baseScopeKey)).toBe(true)
     expect(result).toEqual({ appended: false, reason: 'sealed-scope' })
@@ -496,6 +512,8 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'witness lost',
       authorityEpoch: 7,
+      uncertaintyClass: 'stale',
+      uncertaintyEpoch: 7,
     })
 
     const result = sealStore.unsealScope({
@@ -524,17 +542,25 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'witness lost',
       authorityEpoch: 7,
+      uncertaintyClass: 'missing',
+      uncertaintyEpoch: 1,
     })
 
     const unseal = sealStore.unsealScope({
       scopeKey: baseScopeKey,
       witness: {
         scopeKey: baseScopeKey,
-        authorityEpoch: 8,
+        authorityEpoch: 12,
       },
     })
 
-    const append = ledgerStore.markConsumedWithAuthorityWhileUnsealed(digest, baseMetadata, advancedAuthority, sealStore)
+    const append = ledgerStore.markConsumedWithAuthorityWhileUnsealed(
+      digest,
+      baseMetadata,
+      advancedAuthority,
+      sealStore,
+      sealStore.getUncertaintyEpoch(baseScopeKey),
+    )
 
     expect(unseal).toEqual({ unsealed: true, reason: 'pass' })
     expect(sealStore.isSealed(baseScopeKey)).toBe(false)
@@ -555,17 +581,133 @@ describe('tactic output capability runtime freshness task1', () => {
       scopeKey: baseScopeKey,
       sealReason: 'witness unavailable',
       authorityEpoch: 7,
+      uncertaintyClass: 'missing',
+      uncertaintyEpoch: 3,
     })
 
     const unseal = sealStore.unsealScope({
       scopeKey: baseScopeKey,
       witness: undefined,
     })
-    const append = ledgerStore.markConsumedWithAuthorityWhileUnsealed(digest, baseMetadata, validAuthority, sealStore)
+    const append = ledgerStore.markConsumedWithAuthorityWhileUnsealed(
+      digest,
+      baseMetadata,
+      validAuthority,
+      sealStore,
+      sealStore.getUncertaintyEpoch(baseScopeKey),
+    )
 
     expect(unseal).toEqual({ unsealed: false, reason: 'missing-authority-witness' })
     expect(sealStore.isSealed(baseScopeKey)).toBe(true)
     expect(append).toEqual({ appended: false, reason: 'sealed-scope' })
+    expect(ledgerStore.has(digest)).toBe(false)
+  })
+
+  it('preserves conflicting uncertainty across restart', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-sealed-'))
+    const sealFilePath = join(tempDir, 'sealed.json')
+
+    const firstStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({
+      filePath: sealFilePath,
+      now: () => '2026-03-12T20:57:00.000Z',
+    })
+    firstStore.load()
+    firstStore.sealScope({
+      scopeKey: baseScopeKey,
+      sealReason: 'conflicting authority evidence',
+      authorityEpoch: 7,
+      uncertaintyClass: 'conflicting',
+      uncertaintyEpoch: 11,
+    })
+
+    const secondStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({ filePath: sealFilePath })
+    secondStore.load()
+    const state = secondStore.getScopeState(baseScopeKey)
+
+    expect(state?.sealed).toBe(true)
+    expect(state?.uncertaintyClass).toBe('conflicting')
+    expect(state?.uncertaintyEpoch).toBe(11)
+  })
+
+  it('does not let a generic stale witness clear contradictory state', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-sealed-'))
+    const sealFilePath = join(tempDir, 'sealed.json')
+    const sealStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({ filePath: sealFilePath })
+    sealStore.load()
+    sealStore.sealScope({
+      scopeKey: baseScopeKey,
+      sealReason: 'conflicting authority evidence',
+      authorityEpoch: 7,
+      uncertaintyClass: 'conflicting',
+      uncertaintyEpoch: 11,
+    })
+
+    const result = sealStore.unsealScope({
+      scopeKey: baseScopeKey,
+      witness: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 8,
+      },
+    })
+
+    expect(result).toEqual({ unsealed: false, reason: 'stale-authority-witness' })
+    expect(sealStore.isSealed(baseScopeKey)).toBe(true)
+  })
+
+  it('invalidates stale admitted work after uncertainty epoch advances', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-sealed-'))
+    const ledgerFilePath = join(tempDir, 'consumed.jsonl')
+    const sealFilePath = join(tempDir, 'sealed.json')
+    const digest = computeTacticOutputCapabilityRuntimeClaimDigestTask1(baseClaim)
+
+    const ledgerStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath: ledgerFilePath })
+    const sealStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({ filePath: sealFilePath })
+    ledgerStore.load()
+    sealStore.load()
+
+    const observedEpochAtAdmission = sealStore.getUncertaintyEpoch(baseScopeKey)
+    expect(observedEpochAtAdmission).toBe(0)
+
+    sealStore.sealScope({
+      scopeKey: baseScopeKey,
+      sealReason: 'witness timeout',
+      authorityEpoch: 7,
+      uncertaintyClass: 'timeout-suspected',
+      uncertaintyEpoch: 1,
+    })
+
+    const result = ledgerStore.markConsumedWithAuthorityWhileUnsealed(
+      digest,
+      baseMetadata,
+      validAuthority,
+      sealStore,
+      observedEpochAtAdmission,
+    )
+
+    expect(result).toEqual({ appended: false, reason: 'stale-uncertainty-epoch' })
+    expect(ledgerStore.has(digest)).toBe(false)
+  })
+
+  it('fails closed when append lacks uncertainty epoch proof', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-sealed-'))
+    const ledgerFilePath = join(tempDir, 'consumed.jsonl')
+    const sealFilePath = join(tempDir, 'sealed.json')
+    const digest = computeTacticOutputCapabilityRuntimeClaimDigestTask1(baseClaim)
+
+    const ledgerStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath: ledgerFilePath })
+    const sealStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessSealedScopeStore({ filePath: sealFilePath })
+    ledgerStore.load()
+    sealStore.load()
+
+    const result = ledgerStore.markConsumedWithAuthorityWhileUnsealed(
+      digest,
+      baseMetadata,
+      validAuthority,
+      sealStore,
+      undefined,
+    )
+
+    expect(result).toEqual({ appended: false, reason: 'missing-uncertainty-epoch' })
     expect(ledgerStore.has(digest)).toBe(false)
   })
 })
