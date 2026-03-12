@@ -1,6 +1,11 @@
 import { closeSync, existsSync, fsyncSync, openSync, readFileSync, writeSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 
+import {
+  evaluateSubmitFencingGuard,
+  type SubmitFencingInput,
+  type SubmitFencingReason,
+} from './single-writer-fencing.ts'
 import type { TacticOutputCapabilityContextScope } from './tactic-output-capability-context-task1.ts'
 
 export type TacticOutputCapabilityRuntimeSide = 'attacker' | 'defender'
@@ -35,11 +40,14 @@ export interface TacticOutputCapabilityRuntimeFreshnessState {
 }
 
 export interface TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata {
+  scopeKey: string
   battleId: string
   runId: string
   turnIndex: number
   contextVersion: number
   decision: TacticOutputCapabilityRuntimeFreshnessDecision
+  writerId?: string
+  writerToken?: number
 }
 
 export interface TacticOutputCapabilityRuntimeFreshnessConsumedDigestStore {
@@ -48,6 +56,27 @@ export interface TacticOutputCapabilityRuntimeFreshnessConsumedDigestStore {
     digest: `0x${string}`,
     metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
   ): void
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessWriterAuthority {
+  scopeKey: string
+  writerId: string
+  heldToken: number
+  lockState: LockStateLike
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessFencedAppendResult {
+  appended: boolean
+  reason: SubmitFencingReason
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessFencedConsumedDigestStore
+  extends TacticOutputCapabilityRuntimeFreshnessConsumedDigestStore {
+  markConsumedWithAuthority(
+    digest: `0x${string}`,
+    metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
+    authority: TacticOutputCapabilityRuntimeFreshnessWriterAuthority,
+  ): TacticOutputCapabilityRuntimeFreshnessFencedAppendResult
 }
 
 export interface TacticOutputCapabilityRuntimeFreshnessTask1Input {
@@ -68,10 +97,13 @@ export interface TacticOutputCapabilityRuntimeFreshnessTask1Result {
 export interface TacticOutputCapabilityRuntimeFreshnessLedgerRecord {
   schemaVersion: number
   digest: `0x${string}`
+  scopeKey: string
   battleId: string
   runId: string
   turnIndex: number
   contextVersion: number
+  writerId: string
+  writerToken: number
   timestamp: string
   checksum: `0x${string}`
 }
@@ -81,10 +113,14 @@ export interface TacticOutputCapabilityRuntimeFreshnessFileBackedStoreOptions {
   now?: () => string
 }
 
+type LockStateLike = SubmitFencingInput['lockState']
+
 const CLAIM_DIGEST_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/claim-digest'
 const RESULT_ARTIFACT_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/result'
 const LEDGER_RECORD_DOMAIN = 'clawttack/tactic-output-capability-runtime-freshness-task1/ledger-record'
-const LEDGER_SCHEMA_VERSION = 1
+const LEDGER_SCHEMA_VERSION = 2
+const UNFENCED_WRITER_ID = 'unfenced'
+const UNFENCED_WRITER_TOKEN = 0
 
 export class InMemoryTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore
   implements TacticOutputCapabilityRuntimeFreshnessConsumedDigestStore {
@@ -103,7 +139,7 @@ export class InMemoryTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore
 }
 
 export class FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore
-  implements TacticOutputCapabilityRuntimeFreshnessConsumedDigestStore {
+  implements TacticOutputCapabilityRuntimeFreshnessFencedConsumedDigestStore {
   readonly #filePath: string
   readonly #now: () => string
   readonly #digests = new Map<`0x${string}`, TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata>()
@@ -137,11 +173,14 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore
       const parsed = JSON.parse(line) as Partial<TacticOutputCapabilityRuntimeFreshnessLedgerRecord>
       const record = validateLedgerRecord(parsed)
       this.#digests.set(record.digest, {
+        scopeKey: record.scopeKey,
         battleId: record.battleId,
         runId: record.runId,
         turnIndex: record.turnIndex,
         contextVersion: record.contextVersion,
         decision: 'allow',
+        writerId: record.writerId,
+        writerToken: record.writerToken,
       })
     }
 
@@ -158,13 +197,52 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore
     metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
   ): void {
     this.assertLoaded()
+    this.appendDurably(digest, metadata)
+  }
 
+  markConsumedWithAuthority(
+    digest: `0x${string}`,
+    metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
+    authority: TacticOutputCapabilityRuntimeFreshnessWriterAuthority,
+  ): TacticOutputCapabilityRuntimeFreshnessFencedAppendResult {
+    this.assertLoaded()
+
+    const normalizedMetadata = normalizeConsumedMetadata(metadata)
+    const normalizedAuthority = normalizeWriterAuthority(authority)
+    const fencing = evaluateSubmitFencingGuard({
+      expectedScopeKey: normalizedMetadata.scopeKey,
+      runnerId: normalizedAuthority.writerId,
+      heldToken: normalizedAuthority.heldToken,
+      lockState: normalizedAuthority.lockState,
+    })
+
+    if (!fencing.allowSubmit) {
+      return { appended: false, reason: fencing.reason }
+    }
+
+    this.appendDurably(digest, {
+      ...normalizedMetadata,
+      writerId: normalizedAuthority.writerId,
+      writerToken: normalizedAuthority.heldToken,
+    })
+
+    return { appended: true, reason: 'pass' }
+  }
+
+  private appendDurably(
+    digest: `0x${string}`,
+    metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
+  ): void {
+    const normalizedMetadata = normalizeConsumedMetadata(metadata)
     const record = createLedgerRecord({
       digest,
-      battleId: metadata.battleId,
-      runId: metadata.runId,
-      turnIndex: metadata.turnIndex,
-      contextVersion: metadata.contextVersion,
+      scopeKey: normalizedMetadata.scopeKey,
+      battleId: normalizedMetadata.battleId,
+      runId: normalizedMetadata.runId,
+      turnIndex: normalizedMetadata.turnIndex,
+      contextVersion: normalizedMetadata.contextVersion,
+      writerId: normalizedMetadata.writerId ?? UNFENCED_WRITER_ID,
+      writerToken: normalizedMetadata.writerToken ?? UNFENCED_WRITER_TOKEN,
       timestamp: this.#now(),
     })
     const line = `${stableStringify(record)}\n`
@@ -177,7 +255,11 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore
       closeSync(fd)
     }
 
-    this.#digests.set(digest, metadata)
+    this.#digests.set(digest, {
+      ...normalizedMetadata,
+      writerId: normalizedMetadata.writerId ?? UNFENCED_WRITER_ID,
+      writerToken: normalizedMetadata.writerToken ?? UNFENCED_WRITER_TOKEN,
+    })
   }
 
   private assertLoaded(): void {
@@ -207,6 +289,8 @@ const sha256 = (payload: unknown): `0x${string}` => {
 }
 
 const normalizeToken = (value: string): string => value.trim().toLowerCase().replace(/\s+/g, ' ')
+
+const normalizeScopeKey = (value: string): string => normalizeToken(value)
 
 const normalizeScope = (scope: TacticOutputCapabilityContextScope): TacticOutputCapabilityContextScope => ({
   scopeClass: scope.scopeClass,
@@ -240,32 +324,70 @@ const normalizeRuntime = (
   dependencyValid: runtime.dependencyValid,
 })
 
+const normalizeConsumedMetadata = (
+  metadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
+): TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata => ({
+  scopeKey: normalizeScopeKey(metadata.scopeKey),
+  battleId: normalizeToken(metadata.battleId),
+  runId: normalizeToken(metadata.runId),
+  turnIndex: metadata.turnIndex,
+  contextVersion: metadata.contextVersion,
+  decision: metadata.decision,
+  writerId: metadata.writerId === undefined ? undefined : normalizeToken(metadata.writerId),
+  writerToken: metadata.writerToken,
+})
+
+const normalizeWriterAuthority = (
+  authority: TacticOutputCapabilityRuntimeFreshnessWriterAuthority,
+): TacticOutputCapabilityRuntimeFreshnessWriterAuthority => ({
+  scopeKey: normalizeScopeKey(authority.scopeKey),
+  writerId: normalizeToken(authority.writerId),
+  heldToken: authority.heldToken,
+  lockState: authority.lockState === null || authority.lockState === undefined
+    ? authority.lockState
+    : {
+        scopeKey: normalizeScopeKey(authority.lockState.scopeKey),
+        ownerId: normalizeToken(authority.lockState.ownerId),
+        activeToken: authority.lockState.activeToken,
+        tokenFloor: authority.lockState.tokenFloor,
+      },
+})
+
 const createLedgerChecksum = (record: Omit<TacticOutputCapabilityRuntimeFreshnessLedgerRecord, 'checksum'>): `0x${string}` => sha256({
   domain: LEDGER_RECORD_DOMAIN,
   schemaVersion: record.schemaVersion,
   digest: record.digest,
+  scopeKey: record.scopeKey,
   battleId: record.battleId,
   runId: record.runId,
   turnIndex: record.turnIndex,
   contextVersion: record.contextVersion,
+  writerId: record.writerId,
+  writerToken: record.writerToken,
   timestamp: record.timestamp,
 })
 
 const createLedgerRecord = (input: {
   digest: `0x${string}`
+  scopeKey: string
   battleId: string
   runId: string
   turnIndex: number
   contextVersion: number
+  writerId: string
+  writerToken: number
   timestamp: string
 }): TacticOutputCapabilityRuntimeFreshnessLedgerRecord => {
   const baseRecord = {
     schemaVersion: LEDGER_SCHEMA_VERSION,
     digest: input.digest,
+    scopeKey: normalizeScopeKey(input.scopeKey),
     battleId: normalizeToken(input.battleId),
     runId: normalizeToken(input.runId),
     turnIndex: input.turnIndex,
     contextVersion: input.contextVersion,
+    writerId: normalizeToken(input.writerId),
+    writerToken: input.writerToken,
     timestamp: input.timestamp,
   } satisfies Omit<TacticOutputCapabilityRuntimeFreshnessLedgerRecord, 'checksum'>
 
@@ -283,10 +405,13 @@ const validateLedgerRecord = (
   }
   if (
     typeof record.digest !== 'string'
+    || typeof record.scopeKey !== 'string'
     || typeof record.battleId !== 'string'
     || typeof record.runId !== 'string'
     || typeof record.turnIndex !== 'number'
     || typeof record.contextVersion !== 'number'
+    || typeof record.writerId !== 'string'
+    || typeof record.writerToken !== 'number'
     || typeof record.timestamp !== 'string'
     || typeof record.checksum !== 'string'
   ) {
@@ -296,10 +421,13 @@ const validateLedgerRecord = (
   const normalizedRecord: TacticOutputCapabilityRuntimeFreshnessLedgerRecord = {
     schemaVersion: record.schemaVersion,
     digest: record.digest as `0x${string}`,
+    scopeKey: normalizeScopeKey(record.scopeKey),
     battleId: normalizeToken(record.battleId),
     runId: normalizeToken(record.runId),
     turnIndex: record.turnIndex,
     contextVersion: record.contextVersion,
+    writerId: normalizeToken(record.writerId),
+    writerToken: record.writerToken,
     timestamp: record.timestamp,
     checksum: record.checksum as `0x${string}`,
   }
@@ -307,10 +435,13 @@ const validateLedgerRecord = (
   const expectedChecksum = createLedgerChecksum({
     schemaVersion: normalizedRecord.schemaVersion,
     digest: normalizedRecord.digest,
+    scopeKey: normalizedRecord.scopeKey,
     battleId: normalizedRecord.battleId,
     runId: normalizedRecord.runId,
     turnIndex: normalizedRecord.turnIndex,
     contextVersion: normalizedRecord.contextVersion,
+    writerId: normalizedRecord.writerId,
+    writerToken: normalizedRecord.writerToken,
     timestamp: normalizedRecord.timestamp,
   })
 
@@ -320,6 +451,12 @@ const validateLedgerRecord = (
 
   return normalizedRecord
 }
+
+export const buildTacticOutputCapabilityRuntimeFreshnessScopeKey = (input: {
+  battleId: string
+  side: TacticOutputCapabilityRuntimeSide
+  runId: string
+}): string => [normalizeToken(input.battleId), input.side, normalizeToken(input.runId)].join(':')
 
 export const computeTacticOutputCapabilityRuntimeClaimDigestTask1 = (
   claim: TacticOutputCapabilityRuntimeFreshnessClaim,
@@ -369,6 +506,7 @@ export const evaluateTacticOutputCapabilityRuntimeFreshnessTask1 = (
 
   if (decision === 'allow' && input.consumeOnAllow !== false) {
     input.consumedDigests.markConsumed(claimDigest, {
+      scopeKey: buildTacticOutputCapabilityRuntimeFreshnessScopeKey(normalizedRuntime),
       battleId: normalizedRuntime.battleId,
       runId: normalizedRuntime.runId,
       turnIndex: normalizedRuntime.turnIndex,

@@ -4,12 +4,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
+  buildTacticOutputCapabilityRuntimeFreshnessScopeKey,
   computeTacticOutputCapabilityRuntimeClaimDigestTask1,
   evaluateTacticOutputCapabilityRuntimeFreshnessTask1,
   FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore,
   InMemoryTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore,
   type TacticOutputCapabilityRuntimeFreshnessClaim,
+  type TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
   type TacticOutputCapabilityRuntimeFreshnessState,
+  type TacticOutputCapabilityRuntimeFreshnessWriterAuthority,
 } from '../src/tactic-output-capability-runtime-freshness-task1.ts'
 
 describe('tactic output capability runtime freshness task1', () => {
@@ -44,6 +47,29 @@ describe('tactic output capability runtime freshness task1', () => {
     turnIndex: 7,
     contextVersion: 3,
     dependencyValid: true,
+  }
+
+  const baseScopeKey = buildTacticOutputCapabilityRuntimeFreshnessScopeKey(baseRuntime)
+
+  const baseMetadata: TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata = {
+    scopeKey: baseScopeKey,
+    battleId: 'battle-027',
+    runId: 'run-9',
+    turnIndex: 7,
+    contextVersion: 3,
+    decision: 'allow',
+  }
+
+  const validAuthority: TacticOutputCapabilityRuntimeFreshnessWriterAuthority = {
+    scopeKey: baseScopeKey,
+    writerId: 'runner-a',
+    heldToken: 7,
+    lockState: {
+      scopeKey: baseScopeKey,
+      ownerId: 'runner-a',
+      activeToken: 7,
+      tokenFloor: 7,
+    },
   }
 
   it('produces the same digest for semantically identical claims with different serialization', () => {
@@ -221,7 +247,7 @@ describe('tactic output capability runtime freshness task1', () => {
   it('rejects a ledger with a trailing partial record', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'freshness-ledger-'))
     const filePath = join(tempDir, 'consumed.jsonl')
-    writeFileSync(filePath, '{"schemaVersion":1')
+    writeFileSync(filePath, '{"schemaVersion":2')
 
     const store = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath })
 
@@ -272,5 +298,127 @@ describe('tactic output capability runtime freshness task1', () => {
     reloaded.load()
 
     expect(reloaded.has(first.claimDigest)).toBe(true)
+  })
+
+  it('fails closed on missing authority state for fenced append', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-ledger-'))
+    const filePath = join(tempDir, 'consumed.jsonl')
+    const store = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath })
+    const digest = computeTacticOutputCapabilityRuntimeClaimDigestTask1(baseClaim)
+    store.load()
+
+    const result = store.markConsumedWithAuthority(digest, baseMetadata, {
+      ...validAuthority,
+      lockState: null,
+    })
+
+    expect(result).toEqual({ appended: false, reason: 'missing-lock-state' })
+    expect(store.has(digest)).toBe(false)
+  })
+
+  it('denies fenced append for a stale token', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-ledger-'))
+    const filePath = join(tempDir, 'consumed.jsonl')
+    const store = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath })
+    const digest = computeTacticOutputCapabilityRuntimeClaimDigestTask1(baseClaim)
+    store.load()
+
+    const result = store.markConsumedWithAuthority(digest, baseMetadata, {
+      ...validAuthority,
+      heldToken: 6,
+      lockState: {
+        scopeKey: baseScopeKey,
+        ownerId: 'runner-a',
+        activeToken: 7,
+        tokenFloor: 7,
+      },
+    })
+
+    expect(result).toEqual({ appended: false, reason: 'stale-fencing-token' })
+    expect(store.has(digest)).toBe(false)
+  })
+
+  it('denies fenced append on scope mismatch', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-ledger-'))
+    const filePath = join(tempDir, 'consumed.jsonl')
+    const store = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath })
+    const digest = computeTacticOutputCapabilityRuntimeClaimDigestTask1(baseClaim)
+    store.load()
+
+    const wrongScopeKey = buildTacticOutputCapabilityRuntimeFreshnessScopeKey({
+      battleId: 'battle-027',
+      side: 'defender',
+      runId: 'run-9',
+    })
+
+    const result = store.markConsumedWithAuthority(digest, baseMetadata, {
+      scopeKey: wrongScopeKey,
+      writerId: 'runner-a',
+      heldToken: 7,
+      lockState: {
+        scopeKey: wrongScopeKey,
+        ownerId: 'runner-a',
+        activeToken: 7,
+        tokenFloor: 7,
+      },
+    })
+
+    expect(result).toEqual({ appended: false, reason: 'lock-scope-mismatch' })
+    expect(store.has(digest)).toBe(false)
+  })
+
+  it('denies fenced append on token regression', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-ledger-'))
+    const filePath = join(tempDir, 'consumed.jsonl')
+    const store = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath })
+    const digest = computeTacticOutputCapabilityRuntimeClaimDigestTask1(baseClaim)
+    store.load()
+
+    const result = store.markConsumedWithAuthority(digest, baseMetadata, {
+      ...validAuthority,
+      heldToken: 5,
+      lockState: {
+        scopeKey: baseScopeKey,
+        ownerId: 'runner-a',
+        activeToken: 5,
+        tokenFloor: 7,
+      },
+    })
+
+    expect(result).toEqual({ appended: false, reason: 'token-regression-detected' })
+    expect(store.has(digest)).toBe(false)
+  })
+
+  it('embeds writer token in durable records for valid fenced append and preserves duplicate denial after restart', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'freshness-ledger-'))
+    const filePath = join(tempDir, 'consumed.jsonl')
+    const digest = computeTacticOutputCapabilityRuntimeClaimDigestTask1(baseClaim)
+
+    const firstStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({
+      filePath,
+      now: () => '2026-03-12T19:56:00.000Z',
+    })
+    firstStore.load()
+
+    const append = firstStore.markConsumedWithAuthority(digest, baseMetadata, validAuthority)
+    expect(append).toEqual({ appended: true, reason: 'pass' })
+
+    const [line] = readFileSync(filePath, 'utf8').trim().split('\n')
+    const record = JSON.parse(line) as { writerId: string; writerToken: number; scopeKey: string }
+    expect(record.writerId).toBe('runner-a')
+    expect(record.writerToken).toBe(7)
+    expect(record.scopeKey).toBe(baseScopeKey)
+
+    const secondStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore({ filePath })
+    secondStore.load()
+
+    const second = evaluateTacticOutputCapabilityRuntimeFreshnessTask1({
+      claim: baseClaim,
+      runtime: baseRuntime,
+      consumedDigests: secondStore,
+      consumeOnAllow: false,
+    })
+
+    expect(second.decision).toBe('duplicate')
   })
 })
