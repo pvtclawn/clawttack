@@ -238,6 +238,37 @@ export type TacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision =
   | 'keep-quarantined'
   | 'causally-stale'
 
+export type TacticOutputCapabilityRuntimeFreshnessReplayReleaseSubreason =
+  | 'missing-recovery-snapshot'
+  | 'mixed-snapshot-stale'
+  | 'authority-source-mismatch'
+  | 'missing-prerequisite'
+  | 'marker-mismatch'
+  | 'marker-forgery'
+  | 'scope-mismatch'
+  | 'unsupported-independence-claim'
+  | 'insufficient-causal-closure'
+
+export type TacticOutputCapabilityRuntimeFreshnessReplayReleaseClass = 'strict-order' | 'independent'
+
+export type TacticOutputCapabilityRuntimeFreshnessReplayWorkClass =
+  | 'protected-append'
+  | 'authority-transition'
+  | 'diagnostic-observation'
+
+export interface TacticOutputCapabilityRuntimeFreshnessDependencyMarker {
+  scopeKey: string
+  authoritySource: string
+  authorityEpoch: number
+  renewalGeneration: number
+  prerequisiteId: string
+}
+
+export interface TacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment {
+  decision: TacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision
+  subreason?: TacticOutputCapabilityRuntimeFreshnessReplayReleaseSubreason
+}
+
 export interface TacticOutputCapabilityRuntimeFreshnessResumeQuarantineState {
   scopeKey: string
   quarantined: boolean
@@ -246,6 +277,7 @@ export interface TacticOutputCapabilityRuntimeFreshnessResumeQuarantineState {
   quarantineGeneration: number
   authoritySource: string
   denialReason?: TacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision
+  denialSubreason?: TacticOutputCapabilityRuntimeFreshnessReplayReleaseSubreason
   quarantinedAt: string
 }
 
@@ -254,15 +286,14 @@ export interface TacticOutputCapabilityRuntimeFreshnessResumeQuarantineFile {
   states: TacticOutputCapabilityRuntimeFreshnessResumeQuarantineState[]
 }
 
-export type TacticOutputCapabilityRuntimeFreshnessReplayReleaseClass = 'strict-order' | 'independent'
-
 export interface TacticOutputCapabilityRuntimeFreshnessResumeWorkItem {
   scopeKey: string
   observedAuthorityEpoch: number
   observedRenewalGeneration: number
   observedAuthoritySource: string
+  workClass: TacticOutputCapabilityRuntimeFreshnessReplayWorkClass
   releaseClass: TacticOutputCapabilityRuntimeFreshnessReplayReleaseClass
-  dependencyMarker?: string
+  dependencyMarker?: TacticOutputCapabilityRuntimeFreshnessDependencyMarker
   queueSequence: number
 }
 
@@ -271,7 +302,7 @@ export interface TacticOutputCapabilityRuntimeFreshnessRecoverySnapshot {
   authorityEpoch: number
   renewalGeneration: number
   authoritySource: string
-  dependencyMarker?: string
+  dependencyMarker?: TacticOutputCapabilityRuntimeFreshnessDependencyMarker
 }
 
 export interface TacticOutputCapabilityRuntimeFreshnessResumeQuarantineStore {
@@ -711,7 +742,7 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessResumeQuarantineSto
     snapshot: TacticOutputCapabilityRuntimeFreshnessRecoverySnapshot | null | undefined
   }): { released: boolean, reason: TacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision } {
     this.assertLoaded()
-    const decision = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision({
+    const assessment = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment({
       workItem: input.workItem,
       snapshot: input.snapshot,
     })
@@ -719,15 +750,16 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessResumeQuarantineSto
     const workItem = normalizeResumeWorkItem(input.workItem)
     const existing = this.#states.get(workItem.scopeKey)
 
-    if (decision !== 'release') {
+    if (assessment.decision !== 'release') {
       if (existing) {
         this.#states.set(workItem.scopeKey, {
           ...existing,
-          denialReason: decision,
+          denialReason: assessment.decision,
+          denialSubreason: assessment.subreason,
         })
         this.persist()
       }
-      return { released: false, reason: decision }
+      return { released: false, reason: assessment.decision }
     }
 
     const snapshot = normalizeRecoverySnapshot(input.snapshot!)
@@ -739,6 +771,7 @@ export class FileBackedTacticOutputCapabilityRuntimeFreshnessResumeQuarantineSto
       quarantineGeneration: snapshot.renewalGeneration,
       authoritySource: snapshot.authoritySource,
       denialReason: undefined,
+      denialSubreason: undefined,
       quarantinedAt: this.#now(),
     })
     this.persist()
@@ -959,8 +992,9 @@ const normalizeResumeWorkItem = (
   observedAuthorityEpoch: workItem.observedAuthorityEpoch,
   observedRenewalGeneration: workItem.observedRenewalGeneration,
   observedAuthoritySource: normalizeToken(workItem.observedAuthoritySource),
+  workClass: workItem.workClass,
   releaseClass: workItem.releaseClass,
-  dependencyMarker: workItem.dependencyMarker === undefined ? undefined : normalizeToken(workItem.dependencyMarker),
+  dependencyMarker: workItem.dependencyMarker,
   queueSequence: workItem.queueSequence,
 })
 
@@ -971,8 +1005,38 @@ const normalizeRecoverySnapshot = (
   authorityEpoch: snapshot.authorityEpoch,
   renewalGeneration: snapshot.renewalGeneration,
   authoritySource: normalizeToken(snapshot.authoritySource),
-  dependencyMarker: snapshot.dependencyMarker === undefined ? undefined : normalizeToken(snapshot.dependencyMarker),
+  dependencyMarker: snapshot.dependencyMarker,
 })
+
+const normalizeDependencyMarker = (
+  marker: unknown,
+): TacticOutputCapabilityRuntimeFreshnessDependencyMarker | undefined => {
+  if (marker === undefined || marker === null) {
+    return undefined
+  }
+  if (typeof marker !== 'object' || Array.isArray(marker)) {
+    return undefined
+  }
+
+  const candidate = marker as Record<string, unknown>
+  if (
+    typeof candidate.scopeKey !== 'string'
+    || typeof candidate.authoritySource !== 'string'
+    || typeof candidate.authorityEpoch !== 'number'
+    || typeof candidate.renewalGeneration !== 'number'
+    || typeof candidate.prerequisiteId !== 'string'
+  ) {
+    return undefined
+  }
+
+  return {
+    scopeKey: normalizeScopeKey(candidate.scopeKey),
+    authoritySource: normalizeToken(candidate.authoritySource),
+    authorityEpoch: candidate.authorityEpoch,
+    renewalGeneration: candidate.renewalGeneration,
+    prerequisiteId: normalizeToken(candidate.prerequisiteId),
+  }
+}
 
 const createResumeQuarantineState = (input: {
   scopeKey: string
@@ -981,6 +1045,7 @@ const createResumeQuarantineState = (input: {
   renewalGeneration: number
   authoritySource: string
   denialReason?: TacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision
+  denialSubreason?: TacticOutputCapabilityRuntimeFreshnessReplayReleaseSubreason
   quarantinedAt: string
 }): TacticOutputCapabilityRuntimeFreshnessResumeQuarantineState => ({
   scopeKey: normalizeScopeKey(input.scopeKey),
@@ -990,6 +1055,7 @@ const createResumeQuarantineState = (input: {
   quarantineGeneration: input.renewalGeneration,
   authoritySource: normalizeToken(input.authoritySource),
   denialReason: input.denialReason,
+  denialSubreason: input.denialSubreason,
   quarantinedAt: input.quarantinedAt,
 })
 
@@ -1016,6 +1082,8 @@ const validateResumeQuarantineState = (
     quarantineGeneration: state.quarantineGeneration,
     authoritySource: normalizeToken(state.authoritySource),
     denialReason: state.denialReason as TacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision | undefined,
+    denialSubreason:
+      state.denialSubreason as TacticOutputCapabilityRuntimeFreshnessReplayReleaseSubreason | undefined,
     quarantinedAt: state.quarantinedAt,
   }
 }
@@ -1073,6 +1141,20 @@ export const buildTacticOutputCapabilityRuntimeFreshnessScopeKey = (input: {
   runId: string
 }): string => [normalizeToken(input.battleId), input.side, normalizeToken(input.runId)].join(':')
 
+export const buildTacticOutputCapabilityRuntimeFreshnessDependencyMarker = (input: {
+  scopeKey: string
+  authoritySource: string
+  authorityEpoch: number
+  renewalGeneration: number
+  prerequisiteId: string
+}): TacticOutputCapabilityRuntimeFreshnessDependencyMarker => ({
+  scopeKey: normalizeScopeKey(input.scopeKey),
+  authoritySource: normalizeToken(input.authoritySource),
+  authorityEpoch: input.authorityEpoch,
+  renewalGeneration: input.renewalGeneration,
+  prerequisiteId: normalizeToken(input.prerequisiteId),
+})
+
 export const computeTacticOutputCapabilityRuntimeClaimDigestTask1 = (
   claim: TacticOutputCapabilityRuntimeFreshnessClaim,
 ): `0x${string}` => {
@@ -1092,38 +1174,99 @@ export const computeTacticOutputCapabilityRuntimeClaimDigestTask1 = (
   })
 }
 
+const canClaimIndependentReplay = (
+  workClass: TacticOutputCapabilityRuntimeFreshnessReplayWorkClass,
+): boolean => workClass === 'diagnostic-observation'
+
+export const evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment = (
+  input: {
+    workItem: TacticOutputCapabilityRuntimeFreshnessResumeWorkItem
+    snapshot: TacticOutputCapabilityRuntimeFreshnessRecoverySnapshot | null | undefined
+  },
+): TacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment => {
+  const barrier = evaluateTacticOutputCapabilityRuntimeFreshnessResumeBarrier(input)
+  const workItem = normalizeResumeWorkItem(input.workItem)
+
+  if (barrier === 'missing-recovery-snapshot') {
+    return { decision: 'keep-quarantined', subreason: 'missing-recovery-snapshot' }
+  }
+  if (barrier === 'authority-source-mismatch') {
+    return { decision: 'keep-quarantined', subreason: 'authority-source-mismatch' }
+  }
+  if (barrier === 'mixed-snapshot-stale') {
+    return {
+      decision: workItem.releaseClass === 'strict-order' ? 'causally-stale' : 'keep-quarantined',
+      subreason: 'mixed-snapshot-stale',
+    }
+  }
+
+  const snapshot = normalizeRecoverySnapshot(input.snapshot!)
+
+  if (workItem.releaseClass === 'independent' && !canClaimIndependentReplay(workItem.workClass)) {
+    return { decision: 'keep-quarantined', subreason: 'unsupported-independence-claim' }
+  }
+
+  if (workItem.releaseClass === 'independent') {
+    return { decision: 'release' }
+  }
+
+  const rawWorkMarker = (input.workItem as { dependencyMarker?: unknown }).dependencyMarker
+  const rawSnapshotMarker = (input.snapshot as { dependencyMarker?: unknown }).dependencyMarker
+
+  if (rawWorkMarker === undefined || rawWorkMarker === null) {
+    return { decision: 'keep-quarantined', subreason: 'insufficient-causal-closure' }
+  }
+  if (rawSnapshotMarker === undefined || rawSnapshotMarker === null) {
+    return { decision: 'keep-quarantined', subreason: 'missing-prerequisite' }
+  }
+
+  const workMarker = normalizeDependencyMarker(rawWorkMarker)
+  const snapshotMarker = normalizeDependencyMarker(rawSnapshotMarker)
+
+  if (!workMarker || !snapshotMarker) {
+    return { decision: 'keep-quarantined', subreason: 'marker-forgery' }
+  }
+
+  if (workMarker.scopeKey !== workItem.scopeKey || snapshotMarker.scopeKey !== snapshot.scopeKey) {
+    return { decision: 'causally-stale', subreason: 'scope-mismatch' }
+  }
+
+  if (
+    workMarker.authoritySource !== workItem.observedAuthoritySource
+    || workMarker.authorityEpoch !== workItem.observedAuthorityEpoch
+    || workMarker.renewalGeneration !== workItem.observedRenewalGeneration
+  ) {
+    return { decision: 'causally-stale', subreason: 'marker-mismatch' }
+  }
+
+  if (
+    snapshotMarker.authoritySource !== snapshot.authoritySource
+    || snapshotMarker.authorityEpoch !== snapshot.authorityEpoch
+    || snapshotMarker.renewalGeneration !== snapshot.renewalGeneration
+  ) {
+    return { decision: 'causally-stale', subreason: 'marker-mismatch' }
+  }
+
+  if (
+    workMarker.scopeKey !== snapshotMarker.scopeKey
+    || workMarker.authoritySource !== snapshotMarker.authoritySource
+    || workMarker.authorityEpoch !== snapshotMarker.authorityEpoch
+    || workMarker.renewalGeneration !== snapshotMarker.renewalGeneration
+    || workMarker.prerequisiteId !== snapshotMarker.prerequisiteId
+  ) {
+    return { decision: 'causally-stale', subreason: 'marker-mismatch' }
+  }
+
+  return { decision: 'release' }
+}
+
 export const evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision = (
   input: {
     workItem: TacticOutputCapabilityRuntimeFreshnessResumeWorkItem
     snapshot: TacticOutputCapabilityRuntimeFreshnessRecoverySnapshot | null | undefined
   },
-): TacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision => {
-  const barrier = evaluateTacticOutputCapabilityRuntimeFreshnessResumeBarrier(input)
-  if (barrier === 'missing-recovery-snapshot') {
-    return 'keep-quarantined'
-  }
-  if (barrier === 'authority-source-mismatch') {
-    return 'keep-quarantined'
-  }
-  if (barrier === 'mixed-snapshot-stale') {
-    const workItem = normalizeResumeWorkItem(input.workItem)
-    return workItem.releaseClass === 'strict-order' ? 'causally-stale' : 'keep-quarantined'
-  }
-
-  const workItem = normalizeResumeWorkItem(input.workItem)
-  const snapshot = normalizeRecoverySnapshot(input.snapshot!)
-
-  if (workItem.releaseClass === 'strict-order') {
-    if (!workItem.dependencyMarker) {
-      return 'keep-quarantined'
-    }
-    if (workItem.dependencyMarker !== snapshot.dependencyMarker) {
-      return 'causally-stale'
-    }
-  }
-
-  return 'release'
-}
+): TacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision =>
+  evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment(input).decision
 
 export const evaluateTacticOutputCapabilityRuntimeFreshnessResumeBarrier = (
   input: {

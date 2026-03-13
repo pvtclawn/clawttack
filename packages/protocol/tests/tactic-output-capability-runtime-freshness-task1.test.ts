@@ -4,9 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
+  buildTacticOutputCapabilityRuntimeFreshnessDependencyMarker,
   buildTacticOutputCapabilityRuntimeFreshnessScopeKey,
   computeTacticOutputCapabilityRuntimeClaimDigestTask1,
   evaluateTacticOutputCapabilityRuntimeFreshnessLeaseGuard,
+  evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment,
   evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision,
   evaluateTacticOutputCapabilityRuntimeFreshnessResumeBarrier,
   evaluateTacticOutputCapabilityRuntimeFreshnessTask1,
@@ -16,6 +18,7 @@ import {
   InMemoryTacticOutputCapabilityRuntimeFreshnessConsumedDigestStore,
   type TacticOutputCapabilityRuntimeFreshnessClaim,
   type TacticOutputCapabilityRuntimeFreshnessConsumedDigestMetadata,
+  type TacticOutputCapabilityRuntimeFreshnessDependencyMarker,
   type TacticOutputCapabilityRuntimeFreshnessState,
   type TacticOutputCapabilityRuntimeFreshnessTimerPolicy,
   type TacticOutputCapabilityRuntimeFreshnessWriterAuthority,
@@ -75,13 +78,32 @@ describe('tactic output capability runtime freshness task1', () => {
     leaseGraceWindowMs: 500,
   }
 
+  const dependencyMarkerA: TacticOutputCapabilityRuntimeFreshnessDependencyMarker =
+    buildTacticOutputCapabilityRuntimeFreshnessDependencyMarker({
+      scopeKey: baseScopeKey,
+      authoritySource,
+      authorityEpoch: 12,
+      renewalGeneration: 6,
+      prerequisiteId: 'dep-a',
+    })
+
+  const dependencyMarkerB: TacticOutputCapabilityRuntimeFreshnessDependencyMarker =
+    buildTacticOutputCapabilityRuntimeFreshnessDependencyMarker({
+      scopeKey: baseScopeKey,
+      authoritySource,
+      authorityEpoch: 12,
+      renewalGeneration: 6,
+      prerequisiteId: 'dep-b',
+    })
+
   const staleStrictOrderWorkItem = {
     scopeKey: baseScopeKey,
     observedAuthorityEpoch: 12,
     observedRenewalGeneration: 6,
     observedAuthoritySource: authoritySource,
+    workClass: 'protected-append' as const,
     releaseClass: 'strict-order' as const,
-    dependencyMarker: 'dep-a',
+    dependencyMarker: dependencyMarkerA,
     queueSequence: 1,
   }
 
@@ -90,6 +112,7 @@ describe('tactic output capability runtime freshness task1', () => {
     observedAuthorityEpoch: 12,
     observedRenewalGeneration: 6,
     observedAuthoritySource: authoritySource,
+    workClass: 'diagnostic-observation' as const,
     releaseClass: 'independent' as const,
     queueSequence: 2,
   }
@@ -977,6 +1000,7 @@ describe('tactic output capability runtime freshness task1', () => {
         observedAuthorityEpoch: 12,
         observedRenewalGeneration: 6,
         observedAuthoritySource: authoritySource,
+        workClass: 'diagnostic-observation',
         releaseClass: 'independent',
         queueSequence: 1,
       },
@@ -988,8 +1012,9 @@ describe('tactic output capability runtime freshness task1', () => {
       },
     })
 
-    expect(result).toEqual({ released: false, reason: 'mixed-snapshot-stale' })
+    expect(result).toEqual({ released: false, reason: 'keep-quarantined' })
     expect(store.isQuarantined(baseScopeKey)).toBe(true)
+    expect(store.getScopeState(baseScopeKey)?.denialSubreason).toBe('mixed-snapshot-stale')
   })
 
   it('denies resume release on authority provenance mismatch', () => {
@@ -1011,6 +1036,7 @@ describe('tactic output capability runtime freshness task1', () => {
         observedAuthorityEpoch: 12,
         observedRenewalGeneration: 6,
         observedAuthoritySource: authoritySource,
+        workClass: 'diagnostic-observation',
         releaseClass: 'independent',
         queueSequence: 1,
       },
@@ -1022,8 +1048,9 @@ describe('tactic output capability runtime freshness task1', () => {
       },
     })
 
-    expect(result).toEqual({ released: false, reason: 'authority-source-mismatch' })
+    expect(result).toEqual({ released: false, reason: 'keep-quarantined' })
     expect(store.isQuarantined(baseScopeKey)).toBe(true)
+    expect(store.getScopeState(baseScopeKey)?.denialSubreason).toBe('authority-source-mismatch')
   })
 
   it('releases quarantined work only when the current recovery snapshot matches', () => {
@@ -1045,6 +1072,7 @@ describe('tactic output capability runtime freshness task1', () => {
         observedAuthorityEpoch: 12,
         observedRenewalGeneration: 6,
         observedAuthoritySource: authoritySource,
+        workClass: 'diagnostic-observation',
         releaseClass: 'independent',
         queueSequence: 1,
       },
@@ -1056,7 +1084,7 @@ describe('tactic output capability runtime freshness task1', () => {
       },
     })
 
-    expect(result).toEqual({ released: true, reason: 'pass' })
+    expect(result).toEqual({ released: true, reason: 'release' })
     expect(store.isQuarantined(baseScopeKey)).toBe(false)
   })
 
@@ -1086,6 +1114,7 @@ describe('tactic output capability runtime freshness task1', () => {
         observedAuthorityEpoch: 12,
         observedRenewalGeneration: 6,
         observedAuthoritySource: authoritySource,
+        workClass: 'diagnostic-observation',
         releaseClass: 'independent',
         queueSequence: 1,
       },
@@ -1103,7 +1132,7 @@ describe('tactic output capability runtime freshness task1', () => {
         authorityEpoch: 12,
         renewalGeneration: 6,
         authoritySource,
-        dependencyMarker: 'dep-b',
+        dependencyMarker: dependencyMarkerB,
       },
     })
 
@@ -1118,7 +1147,7 @@ describe('tactic output capability runtime freshness task1', () => {
         authorityEpoch: 12,
         renewalGeneration: 6,
         authoritySource,
-        dependencyMarker: 'dep-b',
+        dependencyMarker: dependencyMarkerB,
       },
     })
     const independentResult = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision({
@@ -1136,7 +1165,7 @@ describe('tactic output capability runtime freshness task1', () => {
   })
 
   it('keeps strict-order work quarantined when dependency context is missing', () => {
-    const result = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseDecision({
+    const result = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment({
       workItem: {
         ...staleStrictOrderWorkItem,
         dependencyMarker: undefined,
@@ -1146,11 +1175,14 @@ describe('tactic output capability runtime freshness task1', () => {
         authorityEpoch: 12,
         renewalGeneration: 6,
         authoritySource,
-        dependencyMarker: 'dep-a',
+        dependencyMarker: dependencyMarkerA,
       },
     })
 
-    expect(result).toBe('keep-quarantined')
+    expect(result).toEqual({
+      decision: 'keep-quarantined',
+      subreason: 'insufficient-causal-closure',
+    })
   })
 
   it('persists denial reason for blocked replay work across restart', () => {
@@ -1174,7 +1206,7 @@ describe('tactic output capability runtime freshness task1', () => {
         authorityEpoch: 12,
         renewalGeneration: 6,
         authoritySource,
-        dependencyMarker: 'dep-b',
+        dependencyMarker: dependencyMarkerB,
       },
     })
     expect(blocked).toEqual({ released: false, reason: 'causally-stale' })
@@ -1182,5 +1214,110 @@ describe('tactic output capability runtime freshness task1', () => {
     const secondStore = new FileBackedTacticOutputCapabilityRuntimeFreshnessResumeQuarantineStore({ filePath })
     secondStore.load()
     expect(secondStore.getScopeState(baseScopeKey)?.denialReason).toBe('causally-stale')
+    expect(secondStore.getScopeState(baseScopeKey)?.denialSubreason).toBe('marker-mismatch')
   })
+
+  it('fails closed when unsupported work claims independent replay', () => {
+    const result = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment({
+      workItem: {
+        ...validIndependentWorkItem,
+        workClass: 'protected-append',
+      },
+      snapshot: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 6,
+        authoritySource,
+      },
+    })
+
+    expect(result).toEqual({
+      decision: 'keep-quarantined',
+      subreason: 'unsupported-independence-claim',
+    })
+  })
+
+  it('rejects dependency-marker reuse across mismatched scope', () => {
+    const wrongScopeMarker = buildTacticOutputCapabilityRuntimeFreshnessDependencyMarker({
+      scopeKey: buildTacticOutputCapabilityRuntimeFreshnessScopeKey({
+        battleId: 'battle-027',
+        side: 'defender',
+        runId: 'run-9',
+      }),
+      authoritySource,
+      authorityEpoch: 12,
+      renewalGeneration: 6,
+      prerequisiteId: 'dep-a',
+    })
+
+    const result = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment({
+      workItem: {
+        ...staleStrictOrderWorkItem,
+        dependencyMarker: wrongScopeMarker,
+      },
+      snapshot: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 6,
+        authoritySource,
+        dependencyMarker: dependencyMarkerA,
+      },
+    })
+
+    expect(result).toEqual({
+      decision: 'causally-stale',
+      subreason: 'scope-mismatch',
+    })
+  })
+
+  it('rejects dependency-marker reuse across mismatched authority epoch or renewal generation', () => {
+    const staleMarker = buildTacticOutputCapabilityRuntimeFreshnessDependencyMarker({
+      scopeKey: baseScopeKey,
+      authoritySource,
+      authorityEpoch: 11,
+      renewalGeneration: 5,
+      prerequisiteId: 'dep-a',
+    })
+
+    const result = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment({
+      workItem: {
+        ...staleStrictOrderWorkItem,
+        dependencyMarker: staleMarker,
+      },
+      snapshot: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 6,
+        authoritySource,
+        dependencyMarker: dependencyMarkerA,
+      },
+    })
+
+    expect(result).toEqual({
+      decision: 'causally-stale',
+      subreason: 'marker-mismatch',
+    })
+  })
+
+  it('rejects weak free-form dependency markers for protected work', () => {
+    const result = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment({
+      workItem: {
+        ...staleStrictOrderWorkItem,
+        dependencyMarker: 'dep-a' as unknown as TacticOutputCapabilityRuntimeFreshnessDependencyMarker,
+      },
+      snapshot: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 6,
+        authoritySource,
+        dependencyMarker: dependencyMarkerA,
+      },
+    })
+
+    expect(result).toEqual({
+      decision: 'keep-quarantined',
+      subreason: 'marker-forgery',
+    })
+  })
+
 })
