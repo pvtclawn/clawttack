@@ -85,6 +85,7 @@ describe('tactic output capability runtime freshness task1', () => {
       authorityEpoch: 12,
       renewalGeneration: 6,
       prerequisiteId: 'dep-a',
+      closureLevel: 'direct-prerequisite',
     })
 
   const dependencyMarkerB: TacticOutputCapabilityRuntimeFreshnessDependencyMarker =
@@ -94,6 +95,17 @@ describe('tactic output capability runtime freshness task1', () => {
       authorityEpoch: 12,
       renewalGeneration: 6,
       prerequisiteId: 'dep-b',
+      closureLevel: 'direct-prerequisite',
+    })
+
+  const transitiveDependencyMarkerA: TacticOutputCapabilityRuntimeFreshnessDependencyMarker =
+    buildTacticOutputCapabilityRuntimeFreshnessDependencyMarker({
+      scopeKey: baseScopeKey,
+      authoritySource,
+      authorityEpoch: 12,
+      renewalGeneration: 6,
+      prerequisiteId: 'dep-a',
+      closureLevel: 'transitive-verified',
     })
 
   const staleStrictOrderWorkItem = {
@@ -115,6 +127,17 @@ describe('tactic output capability runtime freshness task1', () => {
     workClass: 'diagnostic-observation' as const,
     releaseClass: 'independent' as const,
     queueSequence: 2,
+  }
+
+  const authorityTransitionWorkItem = {
+    scopeKey: baseScopeKey,
+    observedAuthorityEpoch: 12,
+    observedRenewalGeneration: 6,
+    observedAuthoritySource: authoritySource,
+    workClass: 'authority-transition' as const,
+    releaseClass: 'strict-order' as const,
+    dependencyMarker: transitiveDependencyMarkerA,
+    queueSequence: 3,
   }
 
   const validAuthority: TacticOutputCapabilityRuntimeFreshnessWriterAuthority = {
@@ -1185,6 +1208,72 @@ describe('tactic output capability runtime freshness task1', () => {
     })
   })
 
+
+  it('does not let direct-prerequisite markers satisfy authority-transition replay', () => {
+    const result = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment({
+      workItem: {
+        ...authorityTransitionWorkItem,
+        dependencyMarker: dependencyMarkerA,
+      },
+      snapshot: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 6,
+        authoritySource,
+        dependencyMarker: dependencyMarkerA,
+      },
+    })
+
+    expect(result).toEqual({
+      decision: 'keep-quarantined',
+      subreason: 'insufficient-causal-closure',
+    })
+  })
+
+  it('releases authority-transition replay only with transitive-verified markers', () => {
+    const result = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment({
+      workItem: authorityTransitionWorkItem,
+      snapshot: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 6,
+        authoritySource,
+        dependencyMarker: transitiveDependencyMarkerA,
+      },
+    })
+
+    expect(result).toEqual({
+      decision: 'release',
+    })
+  })
+
+  it('fails closed when dependency markers omit an explicit closure level', () => {
+    const result = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment({
+      workItem: {
+        ...staleStrictOrderWorkItem,
+        dependencyMarker: {
+          scopeKey: baseScopeKey,
+          authoritySource,
+          authorityEpoch: 12,
+          renewalGeneration: 6,
+          prerequisiteId: 'dep-a',
+        } as unknown as TacticOutputCapabilityRuntimeFreshnessDependencyMarker,
+      },
+      snapshot: {
+        scopeKey: baseScopeKey,
+        authorityEpoch: 12,
+        renewalGeneration: 6,
+        authoritySource,
+        dependencyMarker: dependencyMarkerA,
+      },
+    })
+
+    expect(result).toEqual({
+      decision: 'keep-quarantined',
+      subreason: 'marker-forgery',
+    })
+  })
+
   it('persists denial reason for blocked replay work across restart', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'freshness-resume-'))
     const filePath = join(tempDir, 'resume.json')
@@ -1248,6 +1337,7 @@ describe('tactic output capability runtime freshness task1', () => {
       authorityEpoch: 12,
       renewalGeneration: 6,
       prerequisiteId: 'dep-a',
+      closureLevel: 'direct-prerequisite',
     })
 
     const result = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment({
@@ -1277,6 +1367,7 @@ describe('tactic output capability runtime freshness task1', () => {
       authorityEpoch: 11,
       renewalGeneration: 5,
       prerequisiteId: 'dep-a',
+      closureLevel: 'direct-prerequisite',
     })
 
     const result = evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment({

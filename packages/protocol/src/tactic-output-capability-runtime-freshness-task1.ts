@@ -256,12 +256,17 @@ export type TacticOutputCapabilityRuntimeFreshnessReplayWorkClass =
   | 'authority-transition'
   | 'diagnostic-observation'
 
+export type TacticOutputCapabilityRuntimeFreshnessDependencyClosureLevel =
+  | 'direct-prerequisite'
+  | 'transitive-verified'
+
 export interface TacticOutputCapabilityRuntimeFreshnessDependencyMarker {
   scopeKey: string
   authoritySource: string
   authorityEpoch: number
   renewalGeneration: number
   prerequisiteId: string
+  closureLevel: TacticOutputCapabilityRuntimeFreshnessDependencyClosureLevel
 }
 
 export interface TacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment {
@@ -1025,6 +1030,7 @@ const normalizeDependencyMarker = (
     || typeof candidate.authorityEpoch !== 'number'
     || typeof candidate.renewalGeneration !== 'number'
     || typeof candidate.prerequisiteId !== 'string'
+    || (candidate.closureLevel !== 'direct-prerequisite' && candidate.closureLevel !== 'transitive-verified')
   ) {
     return undefined
   }
@@ -1035,6 +1041,7 @@ const normalizeDependencyMarker = (
     authorityEpoch: candidate.authorityEpoch,
     renewalGeneration: candidate.renewalGeneration,
     prerequisiteId: normalizeToken(candidate.prerequisiteId),
+    closureLevel: candidate.closureLevel,
   }
 }
 
@@ -1147,12 +1154,14 @@ export const buildTacticOutputCapabilityRuntimeFreshnessDependencyMarker = (inpu
   authorityEpoch: number
   renewalGeneration: number
   prerequisiteId: string
+  closureLevel: TacticOutputCapabilityRuntimeFreshnessDependencyClosureLevel
 }): TacticOutputCapabilityRuntimeFreshnessDependencyMarker => ({
   scopeKey: normalizeScopeKey(input.scopeKey),
   authoritySource: normalizeToken(input.authoritySource),
   authorityEpoch: input.authorityEpoch,
   renewalGeneration: input.renewalGeneration,
   prerequisiteId: normalizeToken(input.prerequisiteId),
+  closureLevel: input.closureLevel,
 })
 
 export const computeTacticOutputCapabilityRuntimeClaimDigestTask1 = (
@@ -1177,6 +1186,10 @@ export const computeTacticOutputCapabilityRuntimeClaimDigestTask1 = (
 const canClaimIndependentReplay = (
   workClass: TacticOutputCapabilityRuntimeFreshnessReplayWorkClass,
 ): boolean => workClass === 'diagnostic-observation'
+
+const requiresTransitiveClosure = (
+  workClass: TacticOutputCapabilityRuntimeFreshnessReplayWorkClass,
+): boolean => workClass === 'authority-transition'
 
 export const evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessment = (
   input: {
@@ -1253,8 +1266,13 @@ export const evaluateTacticOutputCapabilityRuntimeFreshnessReplayReleaseAssessme
     || workMarker.authorityEpoch !== snapshotMarker.authorityEpoch
     || workMarker.renewalGeneration !== snapshotMarker.renewalGeneration
     || workMarker.prerequisiteId !== snapshotMarker.prerequisiteId
+    || workMarker.closureLevel !== snapshotMarker.closureLevel
   ) {
     return { decision: 'causally-stale', subreason: 'marker-mismatch' }
+  }
+
+  if (requiresTransitiveClosure(workItem.workClass) && workMarker.closureLevel !== 'transitive-verified') {
+    return { decision: 'keep-quarantined', subreason: 'insufficient-causal-closure' }
   }
 
   return { decision: 'release' }
