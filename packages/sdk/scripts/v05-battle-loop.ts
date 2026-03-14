@@ -15,6 +15,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { ethers } from 'ethers'
+import { generateNarrative } from './llm-strategy.ts'
 
 const RPC = process.env.CLAWTTACK_RPC?.trim() || 'https://sepolia.base.org'
 const BATTLE_ADDRESS = mustEnv('CLAWTTACK_BATTLE')
@@ -264,6 +265,10 @@ function buildNarrativeFromTemplate(input: {
   return text
 }
 
+function strategyFor(side: AgentSide): string {
+  return side === 'A' ? STRATEGY_A : STRATEGY_B
+}
+
 function constructNarrative(input: {
   turn: number
   side: AgentSide
@@ -317,6 +322,64 @@ function constructNarrative(input: {
   throw new Error('turn construction failed after deterministic template attempts')
 }
 
+async function buildNarrative(input: {
+  turn: number
+  side: AgentSide
+  target: string
+  poison: string
+  candidates: string[]
+  vopIndex: number
+  bankA: bigint
+  bankB: bigint
+  checkpoint: Checkpoint
+}): Promise<TurnConstructionResult> {
+  const scripted = constructNarrative(input)
+  if (strategyFor(input.side) !== 'llm') return scripted
+
+  try {
+    const narrative = await generateNarrative({
+      targetWord: input.target,
+      poisonWord: input.poison,
+      opponentNarrative: input.checkpoint.lastNarrativeByAgent[input.side === 'A' ? 'B' : 'A'],
+      candidates: input.candidates.map((word, index) => ({ word, index })),
+      turnNumber: input.turn,
+      agentName: input.side === 'A' ? 'PrivateClawn' : 'PrivateClawnJr',
+      isFirstTurn: input.turn <= 1,
+      recentNarratives: [],
+      useJoker: false,
+      myBank: Number(input.side === 'A' ? input.bankA : input.bankB),
+      opponentBank: Number(input.side === 'A' ? input.bankB : input.bankA),
+    })
+    const validated = validateNarrative({
+      target: input.target,
+      candidates: input.candidates,
+      poison: input.poison,
+      narrative,
+      templateFamily: scripted.templateFamily,
+      fallbackStep: scripted.fallbackStep,
+    })
+    if (
+      validated.byteLength <= NARRATIVE_MAX_BYTES
+      && validated.byteLength >= NARRATIVE_MIN_BYTES
+      && validated.targetPresent
+      && !validated.poisonPresent
+      && validated.missingCandidates.length === 0
+    ) {
+      return {
+        narrative,
+        offsets: validated.offsets,
+        templateFamily: scripted.templateFamily,
+        fallbackStep: scripted.fallbackStep,
+      }
+    }
+    console.warn(`⚠️ invalid LLM narrative for side=${input.side}; falling back to script`, validated)
+  } catch (err) {
+    console.warn(`⚠️ LLM narrative failed for side=${input.side}; falling back to script:`, err)
+  }
+
+  return scripted
+}
+
 function guessVopIndexFromNarrative(narrative: string | null): number {
   if (!narrative) return 0
   const n = narrative.toLowerCase()
@@ -328,6 +391,119 @@ function guessVopIndexFromNarrative(narrative: string | null): number {
 type SolvedVop = {
   solution: `0x${string}`
   solved: boolean
+}
+
+type PendingVopState = {
+  commitment: `0x${string}`
+  solverClaimedIndex: number
+  solverSolution: `0x${string}`
+  commitBlockNumber: bigint
+  solverPassed: boolean
+  hasSolverResponse: boolean
+  instanceCommit: `0x${string}`
+}
+
+const PENDING_VOP_GETTER_VARIANTS = [
+  // Current v05 shape.
+  'function pendingVopA() view returns (bytes32 commitment, uint8 solverClaimedIndex, bytes solverSolution, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse, bytes32 instanceCommit)',
+  'function pendingVopB() view returns (bytes32 commitment, uint8 solverClaimedIndex, bytes solverSolution, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse, bytes32 instanceCommit)',
+  // Legacy shape (pre-instanceCommit).
+  'function pendingVopA() view returns (bytes32 commitment, uint8 solverClaimedIndex, bytes solverSolution, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse)',
+  'function pendingVopB() view returns (bytes32 commitment, uint8 solverClaimedIndex, bytes solverSolution, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse)',
+  // Older boundary shape (solverSolution surfaced as bytes32 commitment-like blob).
+  'function pendingVopA() view returns (bytes32 commitment, uint8 solverClaimedIndex, bytes32 solverSolution, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse, bytes32 instanceCommit)',
+  'function pendingVopB() view returns (bytes32 commitment, uint8 solverClaimedIndex, bytes32 solverSolution, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse, bytes32 instanceCommit)',
+  // Minimal legacy shape without solverSolution payload.
+  'function pendingVopA() view returns (bytes32 commitment, uint8 solverClaimedIndex, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse)',
+  'function pendingVopB() view returns (bytes32 commitment, uint8 solverClaimedIndex, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse)',
+] as const
+
+function normalizeSolverSolution(value: unknown): `0x${string}` {
+  if (typeof value === 'string' && value.startsWith('0x')) return value as `0x${string}`
+  return '0x' as `0x${string}`
+}
+
+function isAllZeroHex(data: string): boolean {
+  if (!data.startsWith('0x') || data.length <= 2) return false
+  for (let i = 2; i < data.length; i++) {
+    if (data[i] !== '0') return false
+  }
+  return true
+}
+
+async function fetchPendingVop(provider: ethers.JsonRpcProvider, battleAddress: string, side: AgentSide): Promise<PendingVopState> {
+  const fn = side === 'A' ? 'pendingVopA' : 'pendingVopB'
+  const matching = PENDING_VOP_GETTER_VARIANTS.filter((sig) => sig.includes(`${fn}()`))
+  let lastErr: unknown = null
+
+  const selectorIface = new ethers.Interface([`function ${fn}() view returns (bytes32)`])
+  const callData = selectorIface.encodeFunctionData(fn, [])
+  console.log(`   [decode-pending-vop] side=${side} stage=call selector=${fn}()`)
+  const raw = await provider.call({ to: battleAddress, data: callData })
+  console.log(`   [decode-pending-vop] side=${side} stage=raw bytes=${Math.max(0, (raw.length - 2) / 2)}`)
+
+  if (isAllZeroHex(raw)) {
+    console.log(`   [decode-pending-vop] side=${side} stage=zero-raw short-circuit=true`)
+    return {
+      commitment: ethers.ZeroHash as `0x${string}`,
+      solverClaimedIndex: 0,
+      solverSolution: '0x' as `0x${string}`,
+      commitBlockNumber: 0n,
+      solverPassed: false,
+      hasSolverResponse: false,
+      instanceCommit: ethers.ZeroHash as `0x${string}`,
+    }
+  }
+
+  for (const signature of matching) {
+    try {
+      const iface = new ethers.Interface([signature])
+      const decoded = iface.decodeFunctionResult(fn, raw)
+      console.log(`   [decode-pending-vop] side=${side} stage=decode-ok variant=${signature} words=${decoded.length}`)
+
+      if (decoded.length >= 7) {
+        return {
+          commitment: decoded[0] as `0x${string}`,
+          solverClaimedIndex: Number(decoded[1]),
+          solverSolution: normalizeSolverSolution(decoded[2]),
+          commitBlockNumber: BigInt(decoded[3]),
+          solverPassed: Boolean(decoded[4]),
+          hasSolverResponse: Boolean(decoded[5]),
+          instanceCommit: ((decoded[6] as `0x${string}`) || (ethers.ZeroHash as `0x${string}`)) as `0x${string}`,
+        }
+      }
+
+      if (decoded.length >= 6) {
+        return {
+          commitment: decoded[0] as `0x${string}`,
+          solverClaimedIndex: Number(decoded[1]),
+          solverSolution: normalizeSolverSolution(decoded[2]),
+          commitBlockNumber: BigInt(decoded[3]),
+          solverPassed: Boolean(decoded[4]),
+          hasSolverResponse: Boolean(decoded[5]),
+          instanceCommit: ethers.ZeroHash as `0x${string}`,
+        }
+      }
+
+      return {
+        commitment: decoded[0] as `0x${string}`,
+        solverClaimedIndex: Number(decoded[1]),
+        solverSolution: '0x' as `0x${string}`,
+        commitBlockNumber: BigInt(decoded[2]),
+        solverPassed: Boolean(decoded[3]),
+        hasSolverResponse: Boolean(decoded[4]),
+        instanceCommit: ethers.ZeroHash as `0x${string}`,
+      }
+    } catch (err) {
+      lastErr = err
+      const message = err instanceof Error ? err.message : String(err)
+      console.log(`   [decode-pending-vop] side=${side} stage=decode-fail variant=${signature} reason=${message}`)
+    }
+  }
+
+  throw lastErr instanceof Error
+    ? new Error(`[decode-pending-vop] ${fn} failed across ABI variants: ${lastErr.message}`)
+    : new Error(`[decode-pending-vop] ${fn} failed across ABI variants`)
 }
 
 async function solveHashPreimage(provider: ethers.JsonRpcProvider, commitBlock: number): Promise<SolvedVop> {
@@ -469,7 +645,7 @@ async function main(): Promise<void> {
       throw new Error(`candidate index encoding failed for ${JSON.stringify(candidates)}`)
     }
 
-    console.log(`   ↳ fetch pending NCC/VOP state for side=${side}`)
+    console.log(`   [fetch-pending-ncc] side=${side}`)
     const oppNcc = side === 'A' ? await battleRead.pendingNccB() : await battleRead.pendingNccA()
     const nccGuess = String(oppNcc.commitment) === ethers.ZeroHash
       ? 0
@@ -483,7 +659,10 @@ async function main(): Promise<void> {
       ? { vopSalt: prev.vopSalt, vopIndex: prev.vopIdx }
       : { vopSalt: ethers.ZeroHash, vopIndex: 0 }
 
-    const oppVop = side === 'A' ? await battleRead.pendingVopB() : await battleRead.pendingVopA()
+    const oppVopSide: AgentSide = side === 'A' ? 'B' : 'A'
+    console.log(`   [fetch-pending-vop] side=${oppVopSide}`)
+    const oppVop = await fetchPendingVop(provider, BATTLE_ADDRESS, oppVopSide)
+    console.log(`   [decode-pending-vop] side=${oppVopSide} commitment=${oppVop.commitment} commitBlock=${oppVop.commitBlockNumber.toString()}`)
     let vopClaimedIndex = 0
     let vopSolution = ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [0n]) as `0x${string}`
     let vopSolved = false
@@ -516,7 +695,7 @@ async function main(): Promise<void> {
     console.log(
       `\n🎮 turn=${turn} side=${side} bankA=${bankA} bankB=${bankB} target=${target} poison=${poison} template=${constructed.templateFamily} fallback=${constructed.fallbackStep}`,
     )
-    console.log('   ↳ payload assembled, estimating/sending submitTurn')
+    console.log('   [submit-turn] payload assembled, estimating/sending submitTurn')
     const rc = await submitWithRetry(battle, payload)
 
     cp.prevByAgent[side] = {

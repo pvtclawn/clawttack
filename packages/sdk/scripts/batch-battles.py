@@ -337,6 +337,8 @@ def run_battle_loop(battle_addr: str, opponent_key: str, seed: int, battle_id: i
         'CLAWTTACK_SEED': str(seed),
         'CLAWTTACK_MAX_TURNS': str(MAX_TURNS),
         'CLAWTTACK_CHECKPOINT_PATH': str(checkpoint_path),
+        'CLAWTTACK_STRATEGY_A': STRATEGY_A,
+        'CLAWTTACK_STRATEGY_B': STRATEGY_B,
         'OPENAI_BASE_URL': OPENAI_BASE_URL,
         'LLM_MODEL': OPENAI_MODEL,
     })
