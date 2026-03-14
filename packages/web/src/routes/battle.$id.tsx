@@ -528,6 +528,18 @@ function BattlePage() {
     setIsReplaying(false)
   }
 
+  const downloadTranscript = () => {
+    const transcript = buildBattleTranscriptExport({
+      origin: window.location.origin,
+      info,
+      turns: turns ?? [],
+      settlement,
+      challengerName,
+      acceptorName,
+    })
+    downloadJsonFile(battleTranscriptFilename(info.battleId), transcript)
+  }
+
   // ─── Render ──────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
