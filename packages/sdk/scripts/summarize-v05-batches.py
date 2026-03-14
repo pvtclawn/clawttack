@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from collections import Counter
@@ -18,6 +19,13 @@ KNOWN_MECHANICS = [
     'multi-turn',
     'active-poison',
     'settlement',
+]
+
+WARNING_CLASS_ORDER = [
+    'label-control-blank',
+    'label-intervention-blank',
+    'label-collapse',
+    'max-turns-mismatch',
 ]
 
 DEFAULT_CONTROL_LABEL = 'baseline-same-regime'
@@ -246,7 +254,7 @@ def _normalize_label(value: str | None) -> str:
     return (value or '').strip().lower()
 
 
-def aggregate(per_battles: list[dict[str, Any]]) -> dict[str, Any]:
+def aggregate(per_battles: list[dict[str, Any]], *, strict_mode: bool = False) -> dict[str, Any]:
     stage_counts = Counter(b['deepestStageReached'] for b in per_battles)
     failure_counts = Counter((b['failureClass'] or 'none') for b in per_battles)
     observed = sorted({m for b in per_battles for m in b['observedMechanics']})
@@ -270,6 +278,8 @@ def aggregate(per_battles: list[dict[str, Any]]) -> dict[str, Any]:
         'identityPairs': sorted({b['identityPair'] for b in per_battles}),
         'acceptedBattleCount': sum(1 for b in per_battles if b['accepted']),
     }
+    unsettled_battle_count = sum(1 for b in per_battles if b['unsettled'])
+    first_mover_a_count = sum(1 for b in per_battles if b['firstMoverA'] is True)
     intervention_target_metrics = {
         'battleCount': intervention_scope_battle_count,
         'turnBudgetRatioDenominator': 'interventionTargetMetrics.battleCount',
@@ -283,20 +293,34 @@ def aggregate(per_battles: list[dict[str, Any]]) -> dict[str, Any]:
         'laterTurnBattleCount': sum(1 for b in per_battles if b['interventionTargetMetrics']['laterTurnReached']),
         'activePoisonBattleCount': sum(1 for b in per_battles if b['interventionTargetMetrics']['activePoisonObserved']),
         'settlementObservedCount': sum(1 for b in per_battles if b['interventionTargetMetrics']['settlementObserved']),
+        'pairedEvidenceScope': 'interventionTargetMetrics',
+        'pairedEvidenceDenominator': 'interventionTargetMetrics.battleCount',
+        'sampleSize': intervention_scope_battle_count,
+        'unsettledShare': (
+            unsettled_battle_count / intervention_scope_battle_count
+            if intervention_scope_battle_count > 0
+            else None
+        ),
+        'firstMoverAShare': (
+            first_mover_a_count / intervention_scope_battle_count
+            if intervention_scope_battle_count > 0
+            else None
+        ),
+        'exploratoryOnly': intervention_scope_battle_count < 10,
         'observedMechanics': observed,
         'unobservedMechanics': [m for m in KNOWN_MECHANICS if m not in observed],
     }
 
-    warnings: list[str] = []
+    warning_messages: dict[str, str] = {}
     control_norm = _normalize_label(control_label)
     intervention_norm = _normalize_label(intervention_label)
     label_hygiene_ok = bool(control_norm) and bool(intervention_norm) and control_norm != intervention_norm
     if not control_norm:
-        warnings.append('label-hygiene: control label is blank after normalization')
+        warning_messages['label-control-blank'] = 'label-hygiene: control label is blank after normalization'
     if not intervention_norm:
-        warnings.append('label-hygiene: intervention label is blank after normalization')
+        warning_messages['label-intervention-blank'] = 'label-hygiene: intervention label is blank after normalization'
     if control_norm and intervention_norm and control_norm == intervention_norm:
-        warnings.append('label-hygiene: control and intervention labels collapse to same normalized value')
+        warning_messages['label-collapse'] = 'label-hygiene: control and intervention labels collapse to same normalized value'
 
     observed_max_turns_values = sorted({
         b['interventionTargetMetrics'].get('maxTurnsConfigured')
@@ -305,14 +329,46 @@ def aggregate(per_battles: list[dict[str, Any]]) -> dict[str, Any]:
     })
     max_turns_comparable = len(observed_max_turns_values) <= 1
     if not max_turns_comparable:
-        warnings.append(
+        warning_messages['max-turns-mismatch'] = (
             'max-turns-comparability: mixed maxTurnsConfigured values observed '
             f'({observed_max_turns_values})'
         )
 
+    warnings = [warning_messages[key] for key in WARNING_CLASS_ORDER if key in warning_messages]
+    contamination_counters = {
+        'labelControlBlankCount': 1 if 'label-control-blank' in warning_messages else 0,
+        'labelInterventionBlankCount': 1 if 'label-intervention-blank' in warning_messages else 0,
+        'labelCollapseCount': 1 if 'label-collapse' in warning_messages else 0,
+        'maxTurnsMismatchCount': 1 if 'max-turns-mismatch' in warning_messages else 0,
+    }
+
+    strict_violations = list(warnings)
+
+    run_config = {
+        'controlLabel': control_label,
+        'interventionLabel': intervention_label,
+        'interventionVariable': 'maxTurnsConfigured',
+        'observedInterventionValues': observed_max_turns_values,
+        'battleCount': len(per_battles),
+    }
+    run_config_fingerprint = hashlib.sha256(
+        json.dumps(run_config, sort_keys=True, separators=(',', ':')).encode('utf-8')
+    ).hexdigest()
+    single_variable_intervention_guardrail = {
+        'ok': len(observed_max_turns_values) == 1,
+        'interventionVariable': 'maxTurnsConfigured',
+        'observedValues': observed_max_turns_values,
+    }
+
     return {
         'controlLabel': control_label,
         'interventionLabel': intervention_label,
+        'runConfig': run_config,
+        'runConfigFingerprint': run_config_fingerprint,
+        'singleVariableInterventionGuardrail': single_variable_intervention_guardrail,
+        'strictMode': strict_mode,
+        'strictViolationCount': len(strict_violations),
+        'strictViolations': strict_violations,
         'battleCount': len(per_battles),
         'stageHistogram': dict(stage_counts),
         'failureHistogram': dict(failure_counts),
@@ -330,6 +386,7 @@ def aggregate(per_battles: list[dict[str, Any]]) -> dict[str, Any]:
         'labelHygieneOk': label_hygiene_ok,
         'maxTurnsComparable': max_turns_comparable,
         'warnings': warnings,
+        'contaminationCounters': contamination_counters,
     }
 
 
@@ -349,6 +406,8 @@ def compare_aggregates(previous: dict[str, Any] | None, current: dict[str, Any])
         'currentControlLabel': current.get('controlLabel'),
         'previousInterventionLabel': previous.get('interventionLabel'),
         'currentInterventionLabel': current.get('interventionLabel'),
+        'previousRunConfigFingerprint': previous.get('runConfigFingerprint'),
+        'currentRunConfigFingerprint': current.get('runConfigFingerprint'),
         'previousBattleCount': previous.get('battleCount'),
         'currentBattleCount': current.get('battleCount'),
         'previousStageHistogram': previous.get('stageHistogram', {}),
@@ -394,6 +453,12 @@ def write_aggregate_markdown(path: Path, agg: dict[str, Any], comparison: dict[s
         f"- turn-budget used count: `{target['turnBudgetUsedCount']}`",
         f"- turn-budget unused count: `{target['turnBudgetUnusedCount']}`",
         f"- turn-budget used ratio: `{target['turnBudgetUsedRatio']}` (denominator: `{target['turnBudgetRatioDenominator']}`)",
+        f"- paired evidence scope: `{target['pairedEvidenceScope']}`",
+        f"- paired evidence denominator: `{target['pairedEvidenceDenominator']}`",
+        f"- paired evidence sample size: `{target['sampleSize']}`",
+        f"- unsettled share: `{target['unsettledShare']}`",
+        f"- first mover A share: `{target['firstMoverAShare']}`",
+        f"- exploratory only: `{target['exploratoryOnly']}`",
         f"- later-turn battle count: `{target['laterTurnBattleCount']}`",
         f"- active-poison battle count: `{target['activePoisonBattleCount']}`",
         f"- settlement observed count: `{target['settlementObservedCount']}`",
@@ -401,9 +466,15 @@ def write_aggregate_markdown(path: Path, agg: dict[str, Any], comparison: dict[s
         f"- unobserved mechanics: {', '.join(target['unobservedMechanics']) or 'none'}",
         '',
         '## guardrails',
+        f"- strict mode: `{agg['strictMode']}`",
+        f"- strict violation count: `{agg['strictViolationCount']}`",
+        f"- strict violations: {', '.join(agg['strictViolations']) if agg['strictViolations'] else 'none'}",
         f"- label hygiene ok: `{agg['labelHygieneOk']}`",
         f"- max turns comparable: `{agg['maxTurnsComparable']}`",
+        f"- single-variable intervention guardrail: `{agg['singleVariableInterventionGuardrail']['ok']}` for `{agg['singleVariableInterventionGuardrail']['interventionVariable']}` values `{agg['singleVariableInterventionGuardrail']['observedValues']}`",
+        f"- run-config fingerprint: `{agg['runConfigFingerprint']}`",
         f"- warnings: {', '.join(agg['warnings']) if agg['warnings'] else 'none'}",
+        f"- contamination counters: `{agg['contaminationCounters']}`",
         '',
         '## comparison',
     ]
@@ -411,6 +482,8 @@ def write_aggregate_markdown(path: Path, agg: dict[str, Any], comparison: dict[s
         lines.extend([
             f"- previous control/intervention: `{comparison['previousControlLabel']}` / `{comparison['previousInterventionLabel']}`",
             f"- current control/intervention: `{comparison['currentControlLabel']}` / `{comparison['currentInterventionLabel']}`",
+            f"- previous run-config fingerprint: `{comparison['previousRunConfigFingerprint']}`",
+            f"- current run-config fingerprint: `{comparison['currentRunConfigFingerprint']}`",
             f"- previous battle count: `{comparison['previousBattleCount']}`",
             f"- current battle count: `{comparison['currentBattleCount']}`",
             f"- previous shared metrics: `{comparison['previousSharedRegimeMetrics']}`",
@@ -428,8 +501,115 @@ def write_aggregate_markdown(path: Path, agg: dict[str, Any], comparison: dict[s
         '',
         '> This batch is exploratory evidence, not a verdict.',
     ])
+    if target.get('exploratoryOnly'):
+        lines.append(
+            f"> Tiny-sample caveat: sample size is `{target.get('sampleSize')}` (denominator `{target.get('pairedEvidenceDenominator')}`); treat all intervention metrics as directional only."
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+
+def _mock_per_battle(*, control_label: str, intervention_label: str, max_turns_configured: int) -> dict[str, Any]:
+    return {
+        'controlLabel': control_label,
+        'interventionLabel': intervention_label,
+        'deepestStageReached': 'multi-turn',
+        'failureClass': None,
+        'observedMechanics': ['first-turn-submit', 'multi-turn'],
+        'turnsMined': 3,
+        'battleId': 1,
+        'firstMoverA': True,
+        'identityPair': 'PrivateClawn vs PrivateClawnJr',
+        'accepted': True,
+        'unsettled': True,
+        'settled': False,
+        'interventionTargetMetrics': {
+            'laterTurnReached': True,
+            'activePoisonObserved': False,
+            'settlementObserved': False,
+            'maxTurnsConfigured': max_turns_configured,
+            'turnBudgetUsed': False,
+            'turnBudgetUnused': True,
+        },
+    }
+
+
+def run_strict_injection_harness() -> dict[str, Any]:
+    cases: list[dict[str, Any]] = []
+
+    case_label_collapse = aggregate(
+        [
+            _mock_per_battle(control_label='same-label', intervention_label='same-label', max_turns_configured=80)
+        ],
+        strict_mode=True,
+    )
+    expected_label = {
+        'label-hygiene: control and intervention labels collapse to same normalized value'
+    }
+    actual_label = set(case_label_collapse['strictViolations'])
+    if actual_label != expected_label:
+        raise SystemExit(
+            'Strict injection case failed (label-collapse): '
+            f'expected={sorted(expected_label)} actual={sorted(actual_label)}'
+        )
+    cases.append({
+        'case': 'label-collapse',
+        'expectedStrictViolations': sorted(expected_label),
+        'actualStrictViolations': sorted(actual_label),
+        'strictViolationCount': case_label_collapse['strictViolationCount'],
+    })
+
+    case_max_turns = aggregate(
+        [
+            _mock_per_battle(control_label='baseline', intervention_label='intervention', max_turns_configured=80),
+            _mock_per_battle(control_label='baseline', intervention_label='intervention', max_turns_configured=120),
+        ],
+        strict_mode=True,
+    )
+    expected_max_turns = {
+        'max-turns-comparability: mixed maxTurnsConfigured values observed ([80, 120])'
+    }
+    actual_max_turns = set(case_max_turns['strictViolations'])
+    if actual_max_turns != expected_max_turns:
+        raise SystemExit(
+            'Strict injection case failed (max-turns-mismatch): '
+            f'expected={sorted(expected_max_turns)} actual={sorted(actual_max_turns)}'
+        )
+    cases.append({
+        'case': 'max-turns-mismatch',
+        'expectedStrictViolations': sorted(expected_max_turns),
+        'actualStrictViolations': sorted(actual_max_turns),
+        'strictViolationCount': case_max_turns['strictViolationCount'],
+    })
+
+    case_combined = aggregate(
+        [
+            _mock_per_battle(control_label='same-label', intervention_label='same-label', max_turns_configured=80),
+            _mock_per_battle(control_label='same-label', intervention_label='same-label', max_turns_configured=120),
+        ],
+        strict_mode=True,
+    )
+    expected_combined = {
+        'label-hygiene: control and intervention labels collapse to same normalized value',
+        'max-turns-comparability: mixed maxTurnsConfigured values observed ([80, 120])',
+    }
+    actual_combined = set(case_combined['strictViolations'])
+    if actual_combined != expected_combined:
+        raise SystemExit(
+            'Strict injection case failed (combined): '
+            f'expected={sorted(expected_combined)} actual={sorted(actual_combined)}'
+        )
+    cases.append({
+        'case': 'combined',
+        'expectedStrictViolations': sorted(expected_combined),
+        'actualStrictViolations': sorted(actual_combined),
+        'strictViolationCount': case_combined['strictViolationCount'],
+    })
+
+    return {
+        'status': 'ok',
+        'cases': cases,
+    }
 
 
 def main() -> None:
@@ -438,7 +618,13 @@ def main() -> None:
     parser.add_argument('--control-label', default=DEFAULT_CONTROL_LABEL, help='Human-readable label for the baseline/control regime.')
     parser.add_argument('--intervention-label', default=DEFAULT_INTERVENTION_LABEL, help='Human-readable label for the current intervention regime.')
     parser.add_argument('--max-turns-configured', type=int, default=80, help='Configured max turns budget for the summarized batch runs (default: 80).')
+    parser.add_argument('--strict', action='store_true', help='Fail with non-zero exit code when guardrail violations are present (after writing diagnostics).')
+    parser.add_argument('--self-test-strict-injections', action='store_true', help='Run deterministic strict-injection coverage checks (label collapse, max-turn mismatch, combined) and exit.')
     args = parser.parse_args()
+
+    if args.self_test_strict_injections:
+        print(json.dumps(run_strict_injection_harness(), indent=2))
+        return
 
     logs = sorted(RESULTS_DIR.glob('batch-*.log'), key=lambda p: p.stat().st_mtime)
     logs = logs[-args.limit:]
@@ -464,7 +650,7 @@ def main() -> None:
         write_json(per_dir / f'{log_path.stem}.json', per_battle)
         write_markdown(per_dir / f'{log_path.stem}.md', per_battle)
 
-    agg = aggregate(per_battles)
+    agg = aggregate(per_battles, strict_mode=args.strict)
     comparison = compare_aggregates(previous_aggregate, agg)
     write_json(agg_dir / 'latest.json', agg)
     write_json(agg_dir / 'comparison-latest.json', comparison)
@@ -473,6 +659,13 @@ def main() -> None:
     print(f'Wrote {len(per_battles)} per-battle summaries to {per_dir}')
     print(f'Wrote aggregate summary to {agg_dir / "latest.json"}')
     print(f'Wrote comparison summary to {agg_dir / "comparison-latest.json"}')
+
+    if args.strict and agg['strictViolationCount'] > 0:
+        print(
+            f"Strict mode failed with {agg['strictViolationCount']} violation(s): "
+            + '; '.join(agg['strictViolations'])
+        )
+        raise SystemExit(2)
 
 
 if __name__ == '__main__':

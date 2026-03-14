@@ -1,0 +1,116 @@
+{
+  "controlLabel": "baseline-same-regime",
+  "interventionLabel": "max-turns-intervention",
+  "runConfig": {
+    "controlLabel": "baseline-same-regime",
+    "interventionLabel": "max-turns-intervention",
+    "interventionVariable": "maxTurnsConfigured",
+    "observedInterventionValues": [
+      80
+    ],
+    "battleCount": 3
+  },
+  "runConfigFingerprint": "911f2381ec1681b975b3aaee488009d4cc137b6f41a99aae1d5f992b0e77090f",
+  "singleVariableInterventionGuardrail": {
+    "ok": true,
+    "interventionVariable": "maxTurnsConfigured",
+    "observedValues": [
+      80
+    ]
+  },
+  "strictMode": true,
+  "strictViolationCount": 0,
+  "strictViolations": [],
+  "battleCount": 3,
+  "stageHistogram": {
+    "multi-turn": 3
+  },
+  "failureHistogram": {
+    "none": 3
+  },
+  "turnsMinedPerBattle": [
+    20,
+    20,
+    20
+  ],
+  "battleIds": [
+    null,
+    null,
+    null
+  ],
+  "firstMoversA": [
+    false,
+    false,
+    true
+  ],
+  "identityPairs": [
+    "PrivateClawn vs PrivateClawnJr"
+  ],
+  "observedMechanics": [
+    "first-turn-submit",
+    "multi-turn"
+  ],
+  "unobservedMechanics": [
+    "active-poison",
+    "settlement"
+  ],
+  "notableAnomalies": [],
+  "unsettledBattleCount": 3,
+  "settledBattleCount": 0,
+  "sharedRegimeMetrics": {
+    "battleCount": 3,
+    "stageHistogram": {
+      "multi-turn": 3
+    },
+    "failureHistogram": {
+      "none": 3
+    },
+    "turnsMinedPerBattle": [
+      20,
+      20,
+      20
+    ],
+    "firstMoversA": [
+      false,
+      false,
+      true
+    ],
+    "identityPairs": [
+      "PrivateClawn vs PrivateClawnJr"
+    ],
+    "acceptedBattleCount": 0
+  },
+  "interventionTargetMetrics": {
+    "battleCount": 3,
+    "turnBudgetRatioDenominator": "interventionTargetMetrics.battleCount",
+    "turnBudgetUsedCount": 0,
+    "turnBudgetUnusedCount": 3,
+    "turnBudgetUsedRatio": 0.0,
+    "laterTurnBattleCount": 3,
+    "activePoisonBattleCount": 0,
+    "settlementObservedCount": 0,
+    "pairedEvidenceScope": "interventionTargetMetrics",
+    "pairedEvidenceDenominator": "interventionTargetMetrics.battleCount",
+    "sampleSize": 3,
+    "unsettledShare": 1.0,
+    "firstMoverAShare": 0.3333333333333333,
+    "exploratoryOnly": true,
+    "observedMechanics": [
+      "first-turn-submit",
+      "multi-turn"
+    ],
+    "unobservedMechanics": [
+      "active-poison",
+      "settlement"
+    ]
+  },
+  "labelHygieneOk": true,
+  "maxTurnsComparable": true,
+  "warnings": [],
+  "contaminationCounters": {
+    "labelControlBlankCount": 0,
+    "labelInterventionBlankCount": 0,
+    "labelCollapseCount": 0,
+    "maxTurnsMismatchCount": 0
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "batchKey": "batch-9-1773457393",
+  "logPath": "battle-results/batch-9-1773457393.log",
+  "checkpointPath": "battle-results/checkpoints/batch-9-1773457393.json",
+  "controlLabel": "baseline-same-regime",
+  "interventionLabel": "max-turns-intervention",
+  "battleId": null,
+  "battleAddress": null,
+  "identityPair": "PrivateClawn vs PrivateClawnJr",
+  "clawnAgentId": null,
+  "clawnAddress": null,
+  "clawnJrAgentId": null,
+  "clawnJrAddress": null,
+  "firstMoverA": false,
+  "deepestStageReached": "multi-turn",
+  "turnsMined": 20,
+  "txHashes": [
+    "0x086d2191ab322d648b84a4721e9b32677a5fc8b6b45b8d065b6a6162d4663546",
+    "0x951730fe5c11d64c17026a2480fcd7ff448cf98e455db9fe3ee229344d5c201e",
+    "0xa63e8dd859696e1832de6d8eaac81272aad522ded3855326061ca6774006be39",
+    "0x6f3d8287d33bf5a7e257d1955b8254cca74c51d1587c10f29e01854f8777a348",
+    "0x156892e22cd3055493cb3505c9df1a2a838e10ab055027ca26fc754f8b4d18ea",
+    "0x2ad24cd59356300f1985f48defdf8b15d83b2fd6fb89c4206c8067c17da422e3",
+    "0xa736eab5a61c74c5f41f75580e339281879250b795fe2869560b301da1bdad91",
+    "0x444cc6262bbe9c388267533088def85cbfbdd3d8c0dc880975a92b7d098e1228",
+    "0xea77429f20707d91b6257115ee0993aa575b733bbd300b1d01f67f7338e9c338",
+    "0x15c562e46dc859fd8d8cc966c4dd444204c4e8ad307872b77c529da8ebcb10c1",
+    "0x95f923a679286c21a4eb76c56a81680b1309d6de8cc1f9e8d6589cae68ace78d",
+    "0xadd88c1bd16b9c9d36e0c973aa13036e95e572e9cf16734c9327e8d56e3465f9",
+    "0x5b3b5a0ba53fa113367158962b7fccb0258e7d3c92b2288775efe4d1c1f0ff43",
+    "0xbed20aece1f3fa7104131465b6deea65e938eac3c1e7a359cf08afa485a6a11d",
+    "0x7c847002a9f9045bc7b9629d5c95cb1aea4a09752b5dac3a36f72cdd6911a229",
+    "0xda8ed0c3136b71d0e0bf1f18baa02a7bc61046a4b052baba2318b42796306916",
+    "0x8274e999084858e4aa88bd0294ed2a25401013c0d6e552851e8d215fa5d1de03",
+    "0x6c7e8db48e8fb4a445e65d1707f7d189a6a34d2790384eac8159adbbb930350e",
+    "0x27ac90d8c165e463250aeca8212c8f0c74e3d59fa4da616d8b9aed439bb10658",
+    "0x8e0c3cde8d9b8432b436cdbb9f0ddd0228b157d0680de7c926ece33d25e91067"
+  ],
+  "firstTxHash": "0x086d2191ab322d648b84a4721e9b32677a5fc8b6b45b8d065b6a6162d4663546",
+  "lastTxHash": "0x8e0c3cde8d9b8432b436cdbb9f0ddd0228b157d0680de7c926ece33d25e91067",
+  "bankAStart": "400",
+  "bankBStart": "400",
+  "bankAEnd": "37",
+  "bankBEnd": "102",
+  "templatesSeen": [
+    "chain"
+  ],
+  "accepted": false,
+  "failureClass": null,
+  "observedMechanics": [
+    "first-turn-submit",
+    "multi-turn"
+  ],
+  "unobservedMechanics": [
+    "active-poison",
+    "settlement"
+  ],
+  "settled": false,
+  "unsettled": true,
+  "sharedRegimeMetrics": {
+    "identityPair": "PrivateClawn vs PrivateClawnJr",
+    "firstMoverA": false,
+    "deepestStageReached": "multi-turn",
+    "accepted": false,
+    "turnsMined": 20,
+    "failureClass": "none"
+  },
+  "interventionTargetMetrics": {
+    "laterTurnReached": true,
+    "settlementObserved": false,
+    "activePoisonObserved": false,
+    "maxTurnsConfigured": 80,
+    "turnsMined": 20,
+    "turnBudgetUsed": false,
+    "turnBudgetUnused": true,
+    "turnsRemainingToCap": 60,
+    "turnBudgetUsageRatio": 0.25,
+    "observedMechanics": [
+      "first-turn-submit",
+      "multi-turn"
+    ],
+    "unobservedMechanics": [
+      "active-poison",
+      "settlement"
+    ]
+  }
+}

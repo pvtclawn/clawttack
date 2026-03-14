@@ -1,0 +1,142 @@
+{
+  "hasPrevious": true,
+  "previousControlLabel": "baseline-same-regime",
+  "currentControlLabel": "baseline-same-regime",
+  "previousInterventionLabel": "max-turns-intervention",
+  "currentInterventionLabel": "max-turns-intervention",
+  "previousRunConfigFingerprint": "911f2381ec1681b975b3aaee488009d4cc137b6f41a99aae1d5f992b0e77090f",
+  "currentRunConfigFingerprint": "911f2381ec1681b975b3aaee488009d4cc137b6f41a99aae1d5f992b0e77090f",
+  "previousBattleCount": 3,
+  "currentBattleCount": 3,
+  "previousStageHistogram": {
+    "multi-turn": 3
+  },
+  "currentStageHistogram": {
+    "multi-turn": 3
+  },
+  "previousFailureHistogram": {
+    "none": 3
+  },
+  "currentFailureHistogram": {
+    "none": 3
+  },
+  "previousObservedMechanics": [
+    "first-turn-submit",
+    "multi-turn"
+  ],
+  "currentObservedMechanics": [
+    "first-turn-submit",
+    "multi-turn"
+  ],
+  "newlyObservedMechanics": [],
+  "stillUnobservedMechanics": [
+    "active-poison",
+    "settlement"
+  ],
+  "previousUnsettledBattleCount": 3,
+  "currentUnsettledBattleCount": 3,
+  "previousBattleIds": [
+    null,
+    null,
+    null
+  ],
+  "currentBattleIds": [
+    null,
+    null,
+    null
+  ],
+  "previousSharedRegimeMetrics": {
+    "battleCount": 3,
+    "stageHistogram": {
+      "multi-turn": 3
+    },
+    "failureHistogram": {
+      "none": 3
+    },
+    "turnsMinedPerBattle": [
+      20,
+      20,
+      20
+    ],
+    "firstMoversA": [
+      false,
+      false,
+      true
+    ],
+    "identityPairs": [
+      "PrivateClawn vs PrivateClawnJr"
+    ],
+    "acceptedBattleCount": 0
+  },
+  "currentSharedRegimeMetrics": {
+    "battleCount": 3,
+    "stageHistogram": {
+      "multi-turn": 3
+    },
+    "failureHistogram": {
+      "none": 3
+    },
+    "turnsMinedPerBattle": [
+      20,
+      20,
+      20
+    ],
+    "firstMoversA": [
+      false,
+      false,
+      true
+    ],
+    "identityPairs": [
+      "PrivateClawn vs PrivateClawnJr"
+    ],
+    "acceptedBattleCount": 0
+  },
+  "previousInterventionTargetMetrics": {
+    "battleCount": 3,
+    "turnBudgetRatioDenominator": "interventionTargetMetrics.battleCount",
+    "turnBudgetUsedCount": 0,
+    "turnBudgetUnusedCount": 3,
+    "turnBudgetUsedRatio": 0.0,
+    "laterTurnBattleCount": 3,
+    "activePoisonBattleCount": 0,
+    "settlementObservedCount": 0,
+    "pairedEvidenceScope": "interventionTargetMetrics",
+    "pairedEvidenceDenominator": "interventionTargetMetrics.battleCount",
+    "sampleSize": 3,
+    "unsettledShare": 1.0,
+    "firstMoverAShare": 0.3333333333333333,
+    "exploratoryOnly": true,
+    "observedMechanics": [
+      "first-turn-submit",
+      "multi-turn"
+    ],
+    "unobservedMechanics": [
+      "active-poison",
+      "settlement"
+    ]
+  },
+  "currentInterventionTargetMetrics": {
+    "battleCount": 3,
+    "turnBudgetRatioDenominator": "interventionTargetMetrics.battleCount",
+    "turnBudgetUsedCount": 0,
+    "turnBudgetUnusedCount": 3,
+    "turnBudgetUsedRatio": 0.0,
+    "laterTurnBattleCount": 3,
+    "activePoisonBattleCount": 0,
+    "settlementObservedCount": 0,
+    "pairedEvidenceScope": "interventionTargetMetrics",
+    "pairedEvidenceDenominator": "interventionTargetMetrics.battleCount",
+    "sampleSize": 3,
+    "unsettledShare": 1.0,
+    "firstMoverAShare": 0.3333333333333333,
+    "exploratoryOnly": true,
+    "observedMechanics": [
+      "first-turn-submit",
+      "multi-turn"
+    ],
+    "unobservedMechanics": [
+      "active-poison",
+      "settlement"
+    ]
+  }
+}
