@@ -31,7 +31,6 @@ STAKE_WEI = int(os.getenv('CLAWTTACK_STAKE_WEI', '1000000000000000'))  # 0.001 e
 WARMUP_BLOCKS = int(os.getenv('CLAWTTACK_WARMUP_BLOCKS', '15'))
 TARGET_AGENT_ID = int(os.getenv('CLAWTTACK_TARGET_AGENT_ID', '0'))
 MAX_JOKERS = int(os.getenv('CLAWTTACK_MAX_JOKERS', '2'))
-CLOZE_ENABLED = os.getenv('CLAWTTACK_CLOZE_ENABLED', 'true').lower() in ('1', 'true', 'yes')
 STRATEGY_A = os.getenv('CLAWTTACK_STRATEGY_A', 'llm')
 STRATEGY_B = os.getenv('CLAWTTACK_STRATEGY_B', 'llm')
 BATTLE_TIMEOUT_SEC = int(os.getenv('CLAWTTACK_BATTLE_TIMEOUT_SEC', '1500'))
@@ -140,8 +139,7 @@ def ensure_registered(account: str, owner_addr: str) -> int:
 
 def create_battle(challenger_id: int) -> tuple[int, str]:
     creation_fee = parse_uint(cast_call(ARENA, 'battleCreationFee()(uint256)'))
-    secret_hash = '0x' + secrets.token_hex(32)
-    config = f'({STAKE_WEI},{WARMUP_BLOCKS},{TARGET_AGENT_ID},{MAX_JOKERS},{str(CLOZE_ENABLED).lower()})'
+    config = f'({STAKE_WEI},{WARMUP_BLOCKS},{TARGET_AGENT_ID},{MAX_JOKERS})'
     total_value = STAKE_WEI + creation_fee
 
     before_count = parse_uint(cast_call(ARENA, 'battlesCount()(uint256)'))
@@ -149,10 +147,9 @@ def create_battle(challenger_id: int) -> tuple[int, str]:
     cast_send_account(
         'clawn',
         ARENA,
-        'createBattle(uint256,(uint256,uint32,uint256,uint8,bool),bytes32)',
+        'createBattle(uint256,(uint256,uint32,uint256,uint8))',
         str(challenger_id),
         config,
-        secret_hash,
         value_wei=total_value,
         timeout=180,
     )
@@ -182,15 +179,13 @@ def accept_battle(battle_addr: str, acceptor_id: int) -> None:
     if battle_phase(battle_addr) == 1:
         return
 
-    secret_hash = '0x' + secrets.token_hex(32)
     for attempt in range(1, 4):
         try:
             cast_send_account(
                 'clawnjr',
                 battle_addr,
-                'acceptBattle(uint256,bytes32)',
+                'acceptBattle(uint256)',
                 str(acceptor_id),
-                secret_hash,
                 value_wei=STAKE_WEI,
                 timeout=180,
             )
@@ -214,8 +209,6 @@ def run_battle_loop(battle_addr: str, opponent_key: str, seed: int, battle_id: i
         'CLAWTTACK_RPC': RPC,
         'CLAWTTACK_SEED': str(seed),
         'CLAWTTACK_MAX_TURNS': str(MAX_TURNS),
-        'CLAWTTACK_STRATEGY_A': STRATEGY_A,
-        'CLAWTTACK_STRATEGY_B': STRATEGY_B,
         'CLAWTTACK_CHECKPOINT_PATH': str(checkpoint_path),
         'OPENAI_BASE_URL': OPENAI_BASE_URL,
         'LLM_MODEL': OPENAI_MODEL,
@@ -225,7 +218,7 @@ def run_battle_loop(battle_addr: str, opponent_key: str, seed: int, battle_id: i
 
     with log_path.open('w') as log_file:
         proc = subprocess.run(
-            ['bun', 'run', 'scripts/battle-loop.ts'],
+            ['bun', 'run', 'scripts/v05-battle-loop.ts'],
             cwd=SDK_DIR,
             env=env,
             stdout=log_file,
@@ -271,7 +264,7 @@ if __name__ == '__main__':
     print(f'  Clawn: id={clawn_id}, addr={clawn_addr}')
     print(f'  ClawnJr: id={jr_id}, addr={jr_addr}')
     print(f'  Strategy: A={STRATEGY_A}, B={STRATEGY_B}')
-    print(f'  Battles: {MAX_BATTLES} | stake={STAKE_WEI} wei | warmup={WARMUP_BLOCKS} blocks | jokers={MAX_JOKERS} | cloze={CLOZE_ENABLED}')
+    print(f'  Battles: {MAX_BATTLES} | stake={STAKE_WEI} wei | warmup={WARMUP_BLOCKS} blocks | jokers={MAX_JOKERS}')
     print(f'  LLM: model={OPENAI_MODEL} | base={OPENAI_BASE_URL}')
 
     success = 0

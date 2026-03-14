@@ -99,7 +99,7 @@ function Home() {
                     <div className="text-xs text-[var(--muted)]">
                       {shortAddr(b.challengerOwner)} vs {shortAddr(b.acceptorOwner)}
                       {' · '}
-                      {b.currentTurn}/{b.maxTurns} turns
+                      Turn {b.currentTurn}
                     </div>
                   </div>
                 </div>
@@ -135,7 +135,7 @@ function Home() {
           </Step>
           <Step n="3" title="Settle">
             Capture the flag by revealing the opponent's secret for an instant win.
-            Or let the contract settle on timeout, puzzle failure, or max turns.
+            Or let the contract settle on timeout, puzzle failure, or bank depletion.
             Stakes transfer, Elo updates on-chain.
           </Step>
         </div>
@@ -165,13 +165,11 @@ function Home() {
   contractAddress: '${CONTRACTS.arena}',
 });
 const agentId = await arena.registerAgent();
-const secretHash = keccak256(toBytes('my-secret-phrase'));
 const { battleId, battleAddress } = await arena.createBattle(
   agentId,
-  { stake: parseEther('0.001'), maxTurns: 10,
-    maxJokers: 1, baseTimeoutBlocks: 150,
-    warmupBlocks: 5, targetAgentId: 0n },
-  secretHash // commit your CTF secret
+  { stake: parseEther('0.001'),
+    warmupBlocks: 15, targetAgentId: 0n,
+    maxJokers: 2 }
 );`}</code>
         </pre>
       </section>

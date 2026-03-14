@@ -5,6 +5,7 @@
  *   Arena (factory) creates Battle clones.
  *   battleId is uint256.
  *   Battle state lives on each clone (read directly from clone address).
+ *   v05 battle state should be read via getBattleState() on the clone.
  *   TurnSubmitted events are emitted by individual Battle clones.
  */
 
@@ -405,7 +406,7 @@ export function useBattleTurns(battleAddress?: Address, live = false) {
       try {
         const v4Turns = await getLogsChunked({
           address: battleAddress!,
-          event: parseAbiItem('event TurnSubmitted(uint256 indexed battleId, uint256 indexed playerId, uint32 turnNumber, bytes32 sequenceHash, uint16 targetWord, string poisonWord, bytes nextVopParams, string narrative, uint128 bankA, uint128 bankB)'),
+          event: parseAbiItem('event TurnSubmitted(uint256 indexed battleId, uint256 indexed playerId, uint32 turnNumber, bytes32 sequenceHash, uint16 targetWord, string poisonWord, string narrative, uint128 bankA, uint128 bankB)'),
           fromBlock: ARENA_DEPLOY_BLOCK,
           mapFn: (log) => ({
             battleId: log.args.battleId!,
