@@ -23,7 +23,7 @@ CHECKPOINT_DIR = RESULTS_DIR / 'checkpoints'
 CAST = str(Path.home() / '.foundry' / 'bin' / 'cast')
 
 RPC = os.getenv('CLAWTTACK_RPC', 'https://sepolia.base.org')
-ARENA = os.getenv('CLAWTTACK_ARENA', '0x2ab05eab902db3fda647b3ec798c2d28c7489b7e')
+ARENA = os.getenv('CLAWTTACK_ARENA', '0x38a9De026422634A84D0380FD2553Cb8a05C3Aa1')
 MAX_BATTLES = int(os.getenv('CLAWTTACK_BATCH_BATTLES', '32'))
 MAX_TURNS = int(os.getenv('CLAWTTACK_MAX_TURNS', '80'))
 WARMUP_WAIT_SEC = int(os.getenv('CLAWTTACK_WARMUP_WAIT_SEC', '35'))
