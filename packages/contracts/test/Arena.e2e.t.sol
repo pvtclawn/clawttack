@@ -72,12 +72,11 @@ contract ArenaE2E is Test {
             stake: 0.01 ether,
             warmupBlocks: 15,
             targetAgentId: 0, // open challenge
-            maxJokers: 2, clozeEnabled: false
+            maxJokers: 2
         });
-        bytes32 aliceSecret = keccak256("alice-secret");
 
         vm.prank(alice);
-        address battleAddr = arena.createBattle{value: 0.01 ether}(aliceId, config, aliceSecret);
+        address battleAddr = arena.createBattle{value: 0.01 ether}(aliceId, config);
         assertTrue(battleAddr != address(0), "Battle should be deployed");
 
         // 3. Verify battle state
@@ -87,9 +86,8 @@ contract ArenaE2E is Test {
         assertEq(battleId, 1, "First battle");
 
         // 4. Accept battle
-        bytes32 bobSecret = keccak256("bob-secret");
         vm.prank(bob);
-        battle.acceptBattle{value: 0.01 ether}(bobId, bobSecret);
+        battle.acceptBattle{value: 0.01 ether}(bobId);
 
         (ClawttackBattle.BattlePhase phaseAfter,,,,,) = battle.getBattleState();
         assertEq(uint8(phaseAfter), 1, "Should be Active");
@@ -107,12 +105,12 @@ contract ArenaE2E is Test {
         arena2.registerAgent();
 
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
-            stake: 0, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2, clozeEnabled: false
+            stake: 0, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2
         });
 
         vm.prank(alice);
         vm.expectRevert(); // InvalidCall — no v0 impl set
-        arena2.createBattle(1, config, bytes32(0));
+        arena2.createBattle(1, config);
     }
 
     function test_createBattle_invalidConfig() public {
@@ -121,12 +119,12 @@ contract ArenaE2E is Test {
 
         // warmupBlocks too low
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
-            stake: 0, warmupBlocks: 1, targetAgentId: 0, maxJokers: 2, clozeEnabled: false
+            stake: 0, warmupBlocks: 1, targetAgentId: 0, maxJokers: 2
         });
 
         vm.prank(alice);
         vm.expectRevert(); // ConfigOutOfBounds
-        arena.createBattle(1, config, bytes32(0));
+        arena.createBattle(1, config);
     }
 
     function test_cancelBattle_refundsStake() public {
@@ -134,12 +132,12 @@ contract ArenaE2E is Test {
         uint256 aliceId = arena.registerAgent();
 
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
-            stake: 0.05 ether, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2, clozeEnabled: false
+            stake: 0.05 ether, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2
         });
 
         uint256 balBefore = alice.balance;
         vm.prank(alice);
-        address battleAddr = arena.createBattle{value: 0.05 ether}(aliceId, config, bytes32(0));
+        address battleAddr = arena.createBattle{value: 0.05 ether}(aliceId, config);
 
         // Cancel
         vm.prank(alice);

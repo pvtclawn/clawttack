@@ -27,13 +27,9 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     uint32 public constant DEFAULT_ELO_RATING        = 1500;
     uint32 public constant MAX_ELO_DIFF              = 300;
 
-    uint32 public constant MIN_TIMEOUT_BLOCKS        = 25;
-    uint32 public constant MAX_TIMEOUT_BLOCKS        = 300;
     uint32 public constant MIN_WARMUP_BLOCKS         = 15;
     uint32 public constant MAX_WARMUP_BLOCKS         = 150;
 
-    uint8  public constant MIN_TURNS                 = 12;
-    uint8  public constant MAX_TURNS                 = 40;
     uint8  public constant MAX_JOKERS                = 2;
 
     // ─── Immutables ──────────────────────────────────────────────────────────
@@ -56,7 +52,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     mapping(uint256 => ClawttackTypes.AgentProfile) public agents;
     mapping(uint256 => address) public battles;
 
-    // ─── VOP Registry ──────────────────────────────────────────────
+    // ─── VOP Registry ────────────────────────────────────────────────────────        
 
     address[] public activeVOPs;
     mapping(address => bool) public isVopRegistered;
@@ -64,9 +60,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     // ─── Events ──────────────────────────────────────────────────────────────
 
     event AgentRegistered(uint256 indexed agentId, address indexed owner);
-    event BattleCreated(
-        uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint256 targetAgentId
-    );
+    event BattleCreated(uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint256 targetAgentId);
     event RatingUpdated(uint256 indexed agentId, uint32 newRating);
     event ProtocolFeeUpdated(uint256 oldRate, uint256 newRate);
     event BattleCreationFeeUpdated(uint256 oldFee, uint256 newFee);
@@ -114,6 +108,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         uint256 amount = protocolFees;
         if (amount == 0) revert ClawttackErrors.InsufficientValue();
         protocolFees = 0;
+
         (bool success,) = to.call{value: amount}("");
         if (!success) revert ClawttackErrors.TransferFailed();
     }
@@ -166,11 +161,10 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
      * @notice Creates a new battle with chess-clock timing.
      * @dev Deploys an EIP-1167 clone of the battle implementation.
      * @param challengerId The challenger's registered agent ID.
-     * @param config The battle configuration (chess clock handles timing — no maxTurns).
-     * @param secretHash The challenger's secret hash for CTF verification.
+     * @param config The battle configuration (chess clock handles timing).
      * @return battleAddress The address of the deployed battle clone.
      */
-    function createBattle(uint256 challengerId, ClawttackTypes.BattleConfig calldata config, bytes32 secretHash)
+    function createBattle(uint256 challengerId, ClawttackTypes.BattleConfig calldata config)
         external
         payable
         nonReentrant
@@ -194,9 +188,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         battleAddress = Clones.clone(battleImplementation);
         battles[battleId] = battleAddress;
 
-        IClawttackBattle(battleAddress).initialize(
-            address(this), battleId, challengerId, msg.sender, config, secretHash
-        );
+        IClawttackBattle(battleAddress).initialize(address(this), battleId, challengerId, msg.sender, config);
 
         if (config.stake > 0) {
             (bool success,) = battleAddress.call{value: config.stake}("");
@@ -208,12 +200,12 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
     /**
      * @notice Updates the persistent Elo ratings of agents after a battle concludes.
-     * @dev Only callable by active Battle clones. Processes mathematical updates via EloMath.
+     * @dev Only callable by active Battle clones. Chess clock guarantees a winner.
      * @param battleId      The ID of the battle triggering the update.
-     * @param challengerId_ The challenger agent ID.
-     * @param acceptorId_   The acceptor agent ID.
-     * @param winnerId      The ID of the winning agent (0 if a draw).
-     * @param loserId       The ID of the losing agent (0 if a draw).
+     * @param challengerId_ The challenger agent ID (unused, kept for interface compat).
+     * @param acceptorId_   The acceptor agent ID (unused, kept for interface compat).
+     * @param winnerId      The ID of the winning agent.
+     * @param loserId       The ID of the losing agent.
      * @param battleStake   The total stake. Unrated matches (stake < MIN) do not affect Elo.
      */
     function updateRatings(
@@ -226,62 +218,40 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     ) external {
         if (battles[battleId] != msg.sender) revert ClawttackErrors.InvalidCall();
         if (winnerId > agentsCount || loserId > agentsCount) revert ClawttackErrors.InvalidCall();
-        if (challengerId_ > agentsCount || acceptorId_ > agentsCount) revert ClawttackErrors.InvalidCall();
+        if (winnerId == 0 || loserId == 0) revert ClawttackErrors.InvalidCall();
 
-        if (winnerId != 0) {
-            unchecked {
-                agents[winnerId].totalWins  += 1;
-                agents[loserId].totalLosses += 1;
-            }
+        unchecked {
+            agents[winnerId].totalWins  += 1;
+            agents[loserId].totalLosses += 1;
         }
 
         if (battleStake < MIN_RATED_STAKE) return; // Unrated — skip rating update
 
-        if (winnerId != 0) {
-            // ─── Decisive result ─────────────────────────────────────────────
-            uint32 kWinner = EloMath.kFactor(agents[winnerId].totalWins + agents[winnerId].totalLosses);
-            uint32 kLoser  = EloMath.kFactor(agents[loserId].totalWins  + agents[loserId].totalLosses);
+        uint32 kWinner = EloMath.kFactor(agents[winnerId].totalWins + agents[winnerId].totalLosses);
+        uint32 kLoser  = EloMath.kFactor(agents[loserId].totalWins  + agents[loserId].totalLosses);
 
-            (uint32 wRating, uint32 lRating) = EloMath.updateElo(
-                agents[winnerId].eloRating,
-                agents[loserId].eloRating,
-                kWinner,
-                kLoser
-            );
+        (uint32 wRating, uint32 lRating) = EloMath.updateElo(
+            agents[winnerId].eloRating,
+            agents[loserId].eloRating,
+            kWinner,
+            kLoser
+        );
 
-            agents[winnerId].eloRating = wRating;
-            agents[loserId].eloRating  = lRating;
+        agents[winnerId].eloRating = wRating;
+        agents[loserId].eloRating  = lRating;
 
-            emit RatingUpdated(winnerId, wRating);
-            emit RatingUpdated(loserId,  lRating);
-        } else {
-            // ─── Draw: pull ratings toward equilibrium ───────────────────────
-            uint32 kA = EloMath.kFactor(agents[challengerId_].totalWins + agents[challengerId_].totalLosses);
-            uint32 kB = EloMath.kFactor(agents[acceptorId_].totalWins   + agents[acceptorId_].totalLosses);
-
-            (uint32 rA, uint32 rB) = EloMath.drawElo(
-                agents[challengerId_].eloRating,
-                agents[acceptorId_].eloRating,
-                kA,
-                kB
-            );
-
-            agents[challengerId_].eloRating = rA;
-            agents[acceptorId_].eloRating   = rB;
-
-            emit RatingUpdated(challengerId_, rA);
-            emit RatingUpdated(acceptorId_,   rB);
-        }
+        emit RatingUpdated(winnerId, wRating);
+        emit RatingUpdated(loserId,  lRating);
     }
 
     // ─── External: View ──────────────────────────────────────────────────────
 
-    function getRandomVop(uint256 seed) external view returns (address) {
-        if (activeVOPs.length == 0) revert ClawttackErrors.RegistryEmpty();
-        return activeVOPs[seed % activeVOPs.length];
-    }
-
     function getVopCount() external view returns (uint256) {
         return activeVOPs.length;
+    }
+
+    function getVopByIndex(uint8 index) external view returns (address) {
+        if (index >= activeVOPs.length) revert ClawttackErrors.VopIndexOutOfRange();
+        return activeVOPs[index];
     }
 }

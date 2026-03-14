@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
+import {ClawttackTypes} from "./ClawttackTypes.sol";
+
 /**
  * @title ChessClockLib
  * @notice Encapsulates the v0 chess clock timing model for Clawttack battles.
@@ -23,11 +25,17 @@ library ChessClockLib {
     uint256 constant MAX_TURN_TIMEOUT   = 80;    // ~2.5 min max per turn
     uint256 constant BPS                = 10000;
 
-    // ─── Cloze Dual Penalty (anti-unsolvable-blank incentive) ────────────────
-    // When defender fails Cloze: defender eats NCC_FAIL_PENALTY, attacker eats CLOZE_ATTACKER_PENALTY.
-    // Incentivizes attacker to create solvable blanks (prefers 0 cost over -10).
-    // No cumulative tracking needed — works from turn 1.
-    uint256 constant CLOZE_ATTACKER_PENALTY = 10;  // blocks deducted from attacker when defender fails Cloze
+    // ─── VOP Penalty Constants (Constant Relative Advantage) ────────────────
+    //  X = VOP_PENALTY = 15 blocks (~30 seconds on Base)
+    //  Matrix ensures net(C−S) = −2X for all normal outcomes → no grief incentive
+    uint256 constant VOP_PENALTY                    = 15;               // X: base unit
+    uint256 constant VOP_WRONG_IDX_CHALLENGER       = VOP_PENALTY * 3;  // 3X: challenger pays when index wrong
+    uint256 constant VOP_WRONG_IDX_SOLVER           = VOP_PENALTY;      // X: solver pays when index wrong
+    uint256 constant VOP_NCC_GATE_CHALLENGER        = VOP_PENALTY * 3;  // 3X: challenger pays when NCC gate fails
+    uint256 constant VOP_NCC_GATE_SOLVER            = VOP_PENALTY;      // X: solver pays when NCC gate fails
+    uint256 constant VOP_RIGHT_WRONG_SOL_SOLVER     = VOP_PENALTY * 2;  // 2X: solver pays on right idx + wrong sol
+    uint256 constant VOP_RIGHT_RIGHT_CHALLENGER     = VOP_PENALTY;      // X: challenger pays on full success
+    uint256 constant VOP_RIGHT_RIGHT_SOLVER_REFUND  = VOP_PENALTY;      // X: solver RECOVERS on full success
 
     struct Clock {
         uint128 bankA;          // remaining blocks for agent A
@@ -66,30 +74,15 @@ library ChessClockLib {
         bool nccCorrect,
         bool isFirstTurn
     ) internal returns (uint128 bankAfter, bool bankDepleted) {
-        return _tick(self, isAgentA, nccCorrect, isFirstTurn, false);
+        return _tick(self, isAgentA, nccCorrect, isFirstTurn);
     }
 
-    /**
-     * @notice Processes a turn's timing with Cloze dual-penalty for Cloze-enabled battles.
-     * @dev When clozeEnabled and defender fails NCC, attacker also eats CLOZE_ATTACKER_PENALTY.
-     *      Incentivizes solvable blanks without any cumulative tracking.
-     */
-    function tickWithCloze(
-        Clock storage self,
-        bool isAgentA,
-        bool nccCorrect,
-        bool isFirstTurn,
-        bool clozeEnabled
-    ) internal returns (uint128 bankAfter, bool bankDepleted) {
-        return _tick(self, isAgentA, nccCorrect, isFirstTurn, clozeEnabled);
-    }
 
     function _tick(
         Clock storage self,
         bool isAgentA,
         bool nccCorrect,
-        bool isFirstTurn,
-        bool clozeEnabled
+        bool isFirstTurn
     ) private returns (uint128 bankAfter, bool bankDepleted) {
         uint256 elapsed = block.number - self.lastTurnBlock;
         if (elapsed < MIN_TURN_INTERVAL) revert TurnTooFast();
@@ -136,24 +129,69 @@ library ChessClockLib {
             }
         }
 
-        // 4. Cloze dual-penalty: when defender fails, attacker also bleeds.
-        //    Incentivizes attacker to create solvable blanks.
-        //    Defender fails → defender already paid NCC_FAIL_PENALTY above,
-        //    now attacker pays CLOZE_ATTACKER_PENALTY from THEIR bank.
-        if (clozeEnabled && !isFirstTurn && !nccCorrect) {
-            uint256 oppBank = isAgentA ? self.bankB : self.bankA;
-            if (oppBank > CLOZE_ATTACKER_PENALTY) {
-                _setBank(self, !isAgentA, uint128(oppBank - CLOZE_ATTACKER_PENALTY));
-            } else {
-                _setBank(self, !isAgentA, 0);
-            }
-        }
+
 
         // 5. Store
         bankAfter = uint128(bank);
         _setBank(self, isAgentA, bankAfter);
         self.lastTurnBlock = uint64(block.number);
         return (bankAfter, false);
+    }
+
+    /**
+     * @notice Applies VOP result penalties/rewards to both players' banks.
+     * @dev Implements the Constant Relative Advantage matrix:
+     *      NccGateFailed:       challenger −3X, solver −X  (net −2X)
+     *      WrongIndex:          challenger −3X, solver −X  (net −2X)
+     *      RightIndexWrongSol:  challenger  0,  solver −2X (net +2X, rare)
+     *      RightIndexRightSol:  challenger −X,  solver +X  (net −2X)
+     * @param self The clock storage.
+     * @param isChallengerA True if agent A was the challenger for this VOP round.
+     * @param outcome The VOP outcome enum.
+     * @return challengerDepleted True if challenger's bank hit zero.
+     * @return solverDepleted True if solver's bank hit zero.
+     */
+    function applyVopResult(
+        Clock storage self,
+        bool isChallengerA,
+        ClawttackTypes.VopOutcome outcome
+    ) internal returns (bool challengerDepleted, bool solverDepleted) {
+        uint256 challengerBank = isChallengerA ? self.bankA : self.bankB;
+        uint256 solverBank = isChallengerA ? self.bankB : self.bankA;
+
+        if (outcome == ClawttackTypes.VopOutcome.NccGateFailed) {
+            // Challenger −3X, Solver −X
+            challengerBank = challengerBank > VOP_NCC_GATE_CHALLENGER
+                ? challengerBank - VOP_NCC_GATE_CHALLENGER : 0;
+            solverBank = solverBank > VOP_NCC_GATE_SOLVER
+                ? solverBank - VOP_NCC_GATE_SOLVER : 0;
+
+        } else if (outcome == ClawttackTypes.VopOutcome.WrongIndex) {
+            // Challenger −3X, Solver −X
+            challengerBank = challengerBank > VOP_WRONG_IDX_CHALLENGER
+                ? challengerBank - VOP_WRONG_IDX_CHALLENGER : 0;
+            solverBank = solverBank > VOP_WRONG_IDX_SOLVER
+                ? solverBank - VOP_WRONG_IDX_SOLVER : 0;
+
+        } else if (outcome == ClawttackTypes.VopOutcome.RightIndexWrongSol) {
+            // Challenger 0, Solver −2X
+            solverBank = solverBank > VOP_RIGHT_WRONG_SOL_SOLVER
+                ? solverBank - VOP_RIGHT_WRONG_SOL_SOLVER : 0;
+
+        } else if (outcome == ClawttackTypes.VopOutcome.RightIndexRightSol) {
+            // Challenger −X, Solver +X
+            challengerBank = challengerBank > VOP_RIGHT_RIGHT_CHALLENGER
+                ? challengerBank - VOP_RIGHT_RIGHT_CHALLENGER : 0;
+            solverBank += VOP_RIGHT_RIGHT_SOLVER_REFUND;
+            // Cap at initial bank (prevent infinite accumulation)
+            if (solverBank > INITIAL_BANK) solverBank = INITIAL_BANK;
+        }
+
+        // Write back
+        _setBank(self, isChallengerA, uint128(challengerBank));
+        _setBank(self, !isChallengerA, uint128(solverBank));
+
+        return (challengerBank == 0, solverBank == 0);
     }
 
     /**

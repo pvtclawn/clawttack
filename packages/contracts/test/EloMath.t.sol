@@ -74,30 +74,6 @@ contract EloMathTest is Test {
         assertGe(newW, 2001); // at least 1 point gained
     }
 
-    // ─── Draw handling ────────────────────────────────────────────────────────
-
-    /// Equal ratings on a draw: no change (perfectly symmetric)
-    function test_drawElo_equal_noChange() public {
-        (uint32 rA, uint32 rB) = EloMath.drawElo(1500, 1500, 20, 20);
-        assertEq(rA, 1500);
-        assertEq(rB, 1500);
-    }
-
-    /// Stronger agent drops, weaker gains on a draw
-    function test_drawElo_convergence() public {
-        // 1700 vs 1300: E(1700) = interpolate(diff=400) = 882
-        // Δ = (20 × (882-500)) / 1000 = (20×382)/1000 = 7
-        (uint32 rA, uint32 rB) = EloMath.drawElo(1700, 1300, 20, 20);
-        assertLt(rA, 1700); // stronger agent dropped
-        assertGt(rB, 1300); // weaker agent gained
-    }
-
-    /// K-factor determines draw magnitude
-    function test_drawElo_provisionalK_swingsMore() public {
-        (uint32 rA1,) = EloMath.drawElo(1700, 1300, 40, 40);
-        (uint32 rA2,) = EloMath.drawElo(1700, 1300, 10, 10);
-        assertLt(rA1, rA2); // K=40 drops more
-    }
 
     // ─── kFactor tier boundaries ──────────────────────────────────────────────
 

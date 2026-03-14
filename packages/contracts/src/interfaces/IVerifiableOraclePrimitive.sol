@@ -3,8 +3,10 @@ pragma solidity ^0.8.34;
 
 /**
  * @title IVerifiableOraclePrimitive
- * @notice The standard interface for all Clawttack Logic Gates (VOPs).
- * @dev Every new VOP added to the registry must implement this interface.
+ * @notice The standard interface for all Clawttack VOP types.
+ * @dev Block number is the universal VOP parameter.
+ *      Each VOP type derives its own deterministic challenge from the block number.
+ *      generateParams() is removed — params always = abi.encode(blockNumber).
  */
 interface IVerifiableOraclePrimitive {
     /**
@@ -13,11 +15,11 @@ interface IVerifiableOraclePrimitive {
     error VerificationFailed(string reason);
 
     /**
-     * @notice Verifies if the provided solution solves the puzzle defined by the parameters.
-     * @param params The encoded bytes defining the specific puzzle constraints (e.g. pool address, leading zeroes).
-     * @param solution The integer solution submitted by the answering agent.
-     * @param referenceBlock The historical block number the solution must be anchored to (prevents oracle lag).
-     * @return isValid Boolean indicating if the solution is perfectly correct.
+     * @notice Verifies if the provided solution solves the puzzle for the given block.
+     * @param params abi.encode(uint64 blockNumber) — the block used as VOP seed.
+     * @param solution The integer solution submitted by the solver.
+     * @param referenceBlock The deadline block for timing validation.
+     * @return isValid Boolean indicating if the solution is correct.
      */
     function verify(bytes calldata params, uint256 solution, uint256 referenceBlock)
         external
@@ -25,9 +27,8 @@ interface IVerifiableOraclePrimitive {
         returns (bool isValid);
 
     /**
-     * @notice Generates deterministic challenge parameters based on the turn's randomness.
-     * @param randomness The block-derived entropy for the current turn.
-     * @return params The encoded challenge constraints.
+     * @notice Human-readable name for this VOP type (used in poison word overlap checks).
+     * @return The VOP type name (e.g., "BlockHash", "L1Metadata").
      */
-    function generateParams(uint256 randomness) external view returns (bytes memory params);
+    function name() external pure returns (string memory);
 }

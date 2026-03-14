@@ -11,6 +11,7 @@ interface IClawttackArenaView {
         external
         view
         returns (address owner, uint32 eloRating, uint32 totalWins, uint32 totalLosses);
-    function getRandomVop(uint256 seed) external view returns (address);
+    function getVopByIndex(uint8 index) external view returns (address);
+    function getVopCount() external view returns (uint256);
     function updateRatings(uint256 battleId, uint256 challengerId, uint256 acceptorId, uint256 winnerId, uint256 loserId, uint256 stake) external;
 }

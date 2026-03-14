@@ -28,6 +28,7 @@ contract IntegrationHarness {
     bool public nccResultBReady;
     address public dict;
     uint32 public turn;
+    uint256 public constant FAKE_BATTLE_ID = 1;
 
     function init(address _dict) external {
         clock.init();
@@ -52,7 +53,8 @@ contract IntegrationHarness {
         if (turn >= 2) {
             ClawttackTypes.PendingNcc storage myPrevNcc = isAgentA ? pendingNccA : pendingNccB;
             bool opponentWasCorrect = NccVerifier.verifyReveal(
-                reveal, myPrevNcc.commitment, myPrevNcc.defenderGuessIdx
+                reveal, myPrevNcc.commitment, myPrevNcc.defenderGuessIdx,
+                FAKE_BATTLE_ID, turn - 2
             );
             if (isAgentA) {
                 nccResultB = opponentWasCorrect;
@@ -117,11 +119,14 @@ contract IntegrationTest is Test {
         harness.init(address(dict));
     }
 
-    function _attack(bytes32 salt, uint8 intendedIdx) internal pure returns (ClawttackTypes.NccAttack memory) {
+    function _attack(bytes32 salt, uint8 intendedIdx) internal view returns (ClawttackTypes.NccAttack memory) {
+        uint256 currentHarnessTurn = harness.turn();
         return ClawttackTypes.NccAttack({
             candidateWordIndices: [uint16(0), uint16(1), uint16(2), uint16(3)],
             candidateOffsets: [uint16(14), uint16(26), uint16(41), uint16(55)],
-            nccCommitment: keccak256(abi.encodePacked(salt, intendedIdx))
+            nccCommitment: keccak256(abi.encodePacked(
+                harness.FAKE_BATTLE_ID(), currentHarnessTurn, "NCC", salt, intendedIdx
+            ))
         });
     }
 
@@ -322,9 +327,10 @@ contract IntegrationTest is Test {
     function test_badReveal_forfeits() public {
         uint256 b = block.number;
 
-        // Turn 0: A attacks
+        // Turn 0: A attacks (commitment uses turn=0)
         b += 10; vm.roll(b);
-        harness.doTurn(true, NARRATIVE, _attack(bytes32(uint256(100)), 2), _emptyDefense(), _emptyReveal());
+        bytes32 saltA = bytes32(uint256(100));
+        harness.doTurn(true, NARRATIVE, _attack(saltA, 2), _emptyDefense(), _emptyReveal());
 
         // Turn 1: B attacks + defends
         b += 10; vm.roll(b);
@@ -332,12 +338,14 @@ contract IntegrationTest is Test {
 
         // Turn 2: A tries to reveal with WRONG salt → should get RevealMismatch
         b += 10; vm.roll(b);
+        // Pre-compute attack before vm.expectRevert (since _attack() reads harness.turn())
+        ClawttackTypes.NccAttack memory t2Attack = _attack(bytes32(uint256(300)), 0);
         // In the battle contract, this would settle as NCC_REVEAL_FAILED
-        // In the harness, NccVerifier.verifyReveal still reverts (harness doesn't have settlement)
+        // In the harness, NccVerifier.verifyReveal still reverts
         vm.expectRevert(NccVerifier.RevealMismatch.selector);
         harness.doTurn(
             true, NARRATIVE,
-            _attack(bytes32(uint256(300)), 0),
+            t2Attack,
             _defense(1),
             _reveal(bytes32(uint256(999)), 2) // wrong salt!
         );
