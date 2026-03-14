@@ -28,6 +28,13 @@ WARNING_CLASS_ORDER = [
     'max-turns-mismatch',
 ]
 
+COMPARABILITY_REASON_ORDER = [
+    'missing-baseline',
+    'strict-violation',
+    'guardrail-failure',
+    'runconfig-drift-outside-allowed-variable',
+]
+
 DEFAULT_CONTROL_LABEL = 'baseline-same-regime'
 DEFAULT_INTERVENTION_LABEL = 'same-regime'
 LATER_TURN_THRESHOLD = 3
@@ -390,24 +397,79 @@ def aggregate(per_battles: list[dict[str, Any]], *, strict_mode: bool = False) -
     }
 
 
+def _comparable_run_config_shape(run_config: dict[str, Any] | None) -> dict[str, Any]:
+    rc = dict(run_config or {})
+    rc.pop('observedInterventionValues', None)
+    return rc
+
+
 def compare_aggregates(previous: dict[str, Any] | None, current: dict[str, Any]) -> dict[str, Any]:
     if previous is None:
         return {
             'hasPrevious': False,
+            'comparable': False,
+            'comparabilityReasons': ['missing-baseline'],
             'note': 'No previous aggregate snapshot available for comparison.'
         }
     previous_shared = previous.get('sharedRegimeMetrics', {})
     current_shared = current.get('sharedRegimeMetrics', {})
     previous_target = previous.get('interventionTargetMetrics', {})
     current_target = current.get('interventionTargetMetrics', {})
+
+    reasons: dict[str, str] = {}
+    previous_fingerprint = previous.get('runConfigFingerprint')
+    current_fingerprint = current.get('runConfigFingerprint')
+    previous_strict_violations = previous.get('strictViolationCount', 0)
+    current_strict_violations = current.get('strictViolationCount', 0)
+
+    if previous_strict_violations > 0 or current_strict_violations > 0:
+        reasons['strict-violation'] = (
+            'strict-violation: previous/current strict violations '
+            f'({previous_strict_violations}/{current_strict_violations})'
+        )
+
+    previous_guardrails_ok = bool(
+        previous.get('labelHygieneOk')
+        and previous.get('maxTurnsComparable')
+        and previous.get('singleVariableInterventionGuardrail', {}).get('ok')
+    )
+    current_guardrails_ok = bool(
+        current.get('labelHygieneOk')
+        and current.get('maxTurnsComparable')
+        and current.get('singleVariableInterventionGuardrail', {}).get('ok')
+    )
+    if not previous_guardrails_ok or not current_guardrails_ok:
+        reasons['guardrail-failure'] = (
+            'guardrail-failure: previous/current guardrails '
+            f'({previous_guardrails_ok}/{current_guardrails_ok})'
+        )
+
+    previous_rc_shape = _comparable_run_config_shape(previous.get('runConfig'))
+    current_rc_shape = _comparable_run_config_shape(current.get('runConfig'))
+    runconfig_shape_comparable = previous_rc_shape == current_rc_shape
+    if not runconfig_shape_comparable:
+        reasons['runconfig-drift-outside-allowed-variable'] = (
+            'runconfig-drift-outside-allowed-variable: runConfig changed '
+            'outside allowed intervention variable (observedInterventionValues)'
+        )
+
+    comparable = len(reasons) == 0
+    comparability_reasons = [
+        reasons[key]
+        for key in COMPARABILITY_REASON_ORDER
+        if key in reasons
+    ]
+
     return {
         'hasPrevious': True,
+        'comparable': comparable,
+        'comparabilityReasons': comparability_reasons,
         'previousControlLabel': previous.get('controlLabel'),
         'currentControlLabel': current.get('controlLabel'),
         'previousInterventionLabel': previous.get('interventionLabel'),
         'currentInterventionLabel': current.get('interventionLabel'),
-        'previousRunConfigFingerprint': previous.get('runConfigFingerprint'),
-        'currentRunConfigFingerprint': current.get('runConfigFingerprint'),
+        'previousRunConfigFingerprint': previous_fingerprint,
+        'currentRunConfigFingerprint': current_fingerprint,
         'previousBattleCount': previous.get('battleCount'),
         'currentBattleCount': current.get('battleCount'),
         'previousStageHistogram': previous.get('stageHistogram', {}),
@@ -426,6 +488,9 @@ def compare_aggregates(previous: dict[str, Any] | None, current: dict[str, Any])
         'currentSharedRegimeMetrics': current_shared,
         'previousInterventionTargetMetrics': previous_target,
         'currentInterventionTargetMetrics': current_target,
+        'previousGuardrailsOk': previous_guardrails_ok,
+        'currentGuardrailsOk': current_guardrails_ok,
+        'runConfigShapeComparable': runconfig_shape_comparable,
     }
 
 
@@ -480,21 +545,34 @@ def write_aggregate_markdown(path: Path, agg: dict[str, Any], comparison: dict[s
     ]
     if comparison.get('hasPrevious'):
         lines.extend([
+            f"- comparable: `{comparison['comparable']}`",
+            f"- comparability reasons: {', '.join(comparison['comparabilityReasons']) if comparison['comparabilityReasons'] else 'none'}",
             f"- previous control/intervention: `{comparison['previousControlLabel']}` / `{comparison['previousInterventionLabel']}`",
             f"- current control/intervention: `{comparison['currentControlLabel']}` / `{comparison['currentInterventionLabel']}`",
             f"- previous run-config fingerprint: `{comparison['previousRunConfigFingerprint']}`",
             f"- current run-config fingerprint: `{comparison['currentRunConfigFingerprint']}`",
-            f"- previous battle count: `{comparison['previousBattleCount']}`",
-            f"- current battle count: `{comparison['currentBattleCount']}`",
-            f"- previous shared metrics: `{comparison['previousSharedRegimeMetrics']}`",
-            f"- current shared metrics: `{comparison['currentSharedRegimeMetrics']}`",
-            f"- previous intervention-target metrics: `{comparison['previousInterventionTargetMetrics']}`",
-            f"- current intervention-target metrics: `{comparison['currentInterventionTargetMetrics']}`",
-            f"- previous unsettled: `{comparison['previousUnsettledBattleCount']}`",
-            f"- current unsettled: `{comparison['currentUnsettledBattleCount']}`",
-            f"- newly observed mechanics: {', '.join(comparison['newlyObservedMechanics']) or 'none'}",
-            f"- still unobserved mechanics: {', '.join(comparison['stillUnobservedMechanics']) or 'none'}",
+            f"- run-config shape comparable: `{comparison['runConfigShapeComparable']}`",
+            f"- previous guardrails ok: `{comparison['previousGuardrailsOk']}`",
+            f"- current guardrails ok: `{comparison['currentGuardrailsOk']}`",
         ])
+        if comparison.get('comparable'):
+            lines.extend([
+                f"- previous battle count: `{comparison['previousBattleCount']}`",
+                f"- current battle count: `{comparison['currentBattleCount']}`",
+                f"- previous shared metrics: `{comparison['previousSharedRegimeMetrics']}`",
+                f"- current shared metrics: `{comparison['currentSharedRegimeMetrics']}`",
+                f"- previous intervention-target metrics: `{comparison['previousInterventionTargetMetrics']}`",
+                f"- current intervention-target metrics: `{comparison['currentInterventionTargetMetrics']}`",
+                f"- previous unsettled: `{comparison['previousUnsettledBattleCount']}`",
+                f"- current unsettled: `{comparison['currentUnsettledBattleCount']}`",
+                f"- newly observed mechanics: {', '.join(comparison['newlyObservedMechanics']) or 'none'}",
+                f"- still unobserved mechanics: {', '.join(comparison['stillUnobservedMechanics']) or 'none'}",
+            ])
+        else:
+            lines.extend([
+                '- non-evaluative mode: comparison is not reliable for interpretive metrics.',
+                '- evaluative deltas are intentionally suppressed until comparability is restored.',
+            ])
     else:
         lines.append(f"- {comparison['note']}")
     lines.extend([
