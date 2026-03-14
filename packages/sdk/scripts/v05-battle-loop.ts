@@ -272,6 +272,13 @@ function strategyFor(side: AgentSide): string {
   return side === 'A' ? STRATEGY_A : STRATEGY_B
 }
 
+function fighterAgentFor(side: AgentSide): string {
+  const sideSpecific = side === 'A'
+    ? process.env.CLAWTTACK_FIGHTER_AGENT_A?.trim()
+    : process.env.CLAWTTACK_FIGHTER_AGENT_B?.trim()
+  return sideSpecific || FIGHTER_AGENT
+}
+
 function constructNarrative(input: {
   turn: number
   side: AgentSide
@@ -325,85 +332,6 @@ function constructNarrative(input: {
   throw new Error('turn construction failed after deterministic template attempts')
 }
 
-function extractBalancedJsonCandidate(raw: string): string | null {
-  let start = -1
-  let depth = 0
-  let inString = false
-  let escapeNext = false
-
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i]
-
-    if (start < 0) {
-      if (ch === '{') {
-        start = i
-        depth = 1
-        inString = false
-        escapeNext = false
-      }
-      continue
-    }
-
-    if (inString) {
-      if (escapeNext) {
-        escapeNext = false
-      } else if (ch === '\\') {
-        escapeNext = true
-      } else if (ch === '"') {
-        inString = false
-      }
-      continue
-    }
-
-    if (ch === '"') {
-      inString = true
-      continue
-    }
-
-    if (ch === '{' || ch === '[') depth++
-    if (ch === '}' || ch === ']') depth--
-
-    if (depth === 0) {
-      return raw.slice(start, i + 1)
-    }
-  }
-
-  return null
-}
-
-function extractJsonObject(raw: string, stage: string): any {
-  const direct = raw.trim()
-  if (direct.startsWith('{') || direct.startsWith('[')) {
-    try {
-      return JSON.parse(direct)
-    } catch {
-      // fall through to noise-tolerant extraction
-    }
-  }
-
-  const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
-  for (const line of lines) {
-    if (!line.startsWith('{') && !line.startsWith('[')) continue
-    try {
-      return JSON.parse(line)
-    } catch {
-      // keep scanning
-    }
-  }
-
-  const balanced = extractBalancedJsonCandidate(raw)
-  if (balanced) {
-    try {
-      return JSON.parse(balanced)
-    } catch {
-      // fail below with bounded preview
-    }
-  }
-
-  const preview = raw.slice(0, 240).replace(/\s+/g, ' ')
-  throw new Error(`[gateway-parse] stage=${stage} failed to extract JSON object. preview=${preview}`)
-}
-
 function generateNarrativeViaGateway(input: {
   turn: number
   side: AgentSide
@@ -438,14 +366,23 @@ function generateNarrativeViaGateway(input: {
 
   const raw = execFileSync('openclaw', [
     'agent',
-    '--agent', FIGHTER_AGENT,
+    '--agent', fighterAgentFor(input.side),
+    '--session-id', `clawttack-${BATTLE_ADDRESS.toLowerCase()}-${input.side.toLowerCase()}`,
     '--message', prompt,
     '--json',
   ], { encoding: 'utf8', maxBuffer: 2_000_000 })
 
-  const parsed = extractJsonObject(raw, 'gateway-envelope')
+  const parsed = extractJsonObject(
+    raw,
+    'gateway-envelope',
+    (value) => Boolean(value?.result?.payloads?.[0]?.text ?? value?.payloads?.[0]?.text),
+  )
   const payloadText = parsed?.result?.payloads?.[0]?.text ?? parsed?.payloads?.[0]?.text ?? ''
-  const payload = extractJsonObject(String(payloadText), 'gateway-payload')
+  const payload = extractJsonObject(
+    String(payloadText),
+    'gateway-payload',
+    (value) => typeof value?.narrative === 'string',
+  )
   const narrative = typeof payload?.narrative === 'string' ? payload.narrative.trim() : ''
   if (!narrative) throw new Error(`gateway fighter returned empty narrative: ${String(payloadText).slice(0, 240)}`)
   return narrative
@@ -773,6 +710,93 @@ async function main(): Promise<void> {
 
     console.log(`   [fetch-pending-ncc] side=${side}`)
     const oppNcc = side === 'A' ? await battleRead.pendingNccB() : await battleRead.pendingNccA()
+    const nccGuess = String(oppNcc.commitment) === ethers.ZeroHash
+      ? 0
+      : ((turn + (side === 'A' ? 3 : 1)) % 4)
+
+    const prev = cp.prevByAgent[side]
+    const nccReveal = prev && turn >= 2
+      ? { salt: prev.nccSalt, intendedIdx: prev.nccIdx }
+      : { salt: ethers.ZeroHash, intendedIdx: 0 }
+    const vopReveal = prev && turn >= 2
+      ? { vopSalt: prev.vopSalt, vopIndex: prev.vopIdx }
+      : { vopSalt: ethers.ZeroHash, vopIndex: 0 }
+
+    const oppVopSide: AgentSide = side === 'A' ? 'B' : 'A'
+    console.log(`   [fetch-pending-vop] side=${oppVopSide}`)
+    const oppVop = await fetchPendingVop(provider, BATTLE_ADDRESS, oppVopSide)
+    console.log(`   [decode-pending-vop] side=${oppVopSide} commitment=${oppVop.commitment} commitBlock=${oppVop.commitBlockNumber.toString()}`)
+    let vopClaimedIndex = 0
+    let vopSolution = ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [0n]) as `0x${string}`
+    let vopSolved = false
+
+    if (String(oppVop.commitment) !== ethers.ZeroHash) {
+      vopClaimedIndex = guessVopIndexFromNarrative(cp.lastNarrativeByAgent[other])
+      const commitBlock = Number(oppVop.commitBlockNumber)
+      const solved = await solveVop(provider, vopClaimedIndex, commitBlock)
+      vopSolution = solved.solution
+      vopSolved = solved.solved
+    }
+
+    const customPoison = side === 'A' ? 'ember' : 'cipher'
+
+    const payload = {
+      narrative,
+      customPoisonWord: customPoison,
+      nccAttack: {
+        candidateWordIndices: wordIndices,
+        candidateOffsets: offsets,
+        nccCommitment,
+      },
+      nccDefense: { guessIdx: nccGuess },
+      nccReveal,
+      vopCommit: { vopCommitment, instanceCommit },
+      vopSolve: { vopClaimedIndex, solution: vopSolution },
+      vopReveal,
+    }
+
+    console.log(
+      `\n🎮 turn=${turn} side=${side} bankA=${bankA} bankB=${bankB} target=${target} poison=${poison} template=${constructed.templateFamily} fallback=${constructed.fallbackStep}`,
+    )
+    console.log('   [submit-turn] payload assembled, estimating/sending submitTurn')
+    const rc = await submitWithRetry(battle, payload)
+
+    cp.prevByAgent[side] = {
+      nccSalt,
+      nccIdx: intendedIdx,
+      vopSalt,
+      vopIdx: vopIndex,
+      turn,
+    }
+    cp.lastNarrativeByAgent[side] = narrative
+    cp.lastTurn = turn
+    cp.lastSubmitBlock = Number(rc.blockNumber)
+    cp.results.push({
+      turn,
+      agent: side,
+      txHash: rc.hash,
+      gasUsed: rc.gasUsed.toString(),
+      blockNumber: Number(rc.blockNumber),
+      bankA: bankA.toString(),
+      bankB: bankB.toString(),
+      vopClaimedIndex,
+      vopCommittedIndex: vopIndex,
+      vopSolved,
+      nccGuess,
+    })
+    saveCheckpoint(cp)
+
+    await new Promise((r) => setTimeout(r, 3000))
+  }
+
+  console.log(`✅ v05 loop complete. saved checkpoint=${CHECKPOINT_PATH}`)
+}
+
+main().catch((err) => {
+  console.error('❌ v05 battle loop failed:', err)
+  process.exit(1)
+})
+NccB() : await battleRead.pendingNccA()
     const nccGuess = String(oppNcc.commitment) === ethers.ZeroHash
       ? 0
       : ((turn + (side === 'A' ? 3 : 1)) % 4)
