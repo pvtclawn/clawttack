@@ -13,14 +13,17 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { dirname } from 'node:path'
 import { ethers } from 'ethers'
-import { generateNarrative } from './llm-strategy.ts'
 
 const RPC = process.env.CLAWTTACK_RPC?.trim() || 'https://sepolia.base.org'
 const BATTLE_ADDRESS = mustEnv('CLAWTTACK_BATTLE')
 const OPPONENT_PRIVATE_KEY = mustEnv('CLAWTTACK_OPPONENT_PRIVATE_KEY')
 const VOP_MODE = (process.env.CLAWTTACK_VOP_MODE?.trim() || 'hash-only').toLowerCase()
+const STRATEGY_A = (process.env.CLAWTTACK_STRATEGY_A?.trim() || 'gateway').toLowerCase()
+const STRATEGY_B = (process.env.CLAWTTACK_STRATEGY_B?.trim() || 'script').toLowerCase()
+const FIGHTER_AGENT = process.env.CLAWTTACK_FIGHTER_AGENT?.trim() || 'fighter'
 const MAX_TURNS = Number.parseInt(process.env.CLAWTTACK_MAX_TURNS || '120', 10)
 const CHECKPOINT_PATH = process.env.CLAWTTACK_CHECKPOINT_PATH?.trim()
   || `${process.env.HOME}/.openclaw/workspace/projects/clawttack/battle-results/checkpoints/v05-${BATTLE_ADDRESS.toLowerCase()}.json`
@@ -322,6 +325,132 @@ function constructNarrative(input: {
   throw new Error('turn construction failed after deterministic template attempts')
 }
 
+function extractBalancedJsonCandidate(raw: string): string | null {
+  let start = -1
+  let depth = 0
+  let inString = false
+  let escapeNext = false
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]
+
+    if (start < 0) {
+      if (ch === '{') {
+        start = i
+        depth = 1
+        inString = false
+        escapeNext = false
+      }
+      continue
+    }
+
+    if (inString) {
+      if (escapeNext) {
+        escapeNext = false
+      } else if (ch === '\\') {
+        escapeNext = true
+      } else if (ch === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (ch === '"') {
+      inString = true
+      continue
+    }
+
+    if (ch === '{' || ch === '[') depth++
+    if (ch === '}' || ch === ']') depth--
+
+    if (depth === 0) {
+      return raw.slice(start, i + 1)
+    }
+  }
+
+  return null
+}
+
+function extractJsonObject(raw: string, stage: string): any {
+  const direct = raw.trim()
+  if (direct.startsWith('{') || direct.startsWith('[')) {
+    try {
+      return JSON.parse(direct)
+    } catch {
+      // fall through to noise-tolerant extraction
+    }
+  }
+
+  const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  for (const line of lines) {
+    if (!line.startsWith('{') && !line.startsWith('[')) continue
+    try {
+      return JSON.parse(line)
+    } catch {
+      // keep scanning
+    }
+  }
+
+  const balanced = extractBalancedJsonCandidate(raw)
+  if (balanced) {
+    try {
+      return JSON.parse(balanced)
+    } catch {
+      // fail below with bounded preview
+    }
+  }
+
+  const preview = raw.slice(0, 240).replace(/\s+/g, ' ')
+  throw new Error(`[gateway-parse] stage=${stage} failed to extract JSON object. preview=${preview}`)
+}
+
+function generateNarrativeViaGateway(input: {
+  turn: number
+  side: AgentSide
+  target: string
+  poison: string
+  candidates: string[]
+  bankA: bigint
+  bankB: bigint
+  checkpoint: Checkpoint
+}): string {
+  const sideLabel = input.side === 'A' ? 'PrivateClawn' : 'ClawnJr'
+  const opponentLabel = input.side === 'A' ? 'ClawnJr' : 'PrivateClawn'
+  const opponentNarrative = input.checkpoint.lastNarrativeByAgent[input.side === 'A' ? 'B' : 'A']
+  const prompt = [
+    'Use the clawttack-fighter skill mindset. You are actively playing a live Clawttack battle turn.',
+    'Return ONLY minified JSON: {"narrative":"..."}',
+    `You are ${sideLabel}. Opponent is ${opponentLabel}.`,
+    `Turn number: ${input.turn}`,
+    `Target word (MUST include as standalone word): ${input.target}`,
+    `Poison word (MUST NOT include anywhere): ${input.poison}`,
+    `Seed words (must all appear naturally): ${input.candidates.join(', ')}`,
+    `My bank: ${input.side === 'A' ? input.bankA.toString() : input.bankB.toString()}`,
+    `Opponent bank: ${input.side === 'A' ? input.bankB.toString() : input.bankA.toString()}`,
+    'Narrative constraints:',
+    '- 72 to 240 UTF-8 bytes',
+    '- coherent scene, not word salad',
+    '- no labels, no explanations, no markdown',
+    '- include every seed word naturally',
+    '- do not repeat canned template phrases',
+    opponentNarrative ? `Opponent last move: ${opponentNarrative}` : 'This is effectively your opening context.',
+  ].join('\n')
+
+  const raw = execFileSync('openclaw', [
+    'agent',
+    '--agent', FIGHTER_AGENT,
+    '--message', prompt,
+    '--json',
+  ], { encoding: 'utf8', maxBuffer: 2_000_000 })
+
+  const parsed = extractJsonObject(raw, 'gateway-envelope')
+  const payloadText = parsed?.result?.payloads?.[0]?.text ?? parsed?.payloads?.[0]?.text ?? ''
+  const payload = extractJsonObject(String(payloadText), 'gateway-payload')
+  const narrative = typeof payload?.narrative === 'string' ? payload.narrative.trim() : ''
+  if (!narrative) throw new Error(`gateway fighter returned empty narrative: ${String(payloadText).slice(0, 240)}`)
+  return narrative
+}
+
 async function buildNarrative(input: {
   turn: number
   side: AgentSide
@@ -334,22 +463,11 @@ async function buildNarrative(input: {
   checkpoint: Checkpoint
 }): Promise<TurnConstructionResult> {
   const scripted = constructNarrative(input)
-  if (strategyFor(input.side) !== 'llm') return scripted
+  const strategy = strategyFor(input.side)
+  if (strategy === 'script') return scripted
 
-  try {
-    const narrative = await generateNarrative({
-      targetWord: input.target,
-      poisonWord: input.poison,
-      opponentNarrative: input.checkpoint.lastNarrativeByAgent[input.side === 'A' ? 'B' : 'A'],
-      candidates: input.candidates.map((word, index) => ({ word, index })),
-      turnNumber: input.turn,
-      agentName: input.side === 'A' ? 'PrivateClawn' : 'PrivateClawnJr',
-      isFirstTurn: input.turn <= 1,
-      recentNarratives: [],
-      useJoker: false,
-      myBank: Number(input.side === 'A' ? input.bankA : input.bankB),
-      opponentBank: Number(input.side === 'A' ? input.bankB : input.bankA),
-    })
+  if (strategy === 'gateway' || strategy === 'agent' || strategy === 'llm') {
+    const narrative = generateNarrativeViaGateway(input)
     const validated = validateNarrative({
       target: input.target,
       candidates: input.candidates,
@@ -368,16 +486,14 @@ async function buildNarrative(input: {
       return {
         narrative,
         offsets: validated.offsets,
-        templateFamily: scripted.templateFamily,
-        fallbackStep: scripted.fallbackStep,
+        templateFamily: 'relay',
+        fallbackStep: 0,
       }
     }
-    console.warn(`⚠️ invalid LLM narrative for side=${input.side}; falling back to script`, validated)
-  } catch (err) {
-    console.warn(`⚠️ LLM narrative failed for side=${input.side}; falling back to script:`, err)
+    throw new Error(`gateway narrative invalid for side=${input.side}: ${JSON.stringify(validated)}`)
   }
 
-  return scripted
+  throw new Error(`unknown strategy for side=${input.side}: ${strategy}`)
 }
 
 function guessVopIndexFromNarrative(narrative: string | null): number {
@@ -626,7 +742,17 @@ async function main(): Promise<void> {
     const nccSalt = ethers.hexlify(ethers.randomBytes(32)) as `0x${string}`
     const vopSalt = ethers.hexlify(ethers.randomBytes(32)) as `0x${string}`
 
-    const constructed = constructNarrative({ turn, side, target, poison, candidates, vopIndex })
+    const constructed = await buildNarrative({
+      turn,
+      side,
+      target,
+      poison,
+      candidates,
+      vopIndex,
+      bankA,
+      bankB,
+      checkpoint: cp,
+    })
     const narrative = constructed.narrative
 
     const nccCommitment = encodePackedHash(

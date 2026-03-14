@@ -110,6 +110,61 @@ def stage_from_summary(log_summary: dict[str, Any], checkpoint: dict[str, Any] |
     return 'unknown'
 
 
+def classify_failure(error_line: str | None) -> str:
+    if not error_line:
+        return 'none'
+
+    line = error_line.lower()
+
+    # Interface/ABI decode failures
+    if 'pendingvop' in line:
+        return 'interface-decode/pending-vop'
+    if 'pendingncc' in line:
+        return 'interface-decode/pending-ncc'
+    if 'bad_data' in line or 'could not decode result data' in line or 'decode' in line:
+        return 'interface-decode/generic'
+
+    # Runtime subtypes (keep deterministic + conservative)
+    if any(token in line for token in (
+        'candidate encoding failed',
+        'turn construction',
+        'turn-construction',
+        'narrative validation',
+        'template failed',
+    )):
+        return 'runtime/turn-construction'
+
+    if any(token in line for token in (
+        'estimategas',
+        'estimate gas',
+        'gas estimation',
+    )):
+        return 'runtime/submit-estimation'
+
+    if any(token in line for token in (
+        'submitturn',
+        'send transaction',
+        'transaction failed',
+        'tx failed',
+        'replacement transaction underpriced',
+        'nonce too low',
+    )):
+        return 'runtime/submit-transaction'
+
+    if any(token in line for token in (
+        'checkpoint',
+        'battle state',
+        'state probe',
+        'phase=',
+        'currentturn=',
+        'banka=',
+        'bankb=',
+    )):
+        return 'runtime/checkpoint-or-state'
+
+    return 'runtime/generic'
+
+
 def summarize_checkpoint(checkpoint: dict[str, Any] | None) -> dict[str, Any]:
     results = (checkpoint or {}).get('results', [])
     turns_mined = len(results)
@@ -156,6 +211,9 @@ def build_per_battle(
     cp_summary = summarize_checkpoint(checkpoint)
     stage = stage_from_summary(log_summary, checkpoint)
 
+    failure_detail = log_summary['errorLine']
+    failure_class = classify_failure(failure_detail)
+
     out = {
         'batchKey': batch_key(log_path),
         'logPath': str(log_path.relative_to(ROOT)),
@@ -181,7 +239,8 @@ def build_per_battle(
         'bankBEnd': cp_summary['bankBEnd'],
         'templatesSeen': sorted(set(log_summary['templatesSeen'])),
         'accepted': log_summary['accepted'],
-        'failureClass': log_summary['errorLine'],
+        'failureClass': failure_class,
+        'failureDetail': failure_detail,
     }
     observed = observed_mechanics(out, log_text, log_summary)
     out['observedMechanics'] = observed
@@ -240,7 +299,8 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- deepest stage: `{shared['deepestStageReached']}`",
         f"- accepted: `{shared['accepted']}`",
         f"- turns mined: `{shared['turnsMined']}`",
-        f"- failure/result note: {shared['failureClass']}",
+        f"- failure class: {shared['failureClass']}",
+        f"- failure detail: {per_battle['failureDetail'] or 'none'}",
         '',
         '## intervention-target metrics',
         f"- later-turn reached: `{target['laterTurnReached']}`",

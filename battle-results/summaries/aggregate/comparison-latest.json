@@ -1,11 +1,13 @@
 {
   "hasPrevious": true,
+  "comparable": true,
+  "comparabilityReasons": [],
   "previousControlLabel": "baseline-same-regime",
   "currentControlLabel": "baseline-same-regime",
-  "previousInterventionLabel": "max-turns-intervention",
-  "currentInterventionLabel": "max-turns-intervention",
-  "previousRunConfigFingerprint": "911f2381ec1681b975b3aaee488009d4cc137b6f41a99aae1d5f992b0e77090f",
-  "currentRunConfigFingerprint": "911f2381ec1681b975b3aaee488009d4cc137b6f41a99aae1d5f992b0e77090f",
+  "previousInterventionLabel": "max-turns-120",
+  "currentInterventionLabel": "max-turns-120",
+  "previousRunConfigFingerprint": "f13d0be738401da31a7750fc6557fa675530b90b992fc9e6f902af74bed44962",
+  "currentRunConfigFingerprint": "f13d0be738401da31a7750fc6557fa675530b90b992fc9e6f902af74bed44962",
   "previousBattleCount": 3,
   "currentBattleCount": 3,
   "previousStageHistogram": {
@@ -54,14 +56,14 @@
       "none": 3
     },
     "turnsMinedPerBattle": [
-      20,
-      20,
-      20
+      26,
+      9,
+      27
     ],
     "firstMoversA": [
       false,
-      false,
-      true
+      true,
+      false
     ],
     "identityPairs": [
       "PrivateClawn vs PrivateClawnJr"
@@ -77,14 +79,14 @@
       "none": 3
     },
     "turnsMinedPerBattle": [
-      20,
-      20,
-      20
+      27,
+      26,
+      24
     ],
     "firstMoversA": [
       false,
-      false,
-      true
+      true,
+      false
     ],
     "identityPairs": [
       "PrivateClawn vs PrivateClawnJr"
@@ -138,5 +140,8 @@
       "active-poison",
       "settlement"
     ]
-  }
+  },
+  "previousGuardrailsOk": true,
+  "currentGuardrailsOk": true,
+  "runConfigShapeComparable": true
 }

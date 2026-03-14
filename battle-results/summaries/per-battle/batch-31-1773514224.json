@@ -1,0 +1,69 @@
+{
+  "batchKey": "batch-31-1773514224",
+  "logPath": "battle-results/batch-31-1773514224.log",
+  "checkpointPath": "battle-results/checkpoints/batch-31-1773514224.json",
+  "controlLabel": "baseline-same-regime",
+  "interventionLabel": "max-turns-120",
+  "battleId": null,
+  "battleAddress": null,
+  "identityPair": "PrivateClawn vs PrivateClawnJr",
+  "clawnAgentId": null,
+  "clawnAddress": null,
+  "clawnJrAgentId": null,
+  "clawnJrAddress": null,
+  "firstMoverA": false,
+  "deepestStageReached": "turn-submit",
+  "turnsMined": 1,
+  "txHashes": [
+    "0xd87e387805dbd45f62e78643fe374e378b237ad03e8d713c0962a38448561628"
+  ],
+  "firstTxHash": "0xd87e387805dbd45f62e78643fe374e378b237ad03e8d713c0962a38448561628",
+  "lastTxHash": "0xd87e387805dbd45f62e78643fe374e378b237ad03e8d713c0962a38448561628",
+  "bankAStart": "400",
+  "bankBStart": "400",
+  "bankAEnd": "400",
+  "bankBEnd": "400",
+  "templatesSeen": [
+    "chain"
+  ],
+  "accepted": false,
+  "failureClass": "none",
+  "failureDetail": null,
+  "observedMechanics": [
+    "first-turn-submit"
+  ],
+  "unobservedMechanics": [
+    "multi-turn",
+    "active-poison",
+    "settlement"
+  ],
+  "settled": false,
+  "unsettled": true,
+  "sharedRegimeMetrics": {
+    "identityPair": "PrivateClawn vs PrivateClawnJr",
+    "firstMoverA": false,
+    "deepestStageReached": "turn-submit",
+    "accepted": false,
+    "turnsMined": 1,
+    "failureClass": "none"
+  },
+  "interventionTargetMetrics": {
+    "laterTurnReached": false,
+    "settlementObserved": false,
+    "activePoisonObserved": false,
+    "maxTurnsConfigured": 120,
+    "turnsMined": 1,
+    "turnBudgetUsed": false,
+    "turnBudgetUnused": true,
+    "turnsRemainingToCap": 119,
+    "turnBudgetUsageRatio": 0.008333333333333333,
+    "observedMechanics": [
+      "first-turn-submit"
+    ],
+    "unobservedMechanics": [
+      "multi-turn",
+      "active-poison",
+      "settlement"
+    ]
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "batchKey": "batch-1-1773505297",
+  "logPath": "battle-results/batch-1-1773505297.log",
+  "checkpointPath": "battle-results/checkpoints/batch-1-1773505297.json",
+  "controlLabel": "baseline-same-regime",
+  "interventionLabel": "max-turns-120",
+  "battleId": null,
+  "battleAddress": null,
+  "identityPair": "PrivateClawn vs PrivateClawnJr",
+  "clawnAgentId": null,
+  "clawnAddress": null,
+  "clawnJrAgentId": null,
+  "clawnJrAddress": null,
+  "firstMoverA": false,
+  "deepestStageReached": "multi-turn",
+  "turnsMined": 5,
+  "txHashes": [
+    "0xa9913f1b22685567733d23f94e3242eb9935821877a618f290bcf0ef26ba53a9",
+    "0xc1c09187a1f21259d3968208369c74251ed5fb138435d120afedd985ce8537b9",
+    "0xaef1ba83679128e113debe6bbd0c11aaa4623c93dd9fba9c33f9c2b690222ba5",
+    "0x62ed42d68d0ee383e0c754ba52191901ab29b192dd576f796ee8f883113f2e1e",
+    "0x4fa2cdf3856751c289d5febc7151e2240087578d106ef7245c6884576713ec66"
+  ],
+  "firstTxHash": "0xa9913f1b22685567733d23f94e3242eb9935821877a618f290bcf0ef26ba53a9",
+  "lastTxHash": "0x4fa2cdf3856751c289d5febc7151e2240087578d106ef7245c6884576713ec66",
+  "bankAStart": "400",
+  "bankBStart": "400",
+  "bankAEnd": "349",
+  "bankBEnd": "363",
+  "templatesSeen": [
+    "chain"
+  ],
+  "accepted": false,
+  "failureClass": "error: [Object ...],",
+  "observedMechanics": [
+    "first-turn-submit",
+    "multi-turn"
+  ],
+  "unobservedMechanics": [
+    "active-poison",
+    "settlement"
+  ],
+  "settled": false,
+  "unsettled": true,
+  "sharedRegimeMetrics": {
+    "identityPair": "PrivateClawn vs PrivateClawnJr",
+    "firstMoverA": false,
+    "deepestStageReached": "multi-turn",
+    "accepted": false,
+    "turnsMined": 5,
+    "failureClass": "error: [Object ...],"
+  },
+  "interventionTargetMetrics": {
+    "laterTurnReached": true,
+    "settlementObserved": false,
+    "activePoisonObserved": false,
+    "maxTurnsConfigured": 120,
+    "turnsMined": 5,
+    "turnBudgetUsed": false,
+    "turnBudgetUnused": true,
+    "turnsRemainingToCap": 115,
+    "turnBudgetUsageRatio": 0.041666666666666664,
+    "observedMechanics": [
+      "first-turn-submit",
+      "multi-turn"
+    ],
+    "unobservedMechanics": [
+      "active-poison",
+      "settlement"
+    ]
+  }
+}

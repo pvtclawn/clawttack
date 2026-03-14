@@ -1,0 +1,62 @@
+{
+  "batchKey": "batch-25-1773505412",
+  "logPath": "battle-results/batch-25-1773505412.log",
+  "checkpointPath": null,
+  "controlLabel": "baseline-same-regime",
+  "interventionLabel": "max-turns-120",
+  "battleId": null,
+  "battleAddress": null,
+  "identityPair": "PrivateClawn vs PrivateClawnJr",
+  "clawnAgentId": null,
+  "clawnAddress": null,
+  "clawnJrAgentId": null,
+  "clawnJrAddress": null,
+  "firstMoverA": true,
+  "deepestStageReached": "unknown",
+  "turnsMined": 0,
+  "txHashes": [],
+  "firstTxHash": null,
+  "lastTxHash": null,
+  "bankAStart": null,
+  "bankBStart": null,
+  "bankAEnd": null,
+  "bankBEnd": null,
+  "templatesSeen": [],
+  "accepted": false,
+  "failureClass": "error: could not decode result data (value=\"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\", info={ \"method\": \"pendingVopB\", \"signature\": \"pendingVopB()\" }, code=BAD_DATA, version=6.16.0)",
+  "observedMechanics": [],
+  "unobservedMechanics": [
+    "first-turn-submit",
+    "multi-turn",
+    "active-poison",
+    "settlement"
+  ],
+  "settled": false,
+  "unsettled": true,
+  "sharedRegimeMetrics": {
+    "identityPair": "PrivateClawn vs PrivateClawnJr",
+    "firstMoverA": true,
+    "deepestStageReached": "unknown",
+    "accepted": false,
+    "turnsMined": 0,
+    "failureClass": "error: could not decode result data (value=\"0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\", info={ \"method\": \"pendingVopB\", \"signature\": \"pendingVopB()\" }, code=BAD_DATA, version=6.16.0)"
+  },
+  "interventionTargetMetrics": {
+    "laterTurnReached": false,
+    "settlementObserved": false,
+    "activePoisonObserved": false,
+    "maxTurnsConfigured": 120,
+    "turnsMined": 0,
+    "turnBudgetUsed": false,
+    "turnBudgetUnused": true,
+    "turnsRemainingToCap": 120,
+    "turnBudgetUsageRatio": 0.0,
+    "observedMechanics": [],
+    "unobservedMechanics": [
+      "first-turn-submit",
+      "multi-turn",
+      "active-poison",
+      "settlement"
+    ]
+  }
+}

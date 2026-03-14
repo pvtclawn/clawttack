@@ -1,0 +1,65 @@
+{
+  "batchKey": "batch-27-1773512894",
+  "logPath": "battle-results/batch-27-1773512894.log",
+  "checkpointPath": null,
+  "controlLabel": "baseline-same-regime",
+  "interventionLabel": "max-turns-120",
+  "battleId": null,
+  "battleAddress": null,
+  "identityPair": "PrivateClawn vs PrivateClawnJr",
+  "clawnAgentId": null,
+  "clawnAddress": null,
+  "clawnJrAgentId": null,
+  "clawnJrAddress": null,
+  "firstMoverA": true,
+  "deepestStageReached": "unknown",
+  "turnsMined": 0,
+  "txHashes": [],
+  "firstTxHash": null,
+  "lastTxHash": null,
+  "bankAStart": null,
+  "bankBStart": null,
+  "bankAEnd": null,
+  "bankBEnd": null,
+  "templatesSeen": [
+    "chain"
+  ],
+  "accepted": false,
+  "failureClass": "runtime/generic",
+  "failureDetail": "error: transaction execution reverted (action=\"sendTransaction\", data=null, reason=null, invocation=null, revert=null, transaction={ \"data\": \"\", \"from\": \"0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af\", \"to\": \"0xC23357DF805AA85E69AC5EB7A707BCF14f581E92\" }, receipt={ \"_type\": \"TransactionReceipt\", \"blobGasPrice\": null, \"blobGasUsed\": \"39615\", \"blockHash\": \"0x0000000000000000000000000000000000000000000000000000000000000000\", \"blockNumber\": 38872321, \"contractAddress\": null, \"cumulativeGasUsed\": \"2136830\", \"from\": \"0xeC6cd01f6fdeaEc192b88Eb7B62f5E72D65719Af\", \"gasPrice\": \"6000000\", \"gasUsed\": \"879450\", \"hash\": \"0x41e9036d5a7485f4cdd265c6c3fcbc91f3aa5822fbd99ac9a4044fc0e8b363ae\", \"index\": 13, \"logs\": [  ], \"logsBloom\": \"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\", \"root\": null, \"status\": 0, \"to\": \"0xC23357DF805AA85E69AC5EB7A707BCF14f581E92\" }, code=CALL_EXCEPTION, version=6.16.0)",
+  "observedMechanics": [],
+  "unobservedMechanics": [
+    "first-turn-submit",
+    "multi-turn",
+    "active-poison",
+    "settlement"
+  ],
+  "settled": false,
+  "unsettled": true,
+  "sharedRegimeMetrics": {
+    "identityPair": "PrivateClawn vs PrivateClawnJr",
+    "firstMoverA": true,
+    "deepestStageReached": "unknown",
+    "accepted": false,
+    "turnsMined": 0,
+    "failureClass": "runtime/generic"
+  },
+  "interventionTargetMetrics": {
+    "laterTurnReached": false,
+    "settlementObserved": false,
+    "activePoisonObserved": false,
+    "maxTurnsConfigured": 120,
+    "turnsMined": 0,
+    "turnBudgetUsed": false,
+    "turnBudgetUnused": true,
+    "turnsRemainingToCap": 120,
+    "turnBudgetUsageRatio": 0.0,
+    "observedMechanics": [],
+    "unobservedMechanics": [
+      "first-turn-submit",
+      "multi-turn",
+      "active-poison",
+      "settlement"
+    ]
+  }
+}

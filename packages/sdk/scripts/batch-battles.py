@@ -15,6 +15,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Callable, TypeVar
 
 SDK_DIR = Path(__file__).resolve().parents[1]
 PROJECT_DIR = SDK_DIR.parent.parent
@@ -24,6 +25,7 @@ AGENT_MAP_PATH = CHECKPOINT_DIR / 'agent-map.json'
 CAST = str(Path.home() / '.foundry' / 'bin' / 'cast')
 
 RPC = os.getenv('CLAWTTACK_RPC', 'https://sepolia.base.org')
+RPC_CHAIN_RAW = os.getenv('CLAWTTACK_RPC_CHAIN', '')
 ARENA = os.getenv('CLAWTTACK_ARENA', '0x40E9aC266B8b7F703BeD694592121EF32d796935')
 MAX_BATTLES = int(os.getenv('CLAWTTACK_BATCH_BATTLES', '32'))
 MAX_TURNS = int(os.getenv('CLAWTTACK_MAX_TURNS', '80'))
@@ -39,6 +41,12 @@ OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', 'https://openrouter.ai/api/v1')
 OPENAI_MODEL = os.getenv('LLM_MODEL', 'google/gemini-2.5-flash-lite')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 AGENT_REGISTERED_TOPIC0 = '0xba9d3be5149ecab5ff8e380633795e5d9153c2f0e1ec952dd1de4611d661c9f5'
+RPC_RETRIES_PER_ENDPOINT = int(os.getenv('CLAWTTACK_RPC_RETRIES_PER_ENDPOINT', '2'))
+RPC_RETRY_BACKOFF_SEC = float(os.getenv('CLAWTTACK_RPC_RETRY_BACKOFF_SEC', '2.0'))
+
+RPC_ENDPOINTS: list[str] = []
+ACTIVE_RPC_INDEX = 0
+T = TypeVar('T')
 
 
 def fail(msg: str) -> None:
@@ -51,6 +59,57 @@ def run(cmd: list[str], *, timeout: int = 60, env: dict[str, str] | None = None,
     if check and proc.returncode != 0:
         raise RuntimeError((proc.stderr or proc.stdout or 'command failed').strip())
     return proc
+
+
+def get_active_rpc() -> str:
+    if not RPC_ENDPOINTS:
+        return RPC
+    return RPC_ENDPOINTS[ACTIVE_RPC_INDEX]
+
+
+def is_retryable_rpc_error(error_text: str) -> bool:
+    lower = error_text.lower()
+    return any(token in lower for token in [
+        'temporary failure in name resolution',
+        'name or service not known',
+        'failed to lookup address information',
+        'could not resolve host',
+        'connection reset',
+        'connection refused',
+        'timed out',
+        'timeout',
+        '503',
+        '429',
+        'eof',
+    ])
+
+
+def with_rpc_failover(stage: str, fn: Callable[[], T]) -> T:
+    global ACTIVE_RPC_INDEX
+    attempts_per_endpoint = max(1, RPC_RETRIES_PER_ENDPOINT)
+    if not RPC_ENDPOINTS:
+        return fn()
+
+    last_error: Exception | None = None
+    for endpoint_index, endpoint in enumerate(RPC_ENDPOINTS):
+        ACTIVE_RPC_INDEX = endpoint_index
+        for attempt in range(1, attempts_per_endpoint + 1):
+            print(f'  🔌 rpc[{stage}] endpoint={endpoint} attempt={attempt}/{attempts_per_endpoint}')
+            try:
+                return fn()
+            except Exception as exc:
+                last_error = exc
+                error_text = str(exc)
+                if not is_retryable_rpc_error(error_text):
+                    raise
+                if attempt < attempts_per_endpoint:
+                    time.sleep(RPC_RETRY_BACKOFF_SEC * attempt)
+                    continue
+                print(f'  ⚠️ rpc[{stage}] endpoint failed after retries: {endpoint}')
+
+    if last_error is None:
+        raise RuntimeError(f'rpc[{stage}] failed without an explicit error')
+    raise RuntimeError(f'rpc[{stage}] exhausted all endpoints: {last_error}')
 
 
 def extract_address(text: str) -> str | None:
@@ -89,40 +148,51 @@ def parse_uint(text: str) -> int:
 
 
 def cast_call(to: str, sig: str, *args: str) -> str:
-    cmd = [CAST, 'call', to, sig, *args, '--rpc-url', RPC]
-    return run(cmd).stdout.strip()
+    def _op() -> str:
+        cmd = [CAST, 'call', to, sig, *args, '--rpc-url', get_active_rpc()]
+        return run(cmd).stdout.strip()
+
+    return with_rpc_failover('cast.call', _op)
 
 
 def cast_receipt(tx_hash: str) -> str:
-    cmd = [CAST, 'receipt', tx_hash, '--rpc-url', RPC]
-    return run(cmd, timeout=120).stdout.strip()
+    def _op() -> str:
+        cmd = [CAST, 'receipt', tx_hash, '--rpc-url', get_active_rpc()]
+        return run(cmd, timeout=120).stdout.strip()
+
+    return with_rpc_failover('cast.receipt', _op)
 
 
 def cast_send_account(account: str, to: str, sig: str, *args: str, value_wei: int = 0, timeout: int = 120, retries: int = 3) -> str:
-    last_output = ''
-    for attempt in range(1, retries + 1):
-        cmd = [
-            CAST, 'send', to, sig, *args,
-            '--rpc-url', RPC,
-            '--account', account,
-            '--password', WALLET_PASSWORD,
-            '--gas-limit', '3000000',
-        ]
-        if value_wei > 0:
-            cmd += ['--value', str(value_wei)]
-        proc = run(cmd, timeout=timeout, check=False)
-        output = (proc.stdout or '') + (proc.stderr or '')
-        last_output = output.strip()
-        if proc.returncode == 0 and 'status               1' in output:
-            return output
+    def _send_with_endpoint() -> str:
+        last_output = ''
+        for attempt in range(1, retries + 1):
+            cmd = [
+                CAST, 'send', to, sig, *args,
+                '--rpc-url', get_active_rpc(),
+                '--account', account,
+                '--password', WALLET_PASSWORD,
+                '--gas-limit', '3000000',
+            ]
+            if value_wei > 0:
+                cmd += ['--value', str(value_wei)]
+            proc = run(cmd, timeout=timeout, check=False)
+            output = (proc.stdout or '') + (proc.stderr or '')
+            last_output = output.strip()
+            if proc.returncode == 0 and 'status               1' in output:
+                return output
 
-        retryable = 'replacement transaction underpriced' in output.lower() or 'nonce' in output.lower()
-        if retryable and attempt < retries:
-            time.sleep(5 * attempt)
-            continue
+            retryable_nonce = 'replacement transaction underpriced' in output.lower() or 'nonce' in output.lower()
+            retryable_rpc = is_retryable_rpc_error(output)
+            retryable = retryable_nonce or retryable_rpc
+            if retryable and attempt < retries:
+                time.sleep(5 * attempt)
+                continue
+            raise RuntimeError(last_output)
+
         raise RuntimeError(last_output)
 
-    raise RuntimeError(last_output)
+    return with_rpc_failover('cast.send', _send_with_endpoint)
 
 
 def get_account_address(account: str) -> str:
@@ -325,6 +395,24 @@ def accept_battle(battle_addr: str, acceptor_id: int) -> None:
             time.sleep(4 * attempt)
 
 
+def configure_rpc_endpoints() -> None:
+    global RPC_ENDPOINTS, ACTIVE_RPC_INDEX
+
+    configured = [rpc.strip() for rpc in RPC_CHAIN_RAW.split(',') if rpc.strip()]
+    default_fallbacks = [
+        'https://sepolia.base.org',
+        'https://base-sepolia-rpc.publicnode.com',
+    ]
+
+    chain: list[str] = []
+    for rpc in [RPC, *configured, *default_fallbacks]:
+        if rpc and rpc not in chain:
+            chain.append(rpc)
+
+    RPC_ENDPOINTS = chain
+    ACTIVE_RPC_INDEX = 0
+
+
 def run_battle_loop(battle_addr: str, opponent_key: str, seed: int, battle_id: int) -> int:
     log_path = RESULTS_DIR / f'batch-{battle_id}-{seed}.log'
     checkpoint_path = CHECKPOINT_DIR / f'batch-{battle_id}-{seed}.json'
@@ -333,7 +421,7 @@ def run_battle_loop(battle_addr: str, opponent_key: str, seed: int, battle_id: i
     env.update({
         'CLAWTTACK_BATTLE': battle_addr,
         'CLAWTTACK_OPPONENT_PRIVATE_KEY': opponent_key,
-        'CLAWTTACK_RPC': RPC,
+        'CLAWTTACK_RPC': get_active_rpc(),
         'CLAWTTACK_SEED': str(seed),
         'CLAWTTACK_MAX_TURNS': str(MAX_TURNS),
         'CLAWTTACK_CHECKPOINT_PATH': str(checkpoint_path),
@@ -376,6 +464,7 @@ if __name__ == '__main__':
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+    configure_rpc_endpoints()
 
     try:
         clawn_addr = get_account_address('clawn')
@@ -389,7 +478,7 @@ if __name__ == '__main__':
 
     print('🦞 Clawttack autonomous batch runner')
     print(f'  Arena: {ARENA}')
-    print(f'  RPC: {RPC}')
+    print(f'  RPC chain: {" | ".join(RPC_ENDPOINTS)}')
     print(f'  Clawn: id={clawn_id}, addr={clawn_addr}')
     print(f'  ClawnJr: id={jr_id}, addr={jr_addr}')
     print(f'  Strategy: A={STRATEGY_A}, B={STRATEGY_B}')
