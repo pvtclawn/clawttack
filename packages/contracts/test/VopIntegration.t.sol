@@ -40,9 +40,10 @@ contract VopHarness {
         uint256 battleId,
         uint32 turnNumber,
         bytes32 salt,
-        uint8 vopIndex
+        uint8 vopIndex,
+        bytes32 instanceCommit
     ) external pure returns (bytes32) {
-        return NccVerifier.computeVopCommitment(battleId, turnNumber, salt, vopIndex);
+        return NccVerifier.computeVopCommitment(battleId, turnNumber, salt, vopIndex, instanceCommit);
     }
 }
 
@@ -163,36 +164,43 @@ contract VopIntegrationTest is Test {
 
     /// Domain-separated VOP commitment is deterministic
     function test_vopCommitment_deterministic() public {
-        bytes32 c1 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0);
-        bytes32 c2 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0);
+        bytes32 c1 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0, bytes32(0));
+        bytes32 c2 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0, bytes32(0));
         assertEq(c1, c2, "same inputs = same commitment");
     }
 
     /// Different battleId → different commitment
     function test_vopCommitment_battleIdBound() public {
-        bytes32 c1 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0);
-        bytes32 c2 = harness.computeVopCommitment(2, 0, bytes32(uint256(42)), 0);
+        bytes32 c1 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0, bytes32(0));
+        bytes32 c2 = harness.computeVopCommitment(2, 0, bytes32(uint256(42)), 0, bytes32(0));
         assertTrue(c1 != c2, "different battleId = different commitment");
     }
 
     /// Different turn → different commitment
     function test_vopCommitment_turnBound() public {
-        bytes32 c1 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0);
-        bytes32 c2 = harness.computeVopCommitment(1, 2, bytes32(uint256(42)), 0);
+        bytes32 c1 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0, bytes32(0));
+        bytes32 c2 = harness.computeVopCommitment(1, 2, bytes32(uint256(42)), 0, bytes32(0));
         assertTrue(c1 != c2, "different turn = different commitment");
     }
 
     /// Different index → different commitment
     function test_vopCommitment_indexBound() public {
-        bytes32 c1 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0);
-        bytes32 c2 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 1);
+        bytes32 c1 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0, bytes32(0));
+        bytes32 c2 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 1, bytes32(0));
         assertTrue(c1 != c2, "different index = different commitment");
     }
 
     /// Different salt → different commitment
     function test_vopCommitment_saltBound() public {
-        bytes32 c1 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0);
-        bytes32 c2 = harness.computeVopCommitment(1, 0, bytes32(uint256(99)), 0);
+        bytes32 c1 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0, bytes32(0));
+        bytes32 c2 = harness.computeVopCommitment(1, 0, bytes32(uint256(99)), 0, bytes32(0));
         assertTrue(c1 != c2, "different salt = different commitment");
+    }
+
+    /// Different instanceCommit → different commitment
+    function test_vopCommitment_instanceBound() public {
+        bytes32 c1 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0, bytes32(0));
+        bytes32 c2 = harness.computeVopCommitment(1, 0, bytes32(uint256(42)), 0, keccak256("instance_params"));
+        assertTrue(c1 != c2, "different instanceCommit = different commitment");
     }
 }

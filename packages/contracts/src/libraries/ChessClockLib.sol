@@ -87,8 +87,8 @@ library ChessClockLib {
         uint256 elapsed = block.number - self.lastTurnBlock;
         if (elapsed < MIN_TURN_INTERVAL) revert TurnTooFast();
 
-        // Cap turn time
-        uint256 turnTime = elapsed > MAX_TURN_TIMEOUT ? MAX_TURN_TIMEOUT : elapsed;
+        // Turn time = actual elapsed blocks (no cap — idle = drain)
+        uint256 turnTime = elapsed;
 
         uint256 bank = isAgentA ? self.bankA : self.bankB;
 

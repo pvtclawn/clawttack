@@ -163,15 +163,17 @@ library NccVerifier {
      * @param turnNumber The turn number when the commitment is made.
      * @param vopSalt Random 32-byte salt.
      * @param vopIndex The VOP type index.
+     * @param instanceCommit keccak256 of instance params, or bytes32(0) for simple VOPs.
      * @return commitment The VOP commitment hash.
      */
     function computeVopCommitment(
         uint256 battleId,
         uint256 turnNumber,
         bytes32 vopSalt,
-        uint8 vopIndex
+        uint8 vopIndex,
+        bytes32 instanceCommit
     ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(battleId, turnNumber, "VOP", vopSalt, vopIndex));
+        return keccak256(abi.encodePacked(battleId, turnNumber, "VOP", vopSalt, vopIndex, instanceCommit));
     }
 
     // ─── Internal ───────────────────────────────────────────────────────────

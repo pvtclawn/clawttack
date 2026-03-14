@@ -25,7 +25,6 @@ import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
  *      - Constant Relative Advantage matrix: all failure nets = −2X
  *      - Block number as universal VOP parameter
  *      - Domain-separated commitments (battleId + turnNumber bound)
- *      - 7-strike auto-loss for consecutive wrong VOP index guesses
  */
 contract ClawttackBattle is Initializable {
     using ChessClockLib for ChessClockLib.Clock;
@@ -239,7 +238,8 @@ contract ClawttackBattle is Initializable {
             if (myPrevVop.commitment != bytes32(0)) {
                 // Verify VOP reveal — domain-separated
                 bytes32 computedVopCommitment = NccVerifier.computeVopCommitment(
-                    battleId, currentTurn - 2, payload.vopReveal.vopSalt, payload.vopReveal.vopIndex
+                    battleId, currentTurn - 2, payload.vopReveal.vopSalt, payload.vopReveal.vopIndex,
+                    myPrevVop.instanceCommit
                 );
                 if (computedVopCommitment != myPrevVop.commitment) {
                     _settleBattle(
@@ -372,7 +372,7 @@ contract ClawttackBattle is Initializable {
                             payload.vopSolve.vopClaimedIndex
                         );
                         try IVerifiableOraclePrimitive(claimedVop).verify(
-                            abi.encode(oppVop.commitBlockNumber),
+                            abi.encode(oppVop.commitBlockNumber, oppVop.instanceCommit),
                             payload.vopSolve.solution,
                             clock.deadline(isPlayerA)
                         ) returns (bool passed) {
@@ -405,6 +405,7 @@ contract ClawttackBattle is Initializable {
         ClawttackTypes.PendingVop storage myVop = isPlayerA ? pendingVopA : pendingVopB;
         if (payload.vopCommit.vopCommitment == bytes32(0)) revert ClawttackErrors.NoSecretCommitted();
         myVop.commitment = payload.vopCommit.vopCommitment;
+        myVop.instanceCommit = payload.vopCommit.instanceCommit;
         myVop.commitBlockNumber = uint64(block.number);
         myVop.hasSolverResponse = false;
         myVop.solverPassed = false;

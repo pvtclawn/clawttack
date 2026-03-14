@@ -14,7 +14,7 @@ import {IVerifiableOraclePrimitive} from "../interfaces/IVerifiableOraclePrimiti
 contract HashPreimageVOP is IVerifiableOraclePrimitive {
     function verify(
         bytes calldata params,
-        uint256 solution,
+        bytes calldata solution,
         uint256 /* referenceBlock */
     )
         external
@@ -22,6 +22,7 @@ contract HashPreimageVOP is IVerifiableOraclePrimitive {
         returns (bool)
     {
         uint64 blockNumber = abi.decode(params, (uint64));
+        uint256 sol = abi.decode(solution, (uint256));
 
         // Use blockhash as the puzzle seed (only available for last 256 blocks)
         bytes32 blockSeed = blockhash(blockNumber);
@@ -33,7 +34,7 @@ contract HashPreimageVOP is IVerifiableOraclePrimitive {
         // Difficulty: 8 to 11 leading zero bits
         uint8 leadingZeroBits = uint8(8 + (blockNumber % 4));
 
-        bytes32 hash = keccak256(abi.encode(blockSeed, solution));
+        bytes32 hash = keccak256(abi.encode(blockSeed, sol));
 
         if (leadingZeroBits >= 256) return false;
         return (uint256(hash) >> (256 - leadingZeroBits)) == 0;
