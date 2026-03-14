@@ -16,6 +16,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { dirname } from 'node:path'
 import { ethers } from 'ethers'
+import { extractJsonObject } from './gateway-json'
 
 const RPC = process.env.CLAWTTACK_RPC?.trim() || 'https://sepolia.base.org'
 const BATTLE_ADDRESS = mustEnv('CLAWTTACK_BATTLE')
@@ -710,93 +711,6 @@ async function main(): Promise<void> {
 
     console.log(`   [fetch-pending-ncc] side=${side}`)
     const oppNcc = side === 'A' ? await battleRead.pendingNccB() : await battleRead.pendingNccA()
-    const nccGuess = String(oppNcc.commitment) === ethers.ZeroHash
-      ? 0
-      : ((turn + (side === 'A' ? 3 : 1)) % 4)
-
-    const prev = cp.prevByAgent[side]
-    const nccReveal = prev && turn >= 2
-      ? { salt: prev.nccSalt, intendedIdx: prev.nccIdx }
-      : { salt: ethers.ZeroHash, intendedIdx: 0 }
-    const vopReveal = prev && turn >= 2
-      ? { vopSalt: prev.vopSalt, vopIndex: prev.vopIdx }
-      : { vopSalt: ethers.ZeroHash, vopIndex: 0 }
-
-    const oppVopSide: AgentSide = side === 'A' ? 'B' : 'A'
-    console.log(`   [fetch-pending-vop] side=${oppVopSide}`)
-    const oppVop = await fetchPendingVop(provider, BATTLE_ADDRESS, oppVopSide)
-    console.log(`   [decode-pending-vop] side=${oppVopSide} commitment=${oppVop.commitment} commitBlock=${oppVop.commitBlockNumber.toString()}`)
-    let vopClaimedIndex = 0
-    let vopSolution = ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [0n]) as `0x${string}`
-    let vopSolved = false
-
-    if (String(oppVop.commitment) !== ethers.ZeroHash) {
-      vopClaimedIndex = guessVopIndexFromNarrative(cp.lastNarrativeByAgent[other])
-      const commitBlock = Number(oppVop.commitBlockNumber)
-      const solved = await solveVop(provider, vopClaimedIndex, commitBlock)
-      vopSolution = solved.solution
-      vopSolved = solved.solved
-    }
-
-    const customPoison = side === 'A' ? 'ember' : 'cipher'
-
-    const payload = {
-      narrative,
-      customPoisonWord: customPoison,
-      nccAttack: {
-        candidateWordIndices: wordIndices,
-        candidateOffsets: offsets,
-        nccCommitment,
-      },
-      nccDefense: { guessIdx: nccGuess },
-      nccReveal,
-      vopCommit: { vopCommitment, instanceCommit },
-      vopSolve: { vopClaimedIndex, solution: vopSolution },
-      vopReveal,
-    }
-
-    console.log(
-      `\n🎮 turn=${turn} side=${side} bankA=${bankA} bankB=${bankB} target=${target} poison=${poison} template=${constructed.templateFamily} fallback=${constructed.fallbackStep}`,
-    )
-    console.log('   [submit-turn] payload assembled, estimating/sending submitTurn')
-    const rc = await submitWithRetry(battle, payload)
-
-    cp.prevByAgent[side] = {
-      nccSalt,
-      nccIdx: intendedIdx,
-      vopSalt,
-      vopIdx: vopIndex,
-      turn,
-    }
-    cp.lastNarrativeByAgent[side] = narrative
-    cp.lastTurn = turn
-    cp.lastSubmitBlock = Number(rc.blockNumber)
-    cp.results.push({
-      turn,
-      agent: side,
-      txHash: rc.hash,
-      gasUsed: rc.gasUsed.toString(),
-      blockNumber: Number(rc.blockNumber),
-      bankA: bankA.toString(),
-      bankB: bankB.toString(),
-      vopClaimedIndex,
-      vopCommittedIndex: vopIndex,
-      vopSolved,
-      nccGuess,
-    })
-    saveCheckpoint(cp)
-
-    await new Promise((r) => setTimeout(r, 3000))
-  }
-
-  console.log(`✅ v05 loop complete. saved checkpoint=${CHECKPOINT_PATH}`)
-}
-
-main().catch((err) => {
-  console.error('❌ v05 battle loop failed:', err)
-  process.exit(1)
-})
-NccB() : await battleRead.pendingNccA()
     const nccGuess = String(oppNcc.commitment) === ethers.ZeroHash
       ? 0
       : ((turn + (side === 'A' ? 3 : 1)) % 4)
