@@ -134,16 +134,29 @@ function byteOffset(haystack: string, needle: string): number {
   return new TextEncoder().encode(haystack.slice(0, idx)).length
 }
 
+const NARRATIVE_MAX_BYTES = 240
+const NARRATIVE_MIN_BYTES = 72
+
+function byteLength(text: string): number {
+  return new TextEncoder().encode(text).length
+}
+
 function pickCandidates(words: string[], target: string, poison: string, seed: number): string[] {
   const safe = words.filter((w) => w !== target && w !== poison && w.length >= 4)
   if (safe.length < 16) throw new Error('Not enough safe BIP39 words')
   const base = Math.abs(seed) % safe.length
-  return [
-    safe[(base + 7) % safe.length],
-    safe[(base + 53) % safe.length],
-    safe[(base + 109) % safe.length],
-    safe[(base + 167) % safe.length],
-  ]
+  const chosen: string[] = []
+  const offsets = [7, 53, 109, 167, 223, 281, 337, 389]
+  for (const step of offsets) {
+    const candidate = safe[(base + step) % safe.length]
+    if (!chosen.includes(candidate)) {
+      chosen.push(candidate)
+    }
+    if (chosen.length === 4) {
+      return chosen
+    }
+  }
+  throw new Error('Unable to pick 4 unique candidates')
 }
 
 function chooseVopIndex(turn: number): number {
@@ -151,34 +164,142 @@ function chooseVopIndex(turn: number): number {
   return 0
 }
 
-function buildNarrative(input: {
+type NarrativeTemplateFamily = 'chain' | 'ledger' | 'relay'
+
+type TurnConstructionDiagnostics = {
+  target: string
+  candidates: string[]
+  poison: string
+  narrative: string
+  byteLength: number
+  offsets: number[]
+  missingCandidates: string[]
+  targetPresent: boolean
+  poisonPresent: boolean
+  templateFamily: NarrativeTemplateFamily
+  fallbackStep: number
+}
+
+type TurnConstructionResult = {
+  narrative: string
+  offsets: number[]
+  templateFamily: NarrativeTemplateFamily
+  fallbackStep: number
+}
+
+function validateNarrative(input: {
+  target: string
+  candidates: string[]
+  poison: string
+  narrative: string
+  templateFamily: NarrativeTemplateFamily
+  fallbackStep: number
+}): TurnConstructionDiagnostics {
+  const offsets = input.candidates.map((w) => byteOffset(input.narrative, w))
+  return {
+    target: input.target,
+    candidates: input.candidates,
+    poison: input.poison,
+    narrative: input.narrative,
+    byteLength: byteLength(input.narrative),
+    offsets,
+    missingCandidates: input.candidates.filter((_, idx) => offsets[idx] < 0),
+    targetPresent: byteOffset(input.narrative, input.target) >= 0,
+    poisonPresent: byteOffset(input.narrative, input.poison) >= 0,
+    templateFamily: input.templateFamily,
+    fallbackStep: input.fallbackStep,
+  }
+}
+
+function buildNarrativeFromTemplate(input: {
+  turn: number
+  side: AgentSide
+  target: string
+  candidates: string[]
+  vopIndex: number
+  templateFamily: NarrativeTemplateFamily
+  fallbackStep: number
+}): string {
+  const sideLabel = input.side === 'A' ? 'Challenger' : 'Defender'
+  const hint = input.vopIndex === 0 ? 'hashpulse' : 'metasync'
+  const [c1, c2, c3, c4] = input.candidates
+
+  const variants: Record<NarrativeTemplateFamily, string> = {
+    chain: `${sideLabel} turn ${input.turn}: ${input.target} threads ${c1}, ${c2}, ${c3}, ${c4}. ${hint} route stable now.`,
+    ledger: `${sideLabel} ${input.turn}: ${input.target} maps ${c1} -> ${c2} -> ${c3} -> ${c4}. ${hint} confirms clean ledger.`,
+    relay: `${input.target} links ${c1}, ${c2}, ${c3}, ${c4}. ${sideLabel} turn ${input.turn}; ${hint} relay holds firm.`,
+  }
+
+  let text = variants[input.templateFamily]
+  const fillerOptions = [
+    '',
+    ' Sequence remains coherent.',
+    ' Timing stays aligned.',
+    ' Route pressure is contained.',
+  ]
+
+  if (input.fallbackStep < fillerOptions.length) {
+    text += fillerOptions[input.fallbackStep]
+  }
+
+  if (byteLength(text) < NARRATIVE_MIN_BYTES) {
+    text += ' Signal path remains stable.'
+  }
+
+  return text
+}
+
+function constructNarrative(input: {
   turn: number
   side: AgentSide
   target: string
   poison: string
   candidates: string[]
   vopIndex: number
-}): string {
-  const hint = input.vopIndex === 0 ? 'hashpulse' : 'metasync'
-  let text = `${input.side === 'A' ? 'Challenger' : 'Defender'} turn ${input.turn}: `
-    + `target ${input.target} threads through ${input.candidates[0]}, ${input.candidates[1]}, ${input.candidates[2]}, ${input.candidates[3]}. `
-    + `Signal ${hint} confirms route integrity.`
+}): TurnConstructionResult {
+  const templateFamilies: NarrativeTemplateFamily[] = ['chain', 'ledger', 'relay']
+  const diagnostics: TurnConstructionDiagnostics[] = []
 
-  if (text.toLowerCase().includes(input.poison.toLowerCase())) {
-    text = text.replaceAll(new RegExp(input.poison, 'ig'), 'shieldword')
+  for (const templateFamily of templateFamilies) {
+    for (let fallbackStep = 0; fallbackStep < 3; fallbackStep++) {
+      const narrative = buildNarrativeFromTemplate({
+        turn: input.turn,
+        side: input.side,
+        target: input.target,
+        candidates: input.candidates,
+        vopIndex: input.vopIndex,
+        templateFamily,
+        fallbackStep,
+      })
+      const result = validateNarrative({
+        target: input.target,
+        candidates: input.candidates,
+        poison: input.poison,
+        narrative,
+        templateFamily,
+        fallbackStep,
+      })
+      diagnostics.push(result)
+
+      if (
+        result.byteLength <= NARRATIVE_MAX_BYTES
+        && result.byteLength >= NARRATIVE_MIN_BYTES
+        && result.targetPresent
+        && !result.poisonPresent
+        && result.missingCandidates.length === 0
+      ) {
+        return {
+          narrative,
+          offsets: result.offsets,
+          templateFamily,
+          fallbackStep,
+        }
+      }
+    }
   }
 
-  if (!text.toLowerCase().includes(input.target.toLowerCase())) {
-    text = `${input.target} ${text}`
-  }
-
-  while (new TextEncoder().encode(text).length > 240) {
-    text = text.slice(0, -12)
-  }
-  while (new TextEncoder().encode(text).length < 72) {
-    text += ' hold line'
-  }
-  return text
+  console.error('❌ turn construction diagnostics:', JSON.stringify(diagnostics, null, 2))
+  throw new Error('turn construction failed after deterministic template attempts')
 }
 
 function guessVopIndexFromNarrative(narrative: string | null): number {
@@ -307,7 +428,8 @@ async function main(): Promise<void> {
     const nccSalt = ethers.hexlify(ethers.randomBytes(32)) as `0x${string}`
     const vopSalt = ethers.hexlify(ethers.randomBytes(32)) as `0x${string}`
 
-    const narrative = buildNarrative({ turn, side, target, poison, candidates, vopIndex })
+    const constructed = constructNarrative({ turn, side, target, poison, candidates, vopIndex })
+    const narrative = constructed.narrative
 
     const nccCommitment = encodePackedHash(
       ['uint256', 'uint256', 'string', 'bytes32', 'uint8'],
@@ -319,9 +441,9 @@ async function main(): Promise<void> {
     )
 
     const wordIndices = candidates.map((w) => words.indexOf(w))
-    const offsets = candidates.map((w) => byteOffset(narrative, w))
-    if (wordIndices.some((v) => v < 0) || offsets.some((v) => v < 0)) {
-      throw new Error('candidate encoding failed')
+    const offsets = constructed.offsets
+    if (wordIndices.some((v) => v < 0)) {
+      throw new Error(`candidate index encoding failed for ${JSON.stringify(candidates)}`)
     }
 
     const oppNcc = side === 'A' ? await battleRead.pendingNccB() : await battleRead.pendingNccA()
@@ -366,7 +488,9 @@ async function main(): Promise<void> {
       vopReveal,
     }
 
-    console.log(`\n🎮 turn=${turn} side=${side} bankA=${bankA} bankB=${bankB} target=${target} poison=${poison}`)
+    console.log(
+      `\n🎮 turn=${turn} side=${side} bankA=${bankA} bankB=${bankB} target=${target} poison=${poison} template=${constructed.templateFamily} fallback=${constructed.fallbackStep}`,
+    )
     const rc = await submitWithRetry(battle, payload)
 
     cp.prevByAgent[side] = {
