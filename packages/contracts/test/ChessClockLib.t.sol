@@ -260,109 +260,6 @@ contract ChessClockLibTest is Test {
 
         assertLe(bank, 400, "Refund must never push bank above INITIAL_BANK");
     }
-
-    // ─── Brier Scoring Tests ────────────────────────────────────────────────
-
-    /// @notice Brier penalty drains OPPONENT's bank when their solve rate is below threshold
-    function test_cloze_dual_penalty_drains_attacker() public {
-        // Turn 0 (A, first turn)
-        vm.roll(100);
-        harness.tick(true, true, true);
-
-        // Turn 1 (B)
-        vm.roll(120);
-        harness.tick(false, true, false);
-
-        // Snapshot B's bank before cloze dual-penalty tick
-        (,uint128 bankBBefore,) = harness.getClock();
-
-        // A fails NCC (nccCorrect=false) with cloze enabled → attacker (B) also eats penalty
-        vm.roll(140);
-        harness.tickWithCloze(true, false, false, true);
-
-        (,uint128 bankBAfter,) = harness.getClock();
-        assertLt(bankBAfter, bankBBefore, "Cloze dual penalty should drain attacker bank when defender fails");
-    }
-
-    /// @notice Cloze dual-penalty does NOT apply when defender succeeds
-    function test_cloze_no_attacker_penalty_on_success() public {
-        vm.roll(100);
-        harness.tick(true, true, true);
-
-        vm.roll(120);
-        harness.tick(false, true, false);
-
-        (,uint128 bankBBefore,) = harness.getClock();
-
-        // A succeeds NCC (nccCorrect=true) with cloze enabled → no attacker penalty
-        vm.roll(140);
-        harness.tickWithCloze(true, true, false, true);
-
-        (,uint128 bankBAfter,) = harness.getClock();
-        assertEq(bankBAfter, bankBBefore, "No attacker penalty when defender succeeds");
-    }
-
-    /// @notice Cloze dual-penalty does NOT apply when clozeEnabled=false (backward compat)
-    function test_cloze_disabled_no_attacker_penalty() public {
-        vm.roll(100);
-        harness.tick(true, true, true);
-
-        vm.roll(120);
-        harness.tick(false, true, false);
-
-        (,uint128 bankBBefore,) = harness.getClock();
-
-        // A fails NCC but cloze disabled → no attacker penalty
-        vm.roll(140);
-        harness.tickWithCloze(true, false, false, false);
-
-        (,uint128 bankBAfter,) = harness.getClock();
-        assertEq(bankBAfter, bankBBefore, "No attacker penalty when cloze disabled");
-    }
-
-    /// @notice Cloze dual-penalty does NOT apply on first turn
-    function test_cloze_no_penalty_first_turn() public {
-        vm.roll(100);
-        harness.tick(true, true, true);
-
-        vm.roll(120);
-        harness.tick(false, true, false);
-
-        (,uint128 bankBBefore,) = harness.getClock();
-
-        // First turn with cloze enabled → no penalty (no prior NCC to fail)
-        vm.roll(140);
-        harness.tickWithCloze(true, false, true, true);
-
-        (,uint128 bankBAfter,) = harness.getClock();
-        assertEq(bankBAfter, bankBBefore, "No attacker penalty on first turn");
-    }
-
-    /// @notice Cloze dual-penalty floors opponent bank at zero (no underflow)
-    function test_cloze_penalty_floors_at_zero() public {
-        vm.roll(100);
-        harness.tick(true, true, true);
-
-        // Drain B's bank to near zero via many failed NCC ticks
-        uint256 bn = 120;
-        for (uint256 i = 0; i < 50; i++) {
-            bn += 10;
-            vm.roll(bn);
-            (uint128 bank, bool depleted) = harness.tick(false, false, false);
-            if (depleted) break;
-            if (bank <= 10) break;
-        }
-
-        (,uint128 bankBLow,) = harness.getClock();
-        if (bankBLow > 0 && bankBLow <= 10) {
-            bn += 10;
-            vm.roll(bn);
-            harness.tickWithCloze(true, false, false, true);
-
-            (,uint128 bankBFinal,) = harness.getClock();
-            assertEq(bankBFinal, 0, "Bank should floor at 0, not underflow");
-        }
-    }
 }
 
 /**
@@ -381,14 +278,7 @@ contract ChessClockLibHarness {
         return clock.tick(isAgentA, nccCorrect, isFirstTurn);
     }
 
-    function tickWithCloze(
-        bool isAgentA,
-        bool nccCorrect,
-        bool isFirstTurn,
-        bool clozeEnabled
-    ) external returns (uint128, bool) {
-        return clock.tickWithCloze(isAgentA, nccCorrect, isFirstTurn, clozeEnabled);
-    }
+
 
     function canTimeout(bool isAgentA) external view returns (bool) {
         return clock.canTimeout(isAgentA);

@@ -87,21 +87,52 @@ library NccVerifier {
     }
 
     /**
+     * @notice Non-reverting wrapper for NCC reveal verification.
+     * @dev Returns two separate booleans:
+     *      - isValidReveal: true if the cryptographic commitment matches
+     *      - opponentWasCorrect: true if the defender's guess matched the intended answer
+     *      CRITICAL: These must NOT be conflated. A valid reveal with a wrong guess is
+     *      normal gameplay. Only an invalid reveal (commitment mismatch) is a forfeit.
+     */
+    function verifyRevealSafe(
+        ClawttackTypes.NccReveal memory reveal,
+        bytes32 storedCommitment,
+        uint8 defenderGuessIdx,
+        uint256 battleId,
+        uint256 commitTurnNumber
+    ) internal pure returns (bool isValidReveal, bool opponentWasCorrect) {
+        if (reveal.intendedIdx > 3) return (false, false);
+
+        bytes32 computedCommitment = keccak256(
+            abi.encodePacked(battleId, commitTurnNumber, "NCC", reveal.salt, reveal.intendedIdx)
+        );
+
+        if (computedCommitment != storedCommitment) return (false, false);
+
+        return (true, defenderGuessIdx == reveal.intendedIdx);
+    }
+
+    /**
      * @notice Verifies the attacker's NCC reveal matches their previous commitment.
-     * @dev Called on the attacker's next turn. Checks keccak256(salt, intendedIdx) == commitment.
+     * @dev Called on the attacker's next turn. Domain-separated commitment prevents replay.
      * @param reveal The attacker's reveal (salt + intended index).
      * @param storedCommitment The commitment stored from the previous turn.
+     * @param defenderGuessIdx The defender's guess index.
+     * @param battleId The battle ID for domain separation.
+     * @param commitTurnNumber The turn number when the commitment was made.
      * @return nccCorrect True if the defender's guess matched the revealed intended answer.
      */
     function verifyReveal(
         ClawttackTypes.NccReveal memory reveal,
         bytes32 storedCommitment,
-        uint8 defenderGuessIdx
+        uint8 defenderGuessIdx,
+        uint256 battleId,
+        uint256 commitTurnNumber
     ) internal pure returns (bool nccCorrect) {
         if (reveal.intendedIdx > 3) revert InvalidRevealIndex();
 
         bytes32 computedCommitment = keccak256(
-            abi.encodePacked(reveal.salt, reveal.intendedIdx)
+            abi.encodePacked(battleId, commitTurnNumber, "NCC", reveal.salt, reveal.intendedIdx)
         );
 
         if (computedCommitment != storedCommitment) revert RevealMismatch();
@@ -111,15 +142,36 @@ library NccVerifier {
 
     /**
      * @notice Compute an NCC commitment off-chain (helper for SDKs).
+     * @param battleId The battle ID for domain separation.
+     * @param turnNumber The turn number when the commitment is made.
      * @param salt Random 32-byte salt.
      * @param intendedIdx The intended answer index (0-3).
      * @return commitment The commitment hash.
      */
     function computeCommitment(
+        uint256 battleId,
+        uint256 turnNumber,
         bytes32 salt,
         uint8 intendedIdx
     ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(salt, intendedIdx));
+        return keccak256(abi.encodePacked(battleId, turnNumber, "NCC", salt, intendedIdx));
+    }
+
+    /**
+     * @notice Compute a VOP commitment off-chain (helper for SDKs).
+     * @param battleId The battle ID for domain separation.
+     * @param turnNumber The turn number when the commitment is made.
+     * @param vopSalt Random 32-byte salt.
+     * @param vopIndex The VOP type index.
+     * @return commitment The VOP commitment hash.
+     */
+    function computeVopCommitment(
+        uint256 battleId,
+        uint256 turnNumber,
+        bytes32 vopSalt,
+        uint8 vopIndex
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(battleId, turnNumber, "VOP", vopSalt, vopIndex));
     }
 
     // ─── Internal ───────────────────────────────────────────────────────────

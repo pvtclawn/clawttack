@@ -3,14 +3,15 @@ pragma solidity ^0.8.34;
 
 /**
  * @title ClawttackTypes
- * @notice All data structures for Clawttack (chess clock + VCPSC NCC).
+ * @notice All data structures for Clawttack (chess clock + VCPSC NCC + VOP commit-reveal).
  *
  * Key design decisions:
  * - BattleConfig: removed baseTimeoutBlocks/maxTurns (replaced by chess clock)
- * - TurnPayload: replaces challengeHash/responseHash with VCPSC fields
- * - New: NccAttack struct (4 candidates + commitment)
- * - New: NccDefense struct (guess index)
- * - New: ResultType.BANK_EMPTY
+ * - TurnPayload: NCC + VOP commit-reveal in single payload
+ * - NCC gates VOP: fail NCC → auto-wrong VOP (no solution verified)
+ * - Constant Relative Advantage matrix: challenger −3X / solver −X on all failure paths
+ * - Block number as universal VOP param (no pre-generated puzzle boards)
+ * - Domain-separated commitments (battleId + turnNumber bound)
  */
 library ClawttackTypes {
 
@@ -28,22 +29,30 @@ library ClawttackTypes {
     enum ResultType {
         None,
         COMPROMISE,         // ECDSA signature captured
-        INVALID_SOLUTION,   // VOP puzzle failed
+        INVALID_SOLUTION,   // VOP puzzle failed (unregistered index)
         POISON_VIOLATION,   // Narrative contained opponent's poison word
         TIMEOUT,            // Turn exceeded bank (chess clock)
-        BANK_EMPTY,         // Bank depleted to 0 via NCC penalties + decay
-        FLAG_CAPTURED,      // CTF secret revealed
-        NCC_REVEAL_FAILED   // Mandatory NCC reveal not provided or invalid
+        BANK_EMPTY,         // Bank depleted to 0 via penalties + decay
+        NCC_REVEAL_FAILED,  // Mandatory NCC reveal not provided or invalid
+        VOP_REVEAL_FAILED   // Mandatory VOP reveal not provided or invalid
     }
 
-    // ─── Battle Config (v0) ─────────────────────────────────────────────────
+    // ─── VOP Outcome (used by ChessClockLib for penalty application) ────────
+
+    enum VopOutcome {
+        NccGateFailed,          // NCC defense failed → auto-wrong VOP
+        WrongIndex,             // Solver guessed wrong VOP index
+        RightIndexWrongSol,     // Right index but invalid solution
+        RightIndexRightSol      // Right index + valid solution
+    }
+
+    // ─── Battle Config ──────────────────────────────────────────────────────
 
     struct BattleConfig {
         uint256 stake;           // ETH stake per side
         uint32  warmupBlocks;    // blocks before first turn allowed
         uint256 targetAgentId;   // 0 = open challenge
         uint8   maxJokers;       // joker (1024-byte) turns per agent
-        bool    clozeEnabled;    // require [BLANK] in narratives for NCC comprehension
         // Chess clock params are constants in ChessClockLib
         // No maxTurns — bank decay guarantees termination
     }
@@ -53,74 +62,94 @@ library ClawttackTypes {
     /**
      * @notice The attacker's NCC challenge for the defender's next turn.
      * @dev 4 BIP39 candidates embedded in the narrative at verified offsets.
-     *      Attacker commits to which one is the "intended answer" via salted hash.
-     *
-     * Commitment: keccak256(abi.encodePacked(salt, intendedIdx))
-     * Reveal: on next turn, attacker provides salt + intendedIdx
-     *
-     * Contract verifies all 4 candidates exist at claimed offsets during submission.
+     *      Commitment: keccak256(abi.encodePacked(battleId, turnNumber, "NCC", salt, intendedIdx))
      */
     struct NccAttack {
-        // 4 BIP39 word indices (from WordDictionary)
         uint16[4] candidateWordIndices;
-        // Byte offsets where each candidate appears in the narrative
         uint16[4] candidateOffsets;
-        // Salted commitment to intended answer: keccak256(salt, intendedIdx)
         bytes32   nccCommitment;
     }
 
-    // ─── NCC Defense (submitted by defender each turn) ──────────────────────
-
-    /**
-     * @notice The defender's NCC response to the attacker's previous challenge.
-     * @dev Defender picks one of 4 candidates as their answer.
-     */
     struct NccDefense {
-        uint8 guessIdx;  // 0-3: which candidate the defender thinks is correct
+        uint8 guessIdx;  // 0-3
     }
 
-    // ─── NCC Reveal (submitted by attacker on their next turn) ──────────────
+    struct NccReveal {
+        bytes32 salt;
+        uint8   intendedIdx; // 0-3
+    }
+
+    // ─── VOP Commit-Reveal ──────────────────────────────────────────────────
 
     /**
-     * @notice The attacker reveals their intended answer from the previous turn's NCC.
-     * @dev Must match the commitment. Failure to reveal = forfeit.
+     * @notice Challenger commits to a VOP type index via salted hash.
+     * @dev Commitment: keccak256(abi.encodePacked(battleId, turnNumber, "VOP", vopSalt, vopIndex))
+     *      Block number at solve time serves as universal VOP parameter.
      */
-    struct NccReveal {
-        bytes32 salt;       // Salt used in commitment
-        uint8   intendedIdx; // 0-3: which candidate was the intended answer
+    struct VopCommit {
+        bytes32 vopCommitment;  // Salted hash of VOP index
     }
 
-    // ─── Turn Payload (v0) ──────────────────────────────────────────────────
+    /**
+     * @notice Solver's VOP claim — which VOP type they inferred from the narrative.
+     * @dev Gated on NCC defense: solver must pass NCC before VOP solve is valid.
+     */
+    struct VopSolve {
+        uint8   vopClaimedIndex;  // Which VOP type the solver thinks was committed
+        uint256 solution;         // Solution to that VOP (using commit block number as param)
+    }
+
+    /**
+     * @notice Challenger reveals their VOP commitment on their next turn.
+     * @dev Must match stored commitment. Mismatch = instant forfeit.
+     */
+    struct VopReveal {
+        bytes32 vopSalt;
+        uint8   vopIndex;  // Which VOP type was actually committed
+    }
+
+    // ─── Turn Payload ───────────────────────────────────────────────────────
 
     /**
      * @notice Everything an agent submits per turn.
-     * @dev Combines narrative, VOP solution, NCC attack, NCC defense, and NCC reveal.
+     * @dev Bundles narrative, NCC attack/defense/reveal, VOP commit/solve/reveal.
      */
     struct TurnPayload {
         // --- Core ---
-        string  narrative;          // The narrative text (max 256 or 1024 bytes)
-        uint256 solution;           // VOP puzzle solution
-        string  customPoisonWord;   // Poison word for opponent's next turn
+        string  narrative;
+        string  customPoisonWord;
 
-        // --- NCC Attack (for opponent's next turn) ---
-        NccAttack nccAttack;
+        // --- NCC ---
+        NccAttack  nccAttack;
+        NccDefense nccDefense;   // Only meaningful after turn 0
+        NccReveal  nccReveal;    // Only meaningful after turn 1
 
-        // --- NCC Defense (answer to opponent's previous NCC) ---
-        NccDefense nccDefense;      // Only meaningful after turn 0
-
-        // --- NCC Reveal (reveal YOUR previous NCC commitment) ---
-        NccReveal nccReveal;        // Only meaningful after turn 1
+        // --- VOP ---
+        VopCommit  vopCommit;    // Challenger commits VOP type for opponent
+        VopSolve   vopSolve;     // Solver's claimed VOP index + solution
+        VopReveal  vopReveal;    // Reveal previous VOP commitment (turn >= 2)
     }
 
-    // ─── Pending NCC State (stored between turns) ───────────────────────────
+    // ─── Pending NCC State ──────────────────────────────────────────────────
+
+    struct PendingNcc {
+        bytes32   commitment;
+        uint16[4] candidateWordIndices;
+        uint8     defenderGuessIdx;
+        bool      hasDefenderGuess;
+    }
+
+    // ─── Pending VOP State ──────────────────────────────────────────────────
 
     /**
-     * @notice Stored NCC state awaiting resolution on the next turn.
+     * @notice Stored VOP state awaiting reveal on the next turn.
      */
-    struct PendingNcc {
-        bytes32   commitment;           // keccak256(salt, intendedIdx)
-        uint16[4] candidateWordIndices; // The 4 BIP39 word indices
-        uint8     defenderGuessIdx;     // Defender's guess (set when defender responds)
-        bool      hasDefenderGuess;     // True after defender has responded
+    struct PendingVop {
+        bytes32 commitment;          // keccak256(battleId, turnNumber, "VOP", salt, index)
+        uint8   solverClaimedIndex;  // What the solver guessed
+        uint256 solverSolution;      // What the solver submitted
+        uint64  commitBlockNumber;   // Block number at VOP commit time (used as VOP param)
+        bool    solverPassed;        // Did the solver's solution verify against their claimed VOP?
+        bool    hasSolverResponse;   // True after solver has responded
     }
 }

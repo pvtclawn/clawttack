@@ -39,9 +39,11 @@ contract NccVerifierHarness {
     function verifyReveal(
         ClawttackTypes.NccReveal memory reveal,
         bytes32 storedCommitment,
-        uint8 defenderGuessIdx
+        uint8 defenderGuessIdx,
+        uint256 battleId,
+        uint256 commitTurnNumber
     ) external pure returns (bool) {
-        return NccVerifier.verifyReveal(reveal, storedCommitment, defenderGuessIdx);
+        return NccVerifier.verifyReveal(reveal, storedCommitment, defenderGuessIdx, battleId, commitTurnNumber);
     }
 }
 
@@ -62,7 +64,7 @@ contract NccVerifierTest is Test {
         return ClawttackTypes.NccAttack({
             candidateWordIndices: [uint16(0), uint16(1), uint16(2), uint16(3)],
             candidateOffsets: [uint16(14), uint16(26), uint16(41), uint16(55)],
-            nccCommitment: keccak256(abi.encodePacked(bytes32(uint256(42)), uint8(0)))
+            nccCommitment: keccak256(abi.encodePacked(uint256(1), uint256(0), "NCC", bytes32(uint256(42)), uint8(0)))
         });
     }
 
@@ -121,41 +123,45 @@ contract NccVerifierTest is Test {
 
     function test_verifyReveal_correct() public {
         bytes32 salt = bytes32(uint256(42));
-        bytes32 commitment = keccak256(abi.encodePacked(salt, uint8(2)));
+        uint256 bid = 1; uint256 turn = 0;
+        bytes32 commitment = keccak256(abi.encodePacked(bid, turn, "NCC", salt, uint8(2)));
         bool correct = harness.verifyReveal(
             ClawttackTypes.NccReveal({salt: salt, intendedIdx: 2}),
-            commitment, 2
+            commitment, 2, bid, turn
         );
         assertTrue(correct);
     }
 
     function test_verifyReveal_wrong() public {
         bytes32 salt = bytes32(uint256(42));
-        bytes32 commitment = keccak256(abi.encodePacked(salt, uint8(2)));
+        uint256 bid = 1; uint256 turn = 0;
+        bytes32 commitment = keccak256(abi.encodePacked(bid, turn, "NCC", salt, uint8(2)));
         bool correct = harness.verifyReveal(
             ClawttackTypes.NccReveal({salt: salt, intendedIdx: 2}),
-            commitment, 1
+            commitment, 1, bid, turn
         );
         assertFalse(correct);
     }
 
     function test_verifyReveal_mismatch() public {
         bytes32 salt = bytes32(uint256(42));
-        bytes32 commitment = keccak256(abi.encodePacked(salt, uint8(2)));
+        uint256 bid = 1; uint256 turn = 0;
+        bytes32 commitment = keccak256(abi.encodePacked(bid, turn, "NCC", salt, uint8(2)));
         vm.expectRevert(NccVerifier.RevealMismatch.selector);
         harness.verifyReveal(
             ClawttackTypes.NccReveal({salt: salt, intendedIdx: 1}),
-            commitment, 1
+            commitment, 1, bid, turn
         );
     }
 
     function test_verifyReveal_invalidIndex() public {
         bytes32 salt = bytes32(uint256(42));
-        bytes32 commitment = keccak256(abi.encodePacked(salt, uint8(5)));
+        uint256 bid = 1; uint256 turn = 0;
+        bytes32 commitment = keccak256(abi.encodePacked(bid, turn, "NCC", salt, uint8(5)));
         vm.expectRevert(NccVerifier.InvalidRevealIndex.selector);
         harness.verifyReveal(
             ClawttackTypes.NccReveal({salt: salt, intendedIdx: 5}),
-            commitment, 0
+            commitment, 0, bid, turn
         );
     }
 
@@ -163,8 +169,9 @@ contract NccVerifierTest is Test {
 
     function test_computeCommitment_matches() public {
         bytes32 salt = bytes32(uint256(12345));
-        bytes32 fromHelper = NccVerifier.computeCommitment(salt, 3);
-        bytes32 manual = keccak256(abi.encodePacked(salt, uint8(3)));
+        uint256 bid = 1; uint256 turn = 5;
+        bytes32 fromHelper = NccVerifier.computeCommitment(bid, turn, salt, 3);
+        bytes32 manual = keccak256(abi.encodePacked(bid, turn, "NCC", salt, uint8(3)));
         assertEq(fromHelper, manual);
     }
 
@@ -180,11 +187,12 @@ contract NccVerifierTest is Test {
 
     function test_gas_verifyReveal() public {
         bytes32 salt = bytes32(uint256(42));
-        bytes32 commitment = keccak256(abi.encodePacked(salt, uint8(2)));
+        uint256 bid = 1; uint256 turn = 0;
+        bytes32 commitment = keccak256(abi.encodePacked(bid, turn, "NCC", salt, uint8(2)));
         uint256 gasBefore = gasleft();
         harness.verifyReveal(
             ClawttackTypes.NccReveal({salt: salt, intendedIdx: 2}),
-            commitment, 2
+            commitment, 2, bid, turn
         );
         uint256 gasUsed = gasBefore - gasleft();
         emit log_named_uint("verifyReveal gas", gasUsed);

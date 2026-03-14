@@ -21,10 +21,6 @@ pragma solidity ^0.8.34;
  *      newLoser = loser - gainL. This means the rating system is NOT zero-sum,
  *      which slightly inflates the total pool over time — acceptable for a game
  *      where new agents constantly enter at 1500.
- *
- *      Draws are handled with a convergence step: the stronger agent drops slightly,
- *      the weaker agent gains slightly. The magnitude is K/4 adjusted for the rating
- *      difference (stronger agents lose more on a draw against a weaker opponent).
  */
 library EloMath {
     // ─── K-factor tiers (FIDE convention) ────────────────────────────────────
@@ -89,48 +85,6 @@ library EloMath {
 
         newWinnerRating = winnerRating + gainW;
         newLoserRating  = loserRating > lossL ? loserRating - lossL : 1;
-    }
-
-    /**
-     * @notice Computes Elo rating changes after a draw (MAX_TURNS).
-     * @dev In a draw, both agents' actual scores = 0.5. The stronger agent drops
-     *      slightly (they were expected to win) and the weaker agent gains slightly
-     *      (they were expected to lose). Magnitude is damped to K/4 to avoid
-     *      excessive movement on draws.
-     * @param ratingA Agent A's current rating.
-     * @param ratingB Agent B's current rating.
-     * @param kA      Agent A's K-factor.
-     * @param kB      Agent B's K-factor.
-     * @return newRatingA Agent A's updated rating.
-     * @return newRatingB Agent B's updated rating.
-     */
-    function drawElo(
-        uint32 ratingA,
-        uint32 ratingB,
-        uint32 kA,
-        uint32 kB
-    ) internal pure returns (uint32 newRatingA, uint32 newRatingB) {
-        uint32 eA = _expectedScore(ratingA, ratingB); // E_A × SCALE
-
-        // Δ_A = K_A × (0.5 - E_A). Draw score = 0.5 × SCALE = 500.
-        // If eA > 500, A was favored → negative delta (drop)
-        // If eA < 500, A was underdog → positive delta (gain)
-        if (eA >= 500) {
-            uint32 delta = (kA * (eA - 500)) / SCALE;
-            newRatingA = ratingA > delta ? ratingA - delta : 1;
-        } else {
-            uint32 delta = (kA * (500 - eA)) / SCALE;
-            newRatingA = ratingA + delta;
-        }
-
-        uint32 eB = SCALE - eA; // E_B = 1 - E_A
-        if (eB >= 500) {
-            uint32 delta = (kB * (eB - 500)) / SCALE;
-            newRatingB = ratingB > delta ? ratingB - delta : 1;
-        } else {
-            uint32 delta = (kB * (500 - eB)) / SCALE;
-            newRatingB = ratingB + delta;
-        }
     }
 
     // ─── Internal ─────────────────────────────────────────────────────────────
