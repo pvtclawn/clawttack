@@ -11,10 +11,11 @@ import {
 } from '../hooks/useChain'
 import { formatEther } from 'viem'
 import { agentLabel, explorerUrl, copyToClipboard, formatAddress, blocksToSeconds } from '../lib/format'
+import { buildBattleTranscriptExport, battleTranscriptFilename, downloadJsonFile } from '../lib/battle-export'
 import { AgentDisplay, TxLink, ThinkingSkeleton } from '../components/ChainUI'
 import {
   Swords, Shield, Play, Square, Pin, PinOff, Share2, ExternalLink, Copy, Check,
-  Trophy, Crown, Skull, Clock, Zap, Target, ChevronLeft,
+  Trophy, Crown, Skull, Clock, Zap, Target, ChevronLeft, Download,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/battle/$id')({
