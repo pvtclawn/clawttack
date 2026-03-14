@@ -47,6 +47,7 @@ def parse_log(log_text: str) -> dict[str, Any]:
         'accepted': False,
         'errorLine': None,
         'templatesSeen': [],
+        'settledHint': False,
     }
 
     if match := re.search(r'Clawn:\s+id=(\d+),\s+addr=(0x[a-fA-F0-9]{40})', log_text):
@@ -63,6 +64,7 @@ def parse_log(log_text: str) -> dict[str, Any]:
 
     summary['accepted'] = 'Accepted battle' in log_text
     summary['templatesSeen'] = re.findall(r'template=([a-z]+)', log_text)
+    summary['settledHint'] = any(token in log_text.lower() for token in ('settled', 'winner', 'resulttype'))
 
     error_lines = [
         line.strip() for line in log_text.splitlines()
@@ -108,15 +110,15 @@ def summarize_checkpoint(checkpoint: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
-def observed_mechanics(per_battle: dict[str, Any], log_text: str) -> list[str]:
+def observed_mechanics(per_battle: dict[str, Any], log_text: str, log_summary: dict[str, Any]) -> list[str]:
     observed: list[str] = []
     if per_battle['turnsMined'] >= 1:
         observed.append('first-turn-submit')
     if per_battle['turnsMined'] >= 2:
         observed.append('multi-turn')
-    if 'poisonMode: active' in log_text or 'poisonMode=active' in log_text:
+    if 'poisonMode: active' in log_text or 'poisonMode=active' in log_text or 'poisonMode\": \"active\"' in log_text:
         observed.append('active-poison')
-    if 'settled' in log_text.lower() or 'resulttype' in log_text.lower() or '🏁 stop: phase=' in log_text:
+    if log_summary.get('settledHint'):
         observed.append('settlement')
     return sorted(set(observed))
 
@@ -127,7 +129,6 @@ def build_per_battle(log_path: Path, checkpoint_path: Path | None) -> dict[str, 
     checkpoint = load_json(checkpoint_path) if checkpoint_path else None
     cp_summary = summarize_checkpoint(checkpoint)
     stage = stage_from_summary(log_summary, checkpoint)
-    observed = observed_mechanics(cp_summary, log_text)
 
     out = {
         'batchKey': batch_key(log_path),
@@ -153,9 +154,12 @@ def build_per_battle(log_path: Path, checkpoint_path: Path | None) -> dict[str, 
         'templatesSeen': sorted(set(log_summary['templatesSeen'])),
         'accepted': log_summary['accepted'],
         'failureClass': log_summary['errorLine'],
-        'observedMechanics': observed,
-        'unobservedMechanics': [m for m in KNOWN_MECHANICS if m not in observed],
     }
+    observed = observed_mechanics(out, log_text, log_summary)
+    out['observedMechanics'] = observed
+    out['unobservedMechanics'] = [m for m in KNOWN_MECHANICS if m not in observed]
+    out['settled'] = 'settlement' in observed
+    out['unsettled'] = not out['settled']
     return out
 
 
@@ -174,6 +178,7 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- first mover A: `{per_battle['firstMoverA']}`",
         f"- deepest stage: `{per_battle['deepestStageReached']}`",
         f"- turns mined: `{per_battle['turnsMined']}`",
+        f"- settled: `{per_battle['settled']}` | unsettled: `{per_battle['unsettled']}`",
         f"- txs: `{len(per_battle['txHashes'])}`",
         f"- bank delta: A `{per_battle['bankAStart']}` -> `{per_battle['bankAEnd']}`, B `{per_battle['bankBStart']}` -> `{per_battle['bankBEnd']}`",
         f"- observed mechanics: {', '.join(per_battle['observedMechanics']) or 'none'}",
@@ -199,10 +204,37 @@ def aggregate(per_battles: list[dict[str, Any]]) -> dict[str, Any]:
         'observedMechanics': observed,
         'unobservedMechanics': [m for m in KNOWN_MECHANICS if m not in observed],
         'notableAnomalies': [b['failureClass'] for b in per_battles if b['failureClass']],
+        'unsettledBattleCount': sum(1 for b in per_battles if b['unsettled']),
+        'settledBattleCount': sum(1 for b in per_battles if b['settled']),
     }
 
 
-def write_aggregate_markdown(path: Path, agg: dict[str, Any]) -> None:
+def compare_aggregates(previous: dict[str, Any] | None, current: dict[str, Any]) -> dict[str, Any]:
+    if previous is None:
+        return {
+            'hasPrevious': False,
+            'note': 'No previous aggregate snapshot available for comparison.'
+        }
+    return {
+        'hasPrevious': True,
+        'previousBattleCount': previous.get('battleCount'),
+        'currentBattleCount': current.get('battleCount'),
+        'previousStageHistogram': previous.get('stageHistogram', {}),
+        'currentStageHistogram': current.get('stageHistogram', {}),
+        'previousFailureHistogram': previous.get('failureHistogram', {}),
+        'currentFailureHistogram': current.get('failureHistogram', {}),
+        'previousObservedMechanics': previous.get('observedMechanics', []),
+        'currentObservedMechanics': current.get('observedMechanics', []),
+        'newlyObservedMechanics': sorted(set(current.get('observedMechanics', [])) - set(previous.get('observedMechanics', []))),
+        'stillUnobservedMechanics': current.get('unobservedMechanics', []),
+        'previousUnsettledBattleCount': previous.get('unsettledBattleCount'),
+        'currentUnsettledBattleCount': current.get('unsettledBattleCount'),
+        'previousBattleIds': previous.get('battleIds', []),
+        'currentBattleIds': current.get('battleIds', []),
+    }
+
+
+def write_aggregate_markdown(path: Path, agg: dict[str, Any], comparison: dict[str, Any]) -> None:
     lines = [
         '# batch-summary',
         '',
@@ -210,12 +242,31 @@ def write_aggregate_markdown(path: Path, agg: dict[str, Any]) -> None:
         f"- stage histogram: `{agg['stageHistogram']}`",
         f"- failure histogram: `{agg['failureHistogram']}`",
         f"- turns mined per battle: `{agg['turnsMinedPerBattle']}`",
+        f"- settled vs unsettled: `{agg['settledBattleCount']}` settled / `{agg['unsettledBattleCount']}` unsettled",
+        f"- first movers A: `{agg['firstMoversA']}`",
         f"- observed mechanics: {', '.join(agg['observedMechanics']) or 'none'}",
         f"- unobserved mechanics: {', '.join(agg['unobservedMechanics']) or 'none'}",
         f"- notable anomalies: {', '.join(agg['notableAnomalies']) or 'none'}",
         '',
-        '> This batch is exploratory evidence, not a verdict.',
+        '## comparison',
     ]
+    if comparison.get('hasPrevious'):
+        lines.extend([
+            f"- previous battle count: `{comparison['previousBattleCount']}`",
+            f"- current battle count: `{comparison['currentBattleCount']}`",
+            f"- previous stage histogram: `{comparison['previousStageHistogram']}`",
+            f"- current stage histogram: `{comparison['currentStageHistogram']}`",
+            f"- previous unsettled: `{comparison['previousUnsettledBattleCount']}`",
+            f"- current unsettled: `{comparison['currentUnsettledBattleCount']}`",
+            f"- newly observed mechanics: {', '.join(comparison['newlyObservedMechanics']) or 'none'}",
+            f"- still unobserved mechanics: {', '.join(comparison['stillUnobservedMechanics']) or 'none'}",
+        ])
+    else:
+        lines.append(f"- {comparison['note']}")
+    lines.extend([
+        '',
+        '> This batch is exploratory evidence, not a verdict.',
+    ])
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
@@ -234,6 +285,8 @@ def main() -> None:
     per_dir = SUMMARIES_DIR / 'per-battle'
     agg_dir = SUMMARIES_DIR / 'aggregate'
 
+    previous_aggregate = load_json(agg_dir / 'latest.json')
+
     for log_path in logs:
         checkpoint_path = CHECKPOINTS_DIR / f'{log_path.stem}.json'
         per_battle = build_per_battle(log_path, checkpoint_path if checkpoint_path.exists() else None)
@@ -242,11 +295,14 @@ def main() -> None:
         write_markdown(per_dir / f'{log_path.stem}.md', per_battle)
 
     agg = aggregate(per_battles)
+    comparison = compare_aggregates(previous_aggregate, agg)
     write_json(agg_dir / 'latest.json', agg)
-    write_aggregate_markdown(agg_dir / 'latest.md', agg)
+    write_json(agg_dir / 'comparison-latest.json', comparison)
+    write_aggregate_markdown(agg_dir / 'latest.md', agg, comparison)
 
     print(f'Wrote {len(per_battles)} per-battle summaries to {per_dir}')
     print(f'Wrote aggregate summary to {agg_dir / "latest.json"}')
+    print(f'Wrote comparison summary to {agg_dir / "comparison-latest.json"}')
 
 
 if __name__ == '__main__':
