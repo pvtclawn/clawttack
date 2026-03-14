@@ -82,12 +82,14 @@ library ClawttackTypes {
     // ─── VOP Commit-Reveal ──────────────────────────────────────────────────
 
     /**
-     * @notice Challenger commits to a VOP type index via salted hash.
-     * @dev Commitment: keccak256(abi.encodePacked(battleId, turnNumber, "VOP", vopSalt, vopIndex))
+     * @notice Challenger commits to a VOP type index (and optional instance params) via salted hash.
+     * @dev Commitment: keccak256(abi.encodePacked(battleId, turnNumber, "VOP", vopSalt, vopIndex, instanceCommit))
      *      Block number at solve time serves as universal VOP parameter.
+     *      instanceCommit = keccak256(instanceParams) for param-hiding VOPs, or bytes32(0) for simple VOPs.
      */
     struct VopCommit {
-        bytes32 vopCommitment;  // Salted hash of VOP index
+        bytes32 vopCommitment;  // Salted hash of VOP index + instance
+        bytes32 instanceCommit; // keccak256(vopParams) — bytes32(0) for simple VOPs
     }
 
     /**
@@ -96,7 +98,7 @@ library ClawttackTypes {
      */
     struct VopSolve {
         uint8   vopClaimedIndex;  // Which VOP type the solver thinks was committed
-        uint256 solution;         // Solution to that VOP (using commit block number as param)
+        bytes   solution;         // ABI-encoded solution (uint256 for simple VOPs, structured for advanced)
     }
 
     /**
@@ -145,11 +147,12 @@ library ClawttackTypes {
      * @notice Stored VOP state awaiting reveal on the next turn.
      */
     struct PendingVop {
-        bytes32 commitment;          // keccak256(battleId, turnNumber, "VOP", salt, index)
+        bytes32 commitment;          // keccak256(battleId, turnNumber, "VOP", salt, index, instanceCommit)
         uint8   solverClaimedIndex;  // What the solver guessed
-        uint256 solverSolution;      // What the solver submitted
+        bytes   solverSolution;      // ABI-encoded solution submitted by the solver
         uint64  commitBlockNumber;   // Block number at VOP commit time (used as VOP param)
         bool    solverPassed;        // Did the solver's solution verify against their claimed VOP?
         bool    hasSolverResponse;   // True after solver has responded
+        bytes32 instanceCommit;      // keccak256(instanceParams) for param-hiding VOPs
     }
 }

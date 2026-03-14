@@ -198,13 +198,14 @@ contract ChessClockLibTest is Test {
 
     // ─── MAX_TURN_TIMEOUT capping ──────────────────────────────────────────
 
-    function test_turn_capped_at_max_timeout() public {
-        vm.roll(block.number + 200); // 200 blocks elapsed, but MAX_TURN_TIMEOUT = 80
+    function test_idle_drains_full_elapsed() public {
+        vm.roll(block.number + 200); // 200 blocks elapsed — no cap
         (uint128 bank,) = harness.tick(true, true, true);
-        // Should deduct only 80 (capped), not 200
-        // 400 - 80 = 320, then 2% decay = 6.4 → 314
+        // Should deduct full 200, not capped to 80
+        // 400 - 200 = 200, then 2% decay = 4 → 196
         // First turn so no NCC refund
-        assertGt(bank, 300, "Bank should only lose ~80 + decay, not 200");
+        assertLt(bank, 200, "Full elapsed should be deducted (no cap)");
+        assertGt(bank, 190, "Should be ~196 after 200 elapsed + decay");
     }
 
     // ─── Fuzz Tests ─────────────────────────────────────────────────────────

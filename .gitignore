@@ -52,3 +52,6 @@ yarn.lock
 
 # Local research files
 llms/
+
+# Other
+tmp*/

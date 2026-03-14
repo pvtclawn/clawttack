@@ -17,11 +17,13 @@ interface IVerifiableOraclePrimitive {
     /**
      * @notice Verifies if the provided solution solves the puzzle for the given block.
      * @param params abi.encode(uint64 blockNumber) — the block used as VOP seed.
-     * @param solution The integer solution submitted by the solver.
+     *        Future VOPs may encode additional instance parameters.
+     * @param solution ABI-encoded solution. Simple VOPs use abi.encode(uint256).
+     *        Future VOPs may accept Merkle proofs, ZK proofs, or structured payloads.
      * @param referenceBlock The deadline block for timing validation.
      * @return isValid Boolean indicating if the solution is correct.
      */
-    function verify(bytes calldata params, uint256 solution, uint256 referenceBlock)
+    function verify(bytes calldata params, bytes calldata solution, uint256 referenceBlock)
         external
         view
         returns (bool isValid);
