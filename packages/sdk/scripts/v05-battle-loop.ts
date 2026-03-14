@@ -39,8 +39,8 @@ const BATTLE_ABI = [
   'function poisonWord() view returns (string)',
   'function jokersRemainingA() view returns (uint8)',
   'function jokersRemainingB() view returns (uint8)',
-  'function pendingNccA() view returns (bytes32 commitment, uint16[4] candidateWordIndices, uint8 defenderGuessIdx, bool hasDefenderGuess)',
-  'function pendingNccB() view returns (bytes32 commitment, uint16[4] candidateWordIndices, uint8 defenderGuessIdx, bool hasDefenderGuess)',
+  'function pendingNccA() view returns (bytes32 commitment, uint8 defenderGuessIdx, bool hasDefenderGuess)',
+  'function pendingNccB() view returns (bytes32 commitment, uint8 defenderGuessIdx, bool hasDefenderGuess)',
   'function pendingVopA() view returns (bytes32 commitment, uint8 solverClaimedIndex, uint256 solverSolution, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse)',
   'function pendingVopB() view returns (bytes32 commitment, uint8 solverClaimedIndex, uint256 solverSolution, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse)',
   'function submitTurn((string narrative,string customPoisonWord,(uint16[4] candidateWordIndices,uint16[4] candidateOffsets,bytes32 nccCommitment) nccAttack,(uint8 guessIdx) nccDefense,(bytes32 salt,uint8 intendedIdx) nccReveal,(bytes32 vopCommitment) vopCommit,(uint8 vopClaimedIndex,uint256 solution) vopSolve,(bytes32 vopSalt,uint8 vopIndex) vopReveal) payload)',
@@ -461,6 +461,7 @@ async function main(): Promise<void> {
       throw new Error(`candidate index encoding failed for ${JSON.stringify(candidates)}`)
     }
 
+    console.log(`   ↳ fetch pending NCC/VOP state for side=${side}`)
     const oppNcc = side === 'A' ? await battleRead.pendingNccB() : await battleRead.pendingNccA()
     const nccGuess = String(oppNcc.commitment) === ethers.ZeroHash
       ? 0
@@ -506,6 +507,7 @@ async function main(): Promise<void> {
     console.log(
       `\n🎮 turn=${turn} side=${side} bankA=${bankA} bankB=${bankB} target=${target} poison=${poison} template=${constructed.templateFamily} fallback=${constructed.fallbackStep}`,
     )
+    console.log('   ↳ payload assembled, estimating/sending submitTurn')
     const rc = await submitWithRetry(battle, payload)
 
     cp.prevByAgent[side] = {
