@@ -165,11 +165,15 @@ function chooseVopIndex(turn: number): number {
 }
 
 type NarrativeTemplateFamily = 'chain' | 'ledger' | 'relay'
+type PoisonMode = 'inactive' | 'active'
 
 type TurnConstructionDiagnostics = {
   target: string
   candidates: string[]
   poison: string
+  normalizedPoison: string
+  poisonMode: PoisonMode
+  poisonOffset: number
   narrative: string
   byteLength: number
   offsets: number[]
@@ -187,6 +191,10 @@ type TurnConstructionResult = {
   fallbackStep: number
 }
 
+function normalizeOptionalConstraint(value: string): string {
+  return value.trim()
+}
+
 function validateNarrative(input: {
   target: string
   candidates: string[]
@@ -196,16 +204,23 @@ function validateNarrative(input: {
   fallbackStep: number
 }): TurnConstructionDiagnostics {
   const offsets = input.candidates.map((w) => byteOffset(input.narrative, w))
+  const normalizedPoison = normalizeOptionalConstraint(input.poison)
+  const poisonMode: PoisonMode = normalizedPoison.length === 0 ? 'inactive' : 'active'
+  const poisonOffset = poisonMode === 'active' ? byteOffset(input.narrative, normalizedPoison) : -1
+
   return {
     target: input.target,
     candidates: input.candidates,
     poison: input.poison,
+    normalizedPoison,
+    poisonMode,
+    poisonOffset,
     narrative: input.narrative,
     byteLength: byteLength(input.narrative),
     offsets,
     missingCandidates: input.candidates.filter((_, idx) => offsets[idx] < 0),
     targetPresent: byteOffset(input.narrative, input.target) >= 0,
-    poisonPresent: byteOffset(input.narrative, input.poison) >= 0,
+    poisonPresent: poisonOffset >= 0,
     templateFamily: input.templateFamily,
     fallbackStep: input.fallbackStep,
   }
