@@ -41,9 +41,9 @@ const BATTLE_ABI = [
   'function jokersRemainingB() view returns (uint8)',
   'function pendingNccA() view returns (bytes32 commitment, uint8 defenderGuessIdx, bool hasDefenderGuess)',
   'function pendingNccB() view returns (bytes32 commitment, uint8 defenderGuessIdx, bool hasDefenderGuess)',
-  'function pendingVopA() view returns (bytes32 commitment, uint8 solverClaimedIndex, uint256 solverSolution, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse)',
-  'function pendingVopB() view returns (bytes32 commitment, uint8 solverClaimedIndex, uint256 solverSolution, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse)',
-  'function submitTurn((string narrative,string customPoisonWord,(uint16[4] candidateWordIndices,uint16[4] candidateOffsets,bytes32 nccCommitment) nccAttack,(uint8 guessIdx) nccDefense,(bytes32 salt,uint8 intendedIdx) nccReveal,(bytes32 vopCommitment) vopCommit,(uint8 vopClaimedIndex,uint256 solution) vopSolve,(bytes32 vopSalt,uint8 vopIndex) vopReveal) payload)',
+  'function pendingVopA() view returns (bytes32 commitment, uint8 solverClaimedIndex, bytes solverSolution, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse, bytes32 instanceCommit)',
+  'function pendingVopB() view returns (bytes32 commitment, uint8 solverClaimedIndex, bytes solverSolution, uint64 commitBlockNumber, bool solverPassed, bool hasSolverResponse, bytes32 instanceCommit)',
+  'function submitTurn((string narrative,string customPoisonWord,(uint16[4] candidateWordIndices,uint16[4] candidateOffsets,bytes32 nccCommitment) nccAttack,(uint8 guessIdx) nccDefense,(bytes32 salt,uint8 intendedIdx) nccReveal,(bytes32 vopCommitment,bytes32 instanceCommit) vopCommit,(uint8 vopClaimedIndex,bytes solution) vopSolve,(bytes32 vopSalt,uint8 vopIndex) vopReveal) payload)',
 ] as const
 
 const L1_BLOCK_ABI = [
@@ -325,38 +325,45 @@ function guessVopIndexFromNarrative(narrative: string | null): number {
   return 0
 }
 
-async function solveHashPreimage(provider: ethers.JsonRpcProvider, commitBlock: number): Promise<bigint> {
+type SolvedVop = {
+  solution: `0x${string}`
+  solved: boolean
+}
+
+async function solveHashPreimage(provider: ethers.JsonRpcProvider, commitBlock: number): Promise<SolvedVop> {
   const block = await provider.getBlock(commitBlock)
   const seed = block?.hash
-  if (!seed) return 0n
+  const abi = ethers.AbiCoder.defaultAbiCoder()
+  if (!seed) return { solution: abi.encode(['uint256'], [0n]) as `0x${string}`, solved: false }
 
   const difficulty = 8 + (commitBlock % 4)
   const shift = 256n - BigInt(difficulty)
-  const abi = ethers.AbiCoder.defaultAbiCoder()
 
   for (let i = 0n; i < 2_000_000n; i++) {
     const encoded = abi.encode(['bytes32', 'uint256'], [seed, i])
     const h = BigInt(ethers.keccak256(encoded))
-    if ((h >> shift) === 0n) return i
+    if ((h >> shift) === 0n) {
+      return { solution: abi.encode(['uint256'], [i]) as `0x${string}`, solved: true }
+    }
   }
-  return 0n
+  return { solution: abi.encode(['uint256'], [0n]) as `0x${string}`, solved: false }
 }
 
-async function solveL1Metadata(provider: ethers.JsonRpcProvider, commitBlock: number): Promise<bigint> {
+async function solveL1Metadata(provider: ethers.JsonRpcProvider, commitBlock: number): Promise<SolvedVop> {
   const block = await provider.getBlock(commitBlock)
   const seed = block?.hash
-  if (!seed) return 0n
+  const abi = ethers.AbiCoder.defaultAbiCoder()
+  if (!seed) return { solution: abi.encode(['uint256'], [0n]) as `0x${string}`, solved: false }
   const l1 = new ethers.Contract(L1_BLOCK_PREDEPLOY, L1_BLOCK_ABI, provider)
   const [l1Number, l1BaseFee] = await Promise.all([l1.number(), l1.basefee()])
-  const abi = ethers.AbiCoder.defaultAbiCoder()
   const encoded = abi.encode(['uint64', 'uint256', 'bytes32'], [BigInt(l1Number), BigInt(l1BaseFee), seed])
-  return BigInt(ethers.keccak256(encoded))
+  return { solution: abi.encode(['uint256'], [BigInt(ethers.keccak256(encoded))]) as `0x${string}`, solved: true }
 }
 
-async function solveVop(provider: ethers.JsonRpcProvider, index: number, commitBlock: number): Promise<bigint> {
+async function solveVop(provider: ethers.JsonRpcProvider, index: number, commitBlock: number): Promise<SolvedVop> {
   if (index === 0) return solveHashPreimage(provider, commitBlock)
   if (index === 1) return solveL1Metadata(provider, commitBlock)
-  return 0n
+  return { solution: ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [0n]) as `0x${string}`, solved: false }
 }
 
 async function submitWithRetry(contract: ethers.Contract, payload: any): Promise<ethers.TransactionReceipt> {
@@ -370,7 +377,7 @@ async function submitWithRetry(contract: ethers.Contract, payload: any): Promise
       return rc
     } catch (err: any) {
       const msg = String(err?.shortMessage || err?.message || '')
-      if (attempt < 4 && (msg.includes('BattleNotActive') || msg.includes('TurnTooFast') || msg.includes('replacement'))) {
+      if (attempt < 4 && (msg.includes('BattleNotActive') || msg.includes('TurnTooFast') || msg.includes('replacement') || msg.includes('nonce') || msg.includes('NONCE_EXPIRED') || msg.includes('already been used'))) {
         await new Promise((r) => setTimeout(r, 5000 * attempt))
         continue
       }
@@ -450,9 +457,10 @@ async function main(): Promise<void> {
       ['uint256', 'uint256', 'string', 'bytes32', 'uint8'],
       [battleId, BigInt(turn), 'NCC', nccSalt, intendedIdx],
     )
+    const instanceCommit = ethers.ZeroHash
     const vopCommitment = encodePackedHash(
-      ['uint256', 'uint256', 'string', 'bytes32', 'uint8'],
-      [battleId, BigInt(turn), 'VOP', vopSalt, vopIndex],
+      ['uint256', 'uint256', 'string', 'bytes32', 'uint8', 'bytes32'],
+      [battleId, BigInt(turn), 'VOP', vopSalt, vopIndex, instanceCommit],
     )
 
     const wordIndices = candidates.map((w) => words.indexOf(w))
@@ -477,14 +485,15 @@ async function main(): Promise<void> {
 
     const oppVop = side === 'A' ? await battleRead.pendingVopB() : await battleRead.pendingVopA()
     let vopClaimedIndex = 0
-    let vopSolution = 0n
+    let vopSolution = ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [0n]) as `0x${string}`
     let vopSolved = false
 
     if (String(oppVop.commitment) !== ethers.ZeroHash) {
       vopClaimedIndex = guessVopIndexFromNarrative(cp.lastNarrativeByAgent[other])
       const commitBlock = Number(oppVop.commitBlockNumber)
-      vopSolution = await solveVop(provider, vopClaimedIndex, commitBlock)
-      vopSolved = vopSolution !== 0n || vopClaimedIndex === 1
+      const solved = await solveVop(provider, vopClaimedIndex, commitBlock)
+      vopSolution = solved.solution
+      vopSolved = solved.solved
     }
 
     const customPoison = side === 'A' ? 'ember' : 'cipher'
@@ -499,7 +508,7 @@ async function main(): Promise<void> {
       },
       nccDefense: { guessIdx: nccGuess },
       nccReveal,
-      vopCommit: { vopCommitment },
+      vopCommit: { vopCommitment, instanceCommit },
       vopSolve: { vopClaimedIndex, solution: vopSolution },
       vopReveal,
     }

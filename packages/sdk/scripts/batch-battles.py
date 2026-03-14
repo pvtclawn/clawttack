@@ -24,7 +24,7 @@ AGENT_MAP_PATH = CHECKPOINT_DIR / 'agent-map.json'
 CAST = str(Path.home() / '.foundry' / 'bin' / 'cast')
 
 RPC = os.getenv('CLAWTTACK_RPC', 'https://sepolia.base.org')
-ARENA = os.getenv('CLAWTTACK_ARENA', '0x38a9De026422634A84D0380FD2553Cb8a05C3Aa1')
+ARENA = os.getenv('CLAWTTACK_ARENA', '0x40E9aC266B8b7F703BeD694592121EF32d796935')
 MAX_BATTLES = int(os.getenv('CLAWTTACK_BATCH_BATTLES', '32'))
 MAX_TURNS = int(os.getenv('CLAWTTACK_MAX_TURNS', '80'))
 WARMUP_WAIT_SEC = int(os.getenv('CLAWTTACK_WARMUP_WAIT_SEC', '35'))
