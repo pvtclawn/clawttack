@@ -133,6 +133,7 @@ def build_per_battle(
     *,
     control_label: str,
     intervention_label: str,
+    max_turns_configured: int,
 ) -> dict[str, Any]:
     log_text = load_text(log_path)
     log_summary = parse_log(log_text)
@@ -180,10 +181,19 @@ def build_per_battle(
         'turnsMined': out['turnsMined'],
         'failureClass': out['failureClass'] or 'none',
     }
+    turns_mined = out['turnsMined']
+    budget_used = turns_mined >= max_turns_configured
+    turns_remaining = max(max_turns_configured - turns_mined, 0)
     out['interventionTargetMetrics'] = {
-        'laterTurnReached': out['turnsMined'] >= LATER_TURN_THRESHOLD,
+        'laterTurnReached': turns_mined >= LATER_TURN_THRESHOLD,
         'settlementObserved': out['settled'],
         'activePoisonObserved': 'active-poison' in out['observedMechanics'],
+        'maxTurnsConfigured': max_turns_configured,
+        'turnsMined': turns_mined,
+        'turnBudgetUsed': budget_used,
+        'turnBudgetUnused': not budget_used,
+        'turnsRemainingToCap': turns_remaining,
+        'turnBudgetUsageRatio': (turns_mined / max_turns_configured) if max_turns_configured > 0 else None,
         'observedMechanics': out['observedMechanics'],
         'unobservedMechanics': out['unobservedMechanics'],
     }
@@ -221,11 +231,19 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- later-turn reached: `{target['laterTurnReached']}`",
         f"- settlement observed: `{target['settlementObserved']}`",
         f"- active-poison observed: `{target['activePoisonObserved']}`",
+        f"- max turns configured: `{target['maxTurnsConfigured']}`",
+        f"- turn budget used: `{target['turnBudgetUsed']}` | unused: `{target['turnBudgetUnused']}`",
+        f"- turns remaining to cap: `{target['turnsRemainingToCap']}`",
+        f"- turn budget usage ratio: `{target['turnBudgetUsageRatio']}`",
         f"- observed mechanics: {', '.join(target['observedMechanics']) or 'none'}",
         f"- unobserved mechanics: {', '.join(target['unobservedMechanics']) or 'none'}",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+
+def _normalize_label(value: str | None) -> str:
+    return (value or '').strip().lower()
 
 
 def aggregate(per_battles: list[dict[str, Any]]) -> dict[str, Any]:
@@ -236,6 +254,13 @@ def aggregate(per_battles: list[dict[str, Any]]) -> dict[str, Any]:
     intervention_label = per_battles[0]['interventionLabel'] if per_battles else DEFAULT_INTERVENTION_LABEL
     turns_mined = [b['turnsMined'] for b in per_battles]
     first_movers = [b['firstMoverA'] for b in per_battles]
+    intervention_scope_battle_count = len(per_battles)
+    turn_budget_used_count = sum(
+        1 for b in per_battles if b['interventionTargetMetrics']['turnBudgetUsed']
+    )
+    turn_budget_unused_count = sum(
+        1 for b in per_battles if b['interventionTargetMetrics']['turnBudgetUnused']
+    )
     shared_regime_metrics = {
         'battleCount': len(per_battles),
         'stageHistogram': dict(stage_counts),
@@ -246,12 +271,45 @@ def aggregate(per_battles: list[dict[str, Any]]) -> dict[str, Any]:
         'acceptedBattleCount': sum(1 for b in per_battles if b['accepted']),
     }
     intervention_target_metrics = {
+        'battleCount': intervention_scope_battle_count,
+        'turnBudgetRatioDenominator': 'interventionTargetMetrics.battleCount',
+        'turnBudgetUsedCount': turn_budget_used_count,
+        'turnBudgetUnusedCount': turn_budget_unused_count,
+        'turnBudgetUsedRatio': (
+            turn_budget_used_count / intervention_scope_battle_count
+            if intervention_scope_battle_count > 0
+            else None
+        ),
         'laterTurnBattleCount': sum(1 for b in per_battles if b['interventionTargetMetrics']['laterTurnReached']),
         'activePoisonBattleCount': sum(1 for b in per_battles if b['interventionTargetMetrics']['activePoisonObserved']),
         'settlementObservedCount': sum(1 for b in per_battles if b['interventionTargetMetrics']['settlementObserved']),
         'observedMechanics': observed,
         'unobservedMechanics': [m for m in KNOWN_MECHANICS if m not in observed],
     }
+
+    warnings: list[str] = []
+    control_norm = _normalize_label(control_label)
+    intervention_norm = _normalize_label(intervention_label)
+    label_hygiene_ok = bool(control_norm) and bool(intervention_norm) and control_norm != intervention_norm
+    if not control_norm:
+        warnings.append('label-hygiene: control label is blank after normalization')
+    if not intervention_norm:
+        warnings.append('label-hygiene: intervention label is blank after normalization')
+    if control_norm and intervention_norm and control_norm == intervention_norm:
+        warnings.append('label-hygiene: control and intervention labels collapse to same normalized value')
+
+    observed_max_turns_values = sorted({
+        b['interventionTargetMetrics'].get('maxTurnsConfigured')
+        for b in per_battles
+        if b.get('interventionTargetMetrics', {}).get('maxTurnsConfigured') is not None
+    })
+    max_turns_comparable = len(observed_max_turns_values) <= 1
+    if not max_turns_comparable:
+        warnings.append(
+            'max-turns-comparability: mixed maxTurnsConfigured values observed '
+            f'({observed_max_turns_values})'
+        )
+
     return {
         'controlLabel': control_label,
         'interventionLabel': intervention_label,
@@ -269,6 +327,9 @@ def aggregate(per_battles: list[dict[str, Any]]) -> dict[str, Any]:
         'settledBattleCount': sum(1 for b in per_battles if b['settled']),
         'sharedRegimeMetrics': shared_regime_metrics,
         'interventionTargetMetrics': intervention_target_metrics,
+        'labelHygieneOk': label_hygiene_ok,
+        'maxTurnsComparable': max_turns_comparable,
+        'warnings': warnings,
     }
 
 
@@ -329,11 +390,20 @@ def write_aggregate_markdown(path: Path, agg: dict[str, Any], comparison: dict[s
         f"- accepted battle count: `{shared['acceptedBattleCount']}`",
         '',
         '## intervention-target metrics',
+        f"- intervention-scope battle count: `{target['battleCount']}`",
+        f"- turn-budget used count: `{target['turnBudgetUsedCount']}`",
+        f"- turn-budget unused count: `{target['turnBudgetUnusedCount']}`",
+        f"- turn-budget used ratio: `{target['turnBudgetUsedRatio']}` (denominator: `{target['turnBudgetRatioDenominator']}`)",
         f"- later-turn battle count: `{target['laterTurnBattleCount']}`",
         f"- active-poison battle count: `{target['activePoisonBattleCount']}`",
         f"- settlement observed count: `{target['settlementObservedCount']}`",
         f"- observed mechanics: {', '.join(target['observedMechanics']) or 'none'}",
         f"- unobserved mechanics: {', '.join(target['unobservedMechanics']) or 'none'}",
+        '',
+        '## guardrails',
+        f"- label hygiene ok: `{agg['labelHygieneOk']}`",
+        f"- max turns comparable: `{agg['maxTurnsComparable']}`",
+        f"- warnings: {', '.join(agg['warnings']) if agg['warnings'] else 'none'}",
         '',
         '## comparison',
     ]
@@ -367,6 +437,7 @@ def main() -> None:
     parser.add_argument('--limit', type=int, default=5, help='How many latest batch logs to summarize (default: 5)')
     parser.add_argument('--control-label', default=DEFAULT_CONTROL_LABEL, help='Human-readable label for the baseline/control regime.')
     parser.add_argument('--intervention-label', default=DEFAULT_INTERVENTION_LABEL, help='Human-readable label for the current intervention regime.')
+    parser.add_argument('--max-turns-configured', type=int, default=80, help='Configured max turns budget for the summarized batch runs (default: 80).')
     args = parser.parse_args()
 
     logs = sorted(RESULTS_DIR.glob('batch-*.log'), key=lambda p: p.stat().st_mtime)
@@ -387,6 +458,7 @@ def main() -> None:
             checkpoint_path if checkpoint_path.exists() else None,
             control_label=args.control_label,
             intervention_label=args.intervention_label,
+            max_turns_configured=args.max_turns_configured,
         )
         per_battles.append(per_battle)
         write_json(per_dir / f'{log_path.stem}.json', per_battle)
