@@ -8,7 +8,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 RESULTS_DIR = ROOT / 'battle-results'
 CHECKPOINTS_DIR = RESULTS_DIR / 'checkpoints'
 SUMMARIES_DIR = RESULTS_DIR / 'summaries'
@@ -19,6 +19,10 @@ KNOWN_MECHANICS = [
     'active-poison',
     'settlement',
 ]
+
+DEFAULT_CONTROL_LABEL = 'baseline-same-regime'
+DEFAULT_INTERVENTION_LABEL = 'same-regime'
+LATER_TURN_THRESHOLD = 3
 
 
 def load_text(path: Path) -> str:
@@ -123,7 +127,13 @@ def observed_mechanics(per_battle: dict[str, Any], log_text: str, log_summary: d
     return sorted(set(observed))
 
 
-def build_per_battle(log_path: Path, checkpoint_path: Path | None) -> dict[str, Any]:
+def build_per_battle(
+    log_path: Path,
+    checkpoint_path: Path | None,
+    *,
+    control_label: str,
+    intervention_label: str,
+) -> dict[str, Any]:
     log_text = load_text(log_path)
     log_summary = parse_log(log_text)
     checkpoint = load_json(checkpoint_path) if checkpoint_path else None
@@ -134,6 +144,8 @@ def build_per_battle(log_path: Path, checkpoint_path: Path | None) -> dict[str, 
         'batchKey': batch_key(log_path),
         'logPath': str(log_path.relative_to(ROOT)),
         'checkpointPath': str(checkpoint_path.relative_to(ROOT)) if checkpoint_path else None,
+        'controlLabel': control_label,
+        'interventionLabel': intervention_label,
         'battleId': log_summary['battleId'],
         'battleAddress': log_summary['battleAddress'],
         'identityPair': 'PrivateClawn vs PrivateClawnJr',
@@ -160,6 +172,21 @@ def build_per_battle(log_path: Path, checkpoint_path: Path | None) -> dict[str, 
     out['unobservedMechanics'] = [m for m in KNOWN_MECHANICS if m not in observed]
     out['settled'] = 'settlement' in observed
     out['unsettled'] = not out['settled']
+    out['sharedRegimeMetrics'] = {
+        'identityPair': out['identityPair'],
+        'firstMoverA': out['firstMoverA'],
+        'deepestStageReached': out['deepestStageReached'],
+        'accepted': out['accepted'],
+        'turnsMined': out['turnsMined'],
+        'failureClass': out['failureClass'] or 'none',
+    }
+    out['interventionTargetMetrics'] = {
+        'laterTurnReached': out['turnsMined'] >= LATER_TURN_THRESHOLD,
+        'settlementObserved': out['settled'],
+        'activePoisonObserved': 'active-poison' in out['observedMechanics'],
+        'observedMechanics': out['observedMechanics'],
+        'unobservedMechanics': out['unobservedMechanics'],
+    }
     return out
 
 
@@ -169,21 +196,33 @@ def write_json(path: Path, payload: Any) -> None:
 
 
 def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
+    shared = per_battle['sharedRegimeMetrics']
+    target = per_battle['interventionTargetMetrics']
     lines = [
         f"# {per_battle['batchKey']}",
         '',
+        f"- control label: `{per_battle['controlLabel']}`",
+        f"- intervention label: `{per_battle['interventionLabel']}`",
         f"- battle: `{per_battle['battleId']}` @ `{per_battle['battleAddress']}`",
         f"- identities: {per_battle['identityPair']}",
         f"- agents: clawn={per_battle['clawnAgentId']} / jr={per_battle['clawnJrAgentId']}",
-        f"- first mover A: `{per_battle['firstMoverA']}`",
-        f"- deepest stage: `{per_battle['deepestStageReached']}`",
-        f"- turns mined: `{per_battle['turnsMined']}`",
         f"- settled: `{per_battle['settled']}` | unsettled: `{per_battle['unsettled']}`",
         f"- txs: `{len(per_battle['txHashes'])}`",
         f"- bank delta: A `{per_battle['bankAStart']}` -> `{per_battle['bankAEnd']}`, B `{per_battle['bankBStart']}` -> `{per_battle['bankBEnd']}`",
-        f"- observed mechanics: {', '.join(per_battle['observedMechanics']) or 'none'}",
-        f"- unobserved mechanics: {', '.join(per_battle['unobservedMechanics']) or 'none'}",
-        f"- failure/result note: {per_battle['failureClass'] or 'none'}",
+        '',
+        '## shared-regime metrics',
+        f"- first mover A: `{shared['firstMoverA']}`",
+        f"- deepest stage: `{shared['deepestStageReached']}`",
+        f"- accepted: `{shared['accepted']}`",
+        f"- turns mined: `{shared['turnsMined']}`",
+        f"- failure/result note: {shared['failureClass']}",
+        '',
+        '## intervention-target metrics',
+        f"- later-turn reached: `{target['laterTurnReached']}`",
+        f"- settlement observed: `{target['settlementObserved']}`",
+        f"- active-poison observed: `{target['activePoisonObserved']}`",
+        f"- observed mechanics: {', '.join(target['observedMechanics']) or 'none'}",
+        f"- unobserved mechanics: {', '.join(target['unobservedMechanics']) or 'none'}",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
@@ -193,19 +232,43 @@ def aggregate(per_battles: list[dict[str, Any]]) -> dict[str, Any]:
     stage_counts = Counter(b['deepestStageReached'] for b in per_battles)
     failure_counts = Counter((b['failureClass'] or 'none') for b in per_battles)
     observed = sorted({m for b in per_battles for m in b['observedMechanics']})
-    return {
+    control_label = per_battles[0]['controlLabel'] if per_battles else DEFAULT_CONTROL_LABEL
+    intervention_label = per_battles[0]['interventionLabel'] if per_battles else DEFAULT_INTERVENTION_LABEL
+    turns_mined = [b['turnsMined'] for b in per_battles]
+    first_movers = [b['firstMoverA'] for b in per_battles]
+    shared_regime_metrics = {
         'battleCount': len(per_battles),
         'stageHistogram': dict(stage_counts),
         'failureHistogram': dict(failure_counts),
-        'turnsMinedPerBattle': [b['turnsMined'] for b in per_battles],
+        'turnsMinedPerBattle': turns_mined,
+        'firstMoversA': first_movers,
+        'identityPairs': sorted({b['identityPair'] for b in per_battles}),
+        'acceptedBattleCount': sum(1 for b in per_battles if b['accepted']),
+    }
+    intervention_target_metrics = {
+        'laterTurnBattleCount': sum(1 for b in per_battles if b['interventionTargetMetrics']['laterTurnReached']),
+        'activePoisonBattleCount': sum(1 for b in per_battles if b['interventionTargetMetrics']['activePoisonObserved']),
+        'settlementObservedCount': sum(1 for b in per_battles if b['interventionTargetMetrics']['settlementObserved']),
+        'observedMechanics': observed,
+        'unobservedMechanics': [m for m in KNOWN_MECHANICS if m not in observed],
+    }
+    return {
+        'controlLabel': control_label,
+        'interventionLabel': intervention_label,
+        'battleCount': len(per_battles),
+        'stageHistogram': dict(stage_counts),
+        'failureHistogram': dict(failure_counts),
+        'turnsMinedPerBattle': turns_mined,
         'battleIds': [b['battleId'] for b in per_battles],
-        'firstMoversA': [b['firstMoverA'] for b in per_battles],
+        'firstMoversA': first_movers,
         'identityPairs': sorted({b['identityPair'] for b in per_battles}),
         'observedMechanics': observed,
         'unobservedMechanics': [m for m in KNOWN_MECHANICS if m not in observed],
         'notableAnomalies': [b['failureClass'] for b in per_battles if b['failureClass']],
         'unsettledBattleCount': sum(1 for b in per_battles if b['unsettled']),
         'settledBattleCount': sum(1 for b in per_battles if b['settled']),
+        'sharedRegimeMetrics': shared_regime_metrics,
+        'interventionTargetMetrics': intervention_target_metrics,
     }
 
 
@@ -215,8 +278,16 @@ def compare_aggregates(previous: dict[str, Any] | None, current: dict[str, Any])
             'hasPrevious': False,
             'note': 'No previous aggregate snapshot available for comparison.'
         }
+    previous_shared = previous.get('sharedRegimeMetrics', {})
+    current_shared = current.get('sharedRegimeMetrics', {})
+    previous_target = previous.get('interventionTargetMetrics', {})
+    current_target = current.get('interventionTargetMetrics', {})
     return {
         'hasPrevious': True,
+        'previousControlLabel': previous.get('controlLabel'),
+        'currentControlLabel': current.get('controlLabel'),
+        'previousInterventionLabel': previous.get('interventionLabel'),
+        'currentInterventionLabel': current.get('interventionLabel'),
         'previousBattleCount': previous.get('battleCount'),
         'currentBattleCount': current.get('battleCount'),
         'previousStageHistogram': previous.get('stageHistogram', {}),
@@ -231,31 +302,51 @@ def compare_aggregates(previous: dict[str, Any] | None, current: dict[str, Any])
         'currentUnsettledBattleCount': current.get('unsettledBattleCount'),
         'previousBattleIds': previous.get('battleIds', []),
         'currentBattleIds': current.get('battleIds', []),
+        'previousSharedRegimeMetrics': previous_shared,
+        'currentSharedRegimeMetrics': current_shared,
+        'previousInterventionTargetMetrics': previous_target,
+        'currentInterventionTargetMetrics': current_target,
     }
 
 
 def write_aggregate_markdown(path: Path, agg: dict[str, Any], comparison: dict[str, Any]) -> None:
+    shared = agg['sharedRegimeMetrics']
+    target = agg['interventionTargetMetrics']
     lines = [
         '# batch-summary',
         '',
+        f"- control label: `{agg['controlLabel']}`",
+        f"- intervention label: `{agg['interventionLabel']}`",
         f"- battle count: `{agg['battleCount']}`",
-        f"- stage histogram: `{agg['stageHistogram']}`",
-        f"- failure histogram: `{agg['failureHistogram']}`",
-        f"- turns mined per battle: `{agg['turnsMinedPerBattle']}`",
         f"- settled vs unsettled: `{agg['settledBattleCount']}` settled / `{agg['unsettledBattleCount']}` unsettled",
-        f"- first movers A: `{agg['firstMoversA']}`",
-        f"- observed mechanics: {', '.join(agg['observedMechanics']) or 'none'}",
-        f"- unobserved mechanics: {', '.join(agg['unobservedMechanics']) or 'none'}",
         f"- notable anomalies: {', '.join(agg['notableAnomalies']) or 'none'}",
+        '',
+        '## shared-regime metrics',
+        f"- stage histogram: `{shared['stageHistogram']}`",
+        f"- failure histogram: `{shared['failureHistogram']}`",
+        f"- turns mined per battle: `{shared['turnsMinedPerBattle']}`",
+        f"- first movers A: `{shared['firstMoversA']}`",
+        f"- accepted battle count: `{shared['acceptedBattleCount']}`",
+        '',
+        '## intervention-target metrics',
+        f"- later-turn battle count: `{target['laterTurnBattleCount']}`",
+        f"- active-poison battle count: `{target['activePoisonBattleCount']}`",
+        f"- settlement observed count: `{target['settlementObservedCount']}`",
+        f"- observed mechanics: {', '.join(target['observedMechanics']) or 'none'}",
+        f"- unobserved mechanics: {', '.join(target['unobservedMechanics']) or 'none'}",
         '',
         '## comparison',
     ]
     if comparison.get('hasPrevious'):
         lines.extend([
+            f"- previous control/intervention: `{comparison['previousControlLabel']}` / `{comparison['previousInterventionLabel']}`",
+            f"- current control/intervention: `{comparison['currentControlLabel']}` / `{comparison['currentInterventionLabel']}`",
             f"- previous battle count: `{comparison['previousBattleCount']}`",
             f"- current battle count: `{comparison['currentBattleCount']}`",
-            f"- previous stage histogram: `{comparison['previousStageHistogram']}`",
-            f"- current stage histogram: `{comparison['currentStageHistogram']}`",
+            f"- previous shared metrics: `{comparison['previousSharedRegimeMetrics']}`",
+            f"- current shared metrics: `{comparison['currentSharedRegimeMetrics']}`",
+            f"- previous intervention-target metrics: `{comparison['previousInterventionTargetMetrics']}`",
+            f"- current intervention-target metrics: `{comparison['currentInterventionTargetMetrics']}`",
             f"- previous unsettled: `{comparison['previousUnsettledBattleCount']}`",
             f"- current unsettled: `{comparison['currentUnsettledBattleCount']}`",
             f"- newly observed mechanics: {', '.join(comparison['newlyObservedMechanics']) or 'none'}",
@@ -274,6 +365,8 @@ def write_aggregate_markdown(path: Path, agg: dict[str, Any], comparison: dict[s
 def main() -> None:
     parser = argparse.ArgumentParser(description='Summarize v05 battle batch artifacts into concise per-battle and aggregate summaries.')
     parser.add_argument('--limit', type=int, default=5, help='How many latest batch logs to summarize (default: 5)')
+    parser.add_argument('--control-label', default=DEFAULT_CONTROL_LABEL, help='Human-readable label for the baseline/control regime.')
+    parser.add_argument('--intervention-label', default=DEFAULT_INTERVENTION_LABEL, help='Human-readable label for the current intervention regime.')
     args = parser.parse_args()
 
     logs = sorted(RESULTS_DIR.glob('batch-*.log'), key=lambda p: p.stat().st_mtime)
@@ -289,7 +382,12 @@ def main() -> None:
 
     for log_path in logs:
         checkpoint_path = CHECKPOINTS_DIR / f'{log_path.stem}.json'
-        per_battle = build_per_battle(log_path, checkpoint_path if checkpoint_path.exists() else None)
+        per_battle = build_per_battle(
+            log_path,
+            checkpoint_path if checkpoint_path.exists() else None,
+            control_label=args.control_label,
+            intervention_label=args.intervention_label,
+        )
         per_battles.append(per_battle)
         write_json(per_dir / f'{log_path.stem}.json', per_battle)
         write_markdown(per_dir / f'{log_path.stem}.md', per_battle)
