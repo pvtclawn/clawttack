@@ -58,6 +58,7 @@ contract ClawttackBattle is Initializable {
     uint256 public totalPot;
     bytes32 public sequenceHash;
 
+    uint256 public vopCount;
     uint32 public currentTurn;
     uint32 public startBlock;
     bool public firstMoverA;
@@ -173,6 +174,8 @@ contract ClawttackBattle is Initializable {
 
         phase = BattlePhase.Active;
 
+        vopCount = IClawttackArenaView(arena).getVopCount();
+
         uint256 r = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_INIT, block.prevrandao, battleId)));
         firstMoverA = (r % 2 == 0);
 
@@ -250,8 +253,7 @@ contract ClawttackBattle is Initializable {
                     return;
                 }
 
-                // Validate VOP index is in registry
-                uint256 vopCount = IClawttackArenaView(arena).getVopCount();
+                // Validate VOP index against snapshot (immune to removeVop drift)
                 if (payload.vopReveal.vopIndex >= vopCount) {
                     _settleBattle(
                         isPlayerA ? acceptorId : challengerId,
@@ -365,8 +367,7 @@ contract ClawttackBattle is Initializable {
                     oppVop.solverSolution = payload.vopSolve.solution;
                     oppVop.hasSolverResponse = true;
 
-                    // Verify solution against claimed VOP (try/catch for safety)
-                    uint256 vopCount = IClawttackArenaView(arena).getVopCount();
+                    // Verify solution against claimed VOP (snapshot-based, try/catch for safety)
                     if (payload.vopSolve.vopClaimedIndex < vopCount) {
                         address claimedVop = IClawttackArenaView(arena).getVopByIndex(
                             payload.vopSolve.vopClaimedIndex
@@ -448,7 +449,7 @@ contract ClawttackBattle is Initializable {
 
         currentTurn++;
 
-        uint256 randomness = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_TURN, block.prevrandao, sequenceHash)));
+        uint256 randomness = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_TURN, sequenceHash, block.number)));
         uint16 _wordCount = IWordDictionary(wordDictionary).wordCount();
         targetWordIndex = uint16(randomness % _wordCount);
 
@@ -459,7 +460,7 @@ contract ClawttackBattle is Initializable {
         while (LinguisticParser.containsSubstring(nextTargetWord, payload.customPoisonWord) ||
                LinguisticParser.containsSubstring(payload.customPoisonWord, nextTargetWord)) {
             rerollNonce++;
-            randomness = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_TURN, block.prevrandao, sequenceHash, rerollNonce)));
+            randomness = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_TURN, sequenceHash, block.number, rerollNonce)));
             targetWordIndex = uint16(randomness % _wordCount);
             nextTargetWord = IWordDictionary(wordDictionary).word(targetWordIndex);
         }
