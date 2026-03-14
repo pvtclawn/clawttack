@@ -54,8 +54,9 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
     // ─── VOP Registry ────────────────────────────────────────────────────────        
 
-    address[] public activeVOPs;
+    address[] public vopRegistry;
     mapping(address => bool) public isVopRegistered;
+    mapping(uint8 => bool) public deactivatedVOPs;
 
     // ─── Events ──────────────────────────────────────────────────────────────
 
@@ -66,7 +67,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     event BattleCreationFeeUpdated(uint256 oldFee, uint256 newFee);
     event AgentRegistrationFeeUpdated(uint256 oldFee, uint256 newFee);
     event VOPAdded(address indexed vopAddress);
-    event VOPRemoved(address indexed vopAddress);
+    event VOPDeactivated(uint8 indexed index, address indexed vopAddress);
 
     // ─── Constructor / Receive ───────────────────────────────────────────────
 
@@ -118,22 +119,17 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     function addVop(address vopAddress) external onlyOwner {
         if (isVopRegistered[vopAddress]) revert ClawttackErrors.VOPAlreadyRegistered();
         isVopRegistered[vopAddress] = true;
-        activeVOPs.push(vopAddress);
+        vopRegistry.push(vopAddress);
         emit VOPAdded(vopAddress);
     }
 
-    function removeVop(address vopAddress) external onlyOwner {
-        if (!isVopRegistered[vopAddress]) revert ClawttackErrors.VOPNotRegistered();
-        isVopRegistered[vopAddress] = false;
-        for (uint256 i = 0; i < activeVOPs.length; i++) {
-            if (activeVOPs[i] == vopAddress) {
-                activeVOPs[i] = activeVOPs[activeVOPs.length - 1];
-                activeVOPs.pop();
-                break;
-            }
-        }
-        emit VOPRemoved(vopAddress);
+    function deactivateVop(uint8 index) external onlyOwner {
+        if (index >= vopRegistry.length) revert ClawttackErrors.VopIndexOutOfRange();
+        deactivatedVOPs[index] = true;
+        emit VOPDeactivated(index, vopRegistry[index]);
     }
+
+    uint256 public totalVolume; // Cumulative ETH staked across all battles
 
     // ─── External: Core Protocol ─────────────────────────────────────────────
 
@@ -151,7 +147,9 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
             owner: msg.sender,
             eloRating: DEFAULT_ELO_RATING,
             totalWins: 0,
-            totalLosses: 0
+            totalLosses: 0,
+            totalStaked: 0,
+            totalWon: 0
         });
 
         emit AgentRegistered(agentId, msg.sender);
@@ -199,19 +197,15 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     }
 
     /**
-     * @notice Updates the persistent Elo ratings of agents after a battle concludes.
-     * @dev Only callable by active Battle clones. Chess clock guarantees a winner.
-     * @param battleId      The ID of the battle triggering the update.
-     * @param challengerId_ The challenger agent ID (unused, kept for interface compat).
-     * @param acceptorId_   The acceptor agent ID (unused, kept for interface compat).
-     * @param winnerId      The ID of the winning agent.
-     * @param loserId       The ID of the losing agent.
-     * @param battleStake   The total stake. Unrated matches (stake < MIN) do not affect Elo.
+     * @notice Callback from Battle clones when a battle is settled.
+     * @dev Only callable by active Battle clones. Records outcome and updates Elo.
+     * @param battleId    The ID of the settled battle.
+     * @param winnerId    The ID of the winning agent.
+     * @param loserId     The ID of the losing agent.
+     * @param battleStake Per-player stake. Unrated matches (stake < MIN) skip Elo.
      */
-    function updateRatings(
+    function settleBattle(
         uint256 battleId,
-        uint256 challengerId_,
-        uint256 acceptorId_,
         uint256 winnerId,
         uint256 loserId,
         uint256 battleStake
@@ -220,13 +214,35 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         if (winnerId > agentsCount || loserId > agentsCount) revert ClawttackErrors.InvalidCall();
         if (winnerId == 0 || loserId == 0) revert ClawttackErrors.InvalidCall();
 
+        _recordBattleOutcome(winnerId, loserId, battleStake);
+
+        if (battleStake >= MIN_RATED_STAKE) {
+            _updateElo(winnerId, loserId);
+        }
+    }
+
+    // ─── Internal: Battle Accounting ─────────────────────────────────────────
+
+    function _recordBattleOutcome(
+        uint256 winnerId,
+        uint256 loserId,
+        uint256 stake
+    ) internal {
         unchecked {
             agents[winnerId].totalWins  += 1;
             agents[loserId].totalLosses += 1;
         }
 
-        if (battleStake < MIN_RATED_STAKE) return; // Unrated — skip rating update
+        if (stake > 0) {
+            agents[winnerId].totalStaked += stake;
+            agents[loserId].totalStaked  += stake;
+            totalVolume += stake * 2;
+            uint256 protocolCut = (stake * 2 * protocolFeeRate) / 10000;
+            agents[winnerId].totalWon += stake - (protocolCut / 2);
+        }
+    }
 
+    function _updateElo(uint256 winnerId, uint256 loserId) internal {
         uint32 kWinner = EloMath.kFactor(agents[winnerId].totalWins + agents[winnerId].totalLosses);
         uint32 kLoser  = EloMath.kFactor(agents[loserId].totalWins  + agents[loserId].totalLosses);
 
@@ -247,11 +263,16 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     // ─── External: View ──────────────────────────────────────────────────────
 
     function getVopCount() external view returns (uint256) {
-        return activeVOPs.length;
+        return vopRegistry.length;
     }
 
     function getVopByIndex(uint8 index) external view returns (address) {
-        if (index >= activeVOPs.length) revert ClawttackErrors.VopIndexOutOfRange();
-        return activeVOPs[index];
+        if (index >= vopRegistry.length) revert ClawttackErrors.VopIndexOutOfRange();
+        return vopRegistry[index];
+    }
+
+    function isVopActive(uint8 index) external view returns (bool) {
+        if (index >= vopRegistry.length) return false;
+        return !deactivatedVOPs[index];
     }
 }

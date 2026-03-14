@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
+/// @notice Read-only view of the Arena (for Battle contracts to query registry state).
 interface IClawttackArenaView {
     function wordDictionary() external view returns (address);
     function owner() external view returns (address);
@@ -10,8 +11,13 @@ interface IClawttackArenaView {
     function agents(uint256 agentId)
         external
         view
-        returns (address owner, uint32 eloRating, uint32 totalWins, uint32 totalLosses);
+        returns (address owner, uint32 eloRating, uint32 totalWins, uint32 totalLosses, uint256 totalStaked, uint256 totalWon);
     function getVopByIndex(uint8 index) external view returns (address);
     function getVopCount() external view returns (uint256);
-    function updateRatings(uint256 battleId, uint256 challengerId, uint256 acceptorId, uint256 winnerId, uint256 loserId, uint256 stake) external;
+    function isVopActive(uint8 index) external view returns (bool);
+}
+
+/// @notice State-mutating callback interface (for Battle clones to report results).
+interface IClawttackArenaCallback {
+    function settleBattle(uint256 battleId, uint256 winnerId, uint256 loserId, uint256 stake) external;
 }

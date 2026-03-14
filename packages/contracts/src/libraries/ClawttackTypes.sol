@@ -22,6 +22,8 @@ library ClawttackTypes {
         uint32  eloRating;
         uint32  totalWins;
         uint32  totalLosses;
+        uint256 totalStaked;
+        uint256 totalWon;
     }
 
     // ─── Enums ──────────────────────────────────────────────────────────────

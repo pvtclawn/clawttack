@@ -12,7 +12,7 @@ import {ECDSA} from "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.s
 import {MessageHashUtils} from "openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
 import {IVerifiableOraclePrimitive} from "./interfaces/IVerifiableOraclePrimitive.sol";
 import {IWordDictionary} from "./interfaces/IWordDictionary.sol";
-import {IClawttackArenaView} from "./interfaces/IClawttackArenaView.sol";
+import {IClawttackArenaView, IClawttackArenaCallback} from "./interfaces/IClawttackArenaView.sol";
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 /**
@@ -58,15 +58,12 @@ contract ClawttackBattle is Initializable {
     uint256 public totalPot;
     bytes32 public sequenceHash;
 
-    uint256 public vopCount;
     uint32 public currentTurn;
     uint32 public startBlock;
     bool public firstMoverA;
 
     uint16 public targetWordIndex;
     string public poisonWord;
-
-
 
     // Chess clock
     ChessClockLib.Clock public clock;
@@ -151,46 +148,50 @@ contract ClawttackBattle is Initializable {
         if (msg.value != config.stake) revert ClawttackErrors.InsufficientValue();
         if (_acceptorId == challengerId) revert ClawttackErrors.CannotBattleSelf();
 
-        (address _agentOwner,,,) = IClawttackArenaView(arena).agents(_acceptorId);
-        if (_agentOwner != msg.sender) revert ClawttackErrors.NotParticipant();
-
-        if (config.targetAgentId != 0) {
-            if (_acceptorId != config.targetAgentId) revert ClawttackErrors.WrongTargetAgent();
-        }
+        IClawttackArenaView arenaView = IClawttackArenaView(arena);
+        _validateAcceptor(arenaView, _acceptorId);
 
         acceptorId = _acceptorId;
         acceptorOwner = msg.sender;
         jokersRemainingB = config.maxJokers;
         totalPot += msg.value;
 
+        _initBattleState(arenaView, _acceptorId);
 
-        // Elo rating check for rated battles
-        if (config.stake >= IClawttackArenaView(arena).MIN_RATED_STAKE()) {
-            (, uint32 cRating,,) = IClawttackArenaView(arena).agents(challengerId);
-            (, uint32 aRating,,) = IClawttackArenaView(arena).agents(_acceptorId);
-            uint32 diff = cRating >= aRating ? cRating - aRating : aRating - cRating;
-            if (diff > IClawttackArenaView(arena).MAX_ELO_DIFF()) revert ClawttackErrors.EloDifferenceTooHigh();
+        emit BattleAccepted(battleId, _acceptorId, firstMoverA);
+    }
+
+    function _validateAcceptor(IClawttackArenaView arenaView, uint256 _acceptorId) internal view {
+        (address _agentOwner,,,,,) = arenaView.agents(_acceptorId);
+        if (_agentOwner != msg.sender) revert ClawttackErrors.NotParticipant();
+
+        if (config.targetAgentId != 0) {
+            if (_acceptorId != config.targetAgentId) revert ClawttackErrors.WrongTargetAgent();
         }
 
-        phase = BattlePhase.Active;
+        if (config.stake >= arenaView.MIN_RATED_STAKE()) {
+            (, uint32 cRating,,,,) = arenaView.agents(challengerId);
+            (, uint32 aRating,,,,) = arenaView.agents(_acceptorId);
 
-        vopCount = IClawttackArenaView(arena).getVopCount();
+            uint32 diff = cRating >= aRating ? cRating - aRating : aRating - cRating;
+            if (diff > arenaView.MAX_ELO_DIFF()) revert ClawttackErrors.EloDifferenceTooHigh();
+        }
+    }
+
+    function _initBattleState(IClawttackArenaView arenaView, uint256 _acceptorId) internal {
+        phase = BattlePhase.Active;
 
         uint256 r = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_INIT, block.prevrandao, battleId)));
         firstMoverA = (r % 2 == 0);
 
         startBlock = uint32(block.number + config.warmupBlocks);
-
-        // Initialize chess clock
         clock.init();
 
         currentTurn = 0;
         sequenceHash = keccak256(abi.encodePacked(DOMAIN_TYPE_INIT, battleId, _acceptorId, r));
 
-        address wordDictionary = IClawttackArenaView(arena).wordDictionary();
+        address wordDictionary = arenaView.wordDictionary();
         targetWordIndex = uint16(r % IWordDictionary(wordDictionary).wordCount());
-
-        emit BattleAccepted(battleId, _acceptorId, firstMoverA);
     }
 
     // ─── Submit Turn ────────────────────────────────────────────────────────
@@ -207,112 +208,139 @@ contract ClawttackBattle is Initializable {
 
         if (block.number < startBlock) revert ClawttackErrors.BattleNotActive();
 
-        // ── 1a. NCC Reveal (attacker reveals their previous NCC → determines OPPONENT's result) ──
+        // Compute once, pass everywhere
+        uint256 myId  = isPlayerA ? challengerId : acceptorId;
+        uint256 oppId = isPlayerA ? acceptorId : challengerId;
+        IClawttackArenaView arenaView = IClawttackArenaView(arena);
+
+        // ── Phase 1: Reveals (from turn N-2) ──
         if (currentTurn >= 2) {
-            ClawttackTypes.PendingNcc storage myPrevNcc = isPlayerA ? pendingNccA : pendingNccB;
-
-            // Validate NCC reveal — domain-separated commitment
-            (bool nccRevealValid, bool opponentWasCorrect) = NccVerifier.verifyRevealSafe(
-                payload.nccReveal, myPrevNcc.commitment,
-                myPrevNcc.defenderGuessIdx, battleId, currentTurn - 2
-            );
-            if (!nccRevealValid) {
-                _settleBattle(
-                    isPlayerA ? acceptorId : challengerId,
-                    isPlayerA ? challengerId : acceptorId,
-                    ClawttackTypes.ResultType.NCC_REVEAL_FAILED
-                );
-                return;
-            }
-
-            if (isPlayerA) {
-                nccResultB = opponentWasCorrect;
-                nccResultBReady = true;
-            } else {
-                nccResultA = opponentWasCorrect;
-                nccResultAReady = true;
-            }
+            if (_revealNcc(isPlayerA, oppId, myId, payload)) return;
+            if (_revealVop(isPlayerA, oppId, myId, arenaView, payload)) return;
         }
 
-        // ── 1b. VOP Reveal (challenger reveals their previous VOP commitment) ──
-        if (currentTurn >= 2) {
-            ClawttackTypes.PendingVop storage myPrevVop = isPlayerA ? pendingVopA : pendingVopB;
+        // ── Phase 2: Clock tick ──
+        if (_tickClock(isPlayerA, oppId, myId)) return;
 
-            if (myPrevVop.commitment != bytes32(0)) {
-                // Verify VOP reveal — domain-separated
-                bytes32 computedVopCommitment = NccVerifier.computeVopCommitment(
-                    battleId, currentTurn - 2, payload.vopReveal.vopSalt, payload.vopReveal.vopIndex,
-                    myPrevVop.instanceCommit
-                );
-                if (computedVopCommitment != myPrevVop.commitment) {
-                    _settleBattle(
-                        isPlayerA ? acceptorId : challengerId,
-                        isPlayerA ? challengerId : acceptorId,
-                        ClawttackTypes.ResultType.VOP_REVEAL_FAILED
-                    );
-                    return;
-                }
-
-                // Validate VOP index against snapshot (immune to removeVop drift)
-                if (payload.vopReveal.vopIndex >= vopCount) {
-                    _settleBattle(
-                        isPlayerA ? acceptorId : challengerId,
-                        isPlayerA ? challengerId : acceptorId,
-                        ClawttackTypes.ResultType.INVALID_SOLUTION
-                    );
-                    return;
-                }
-
-                // Determine VOP outcome
-                ClawttackTypes.VopOutcome vopOutcome;
-                bool solverIsA = !isPlayerA; // Solver is the opponent
-
-                if (!myPrevVop.hasSolverResponse) {
-                    // Solver didn't respond (NCC gate failed)
-                    vopOutcome = ClawttackTypes.VopOutcome.NccGateFailed;
-                } else if (myPrevVop.solverClaimedIndex != payload.vopReveal.vopIndex) {
-                    // Wrong index
-                    vopOutcome = ClawttackTypes.VopOutcome.WrongIndex;
-                } else if (!myPrevVop.solverPassed) {
-                    // Right index, wrong solution
-                    vopOutcome = ClawttackTypes.VopOutcome.RightIndexWrongSol;
-                } else {
-                    // Right index, right solution
-                    vopOutcome = ClawttackTypes.VopOutcome.RightIndexRightSol;
-                }
-
-                // Apply penalty matrix (Constant Relative Advantage)
-                bool isChallengerA = isPlayerA; // Current revealer is the challenger
-                (bool cDepleted, bool sDepleted) = clock.applyVopResult(isChallengerA, vopOutcome);
-
-
-                emit VopResolved(
-                    battleId, currentTurn, vopOutcome,
-                    payload.vopReveal.vopIndex, myPrevVop.solverClaimedIndex,
-                    clock.bankA, clock.bankB
-                );
-
-                // Check bank depletion from VOP penalties
-                if (cDepleted) {
-                    uint256 winnerId = isChallengerA ? acceptorId : challengerId;
-                    uint256 loserId = isChallengerA ? challengerId : acceptorId;
-                    _settleBattle(winnerId, loserId, ClawttackTypes.ResultType.BANK_EMPTY);
-                    return;
-                }
-                if (sDepleted) {
-                    uint256 winnerId = solverIsA ? acceptorId : challengerId;
-                    uint256 loserId = solverIsA ? challengerId : acceptorId;
-                    _settleBattle(winnerId, loserId, ClawttackTypes.ResultType.BANK_EMPTY);
-                    return;
-                }
-
-                // Clear pending VOP
-                delete myPrevVop.commitment;
-                delete myPrevVop.hasSolverResponse;
-            }
+        // ── Phase 3: Defense + VOP solve ──
+        bool nccDefensePassed = false;
+        if (currentTurn >= 1) {
+            nccDefensePassed = _defendNcc(isPlayerA, payload);
+            _solveVop(isPlayerA, nccDefensePassed, arenaView, payload);
         }
 
-        // ── 2. Chess Clock Tick (uses THIS agent's stored NCC result) ──
+        // ── Phase 4: Attack commitments ──
+        _commitNccAttack(isPlayerA, arenaView, payload);
+        _commitVop(isPlayerA, payload);
+
+        // ── Phase 5: Narrative + state advance ──
+        _verifyNarrative(isPlayerA, myId, arenaView, payload);
+        _advanceState(myId, arenaView, payload);
+    }
+
+    // ─── Internal: Reveal Phase ──────────────────────────────────────────────
+
+    /// @dev Returns true if battle was settled (caller should return early).
+    function _revealNcc(
+        bool isPlayerA,
+        uint256 winnerId,
+        uint256 loserId,
+        ClawttackTypes.TurnPayload calldata payload
+    ) internal returns (bool settled) {
+        ClawttackTypes.PendingNcc storage myPrevNcc = isPlayerA ? pendingNccA : pendingNccB;
+
+        (bool nccRevealValid, bool opponentWasCorrect) = NccVerifier.verifyRevealSafe(
+            payload.nccReveal, myPrevNcc.commitment,
+            myPrevNcc.defenderGuessIdx, battleId, currentTurn - 2
+        );
+        if (!nccRevealValid) {
+            _settleBattle(winnerId, loserId, ClawttackTypes.ResultType.NCC_REVEAL_FAILED);
+            return true;
+        }
+
+        if (isPlayerA) {
+            nccResultB = opponentWasCorrect;
+            nccResultBReady = true;
+        } else {
+            nccResultA = opponentWasCorrect;
+            nccResultAReady = true;
+        }
+        return false;
+    }
+
+    /// @dev Returns true if battle was settled (caller should return early).
+    function _revealVop(
+        bool isPlayerA,
+        uint256 winnerId,
+        uint256 loserId,
+        IClawttackArenaView arenaView,
+        ClawttackTypes.TurnPayload calldata payload
+    ) internal returns (bool settled) {
+        ClawttackTypes.PendingVop storage myPrevVop = isPlayerA ? pendingVopA : pendingVopB;
+        if (myPrevVop.commitment == bytes32(0)) return false;
+
+        // Verify VOP commitment
+        bytes32 computedVopCommitment = NccVerifier.computeVopCommitment(
+            battleId, currentTurn - 2, payload.vopReveal.vopSalt, payload.vopReveal.vopIndex,
+            myPrevVop.instanceCommit
+        );
+        if (computedVopCommitment != myPrevVop.commitment) {
+            _settleBattle(winnerId, loserId, ClawttackTypes.ResultType.VOP_REVEAL_FAILED);
+            return true;
+        }
+
+        // Validate VOP index
+        uint256 vopCount = arenaView.getVopCount();
+        if (payload.vopReveal.vopIndex >= vopCount) {
+            _settleBattle(winnerId, loserId, ClawttackTypes.ResultType.INVALID_SOLUTION);
+            return true;
+        }
+
+        // Determine VOP outcome
+        ClawttackTypes.VopOutcome vopOutcome;
+        bool solverIsA = !isPlayerA;
+
+        if (!myPrevVop.hasSolverResponse) {
+            vopOutcome = ClawttackTypes.VopOutcome.NccGateFailed;
+        } else if (myPrevVop.solverClaimedIndex != payload.vopReveal.vopIndex) {
+            vopOutcome = ClawttackTypes.VopOutcome.WrongIndex;
+        } else if (!myPrevVop.solverPassed) {
+            vopOutcome = ClawttackTypes.VopOutcome.RightIndexWrongSol;
+        } else {
+            vopOutcome = ClawttackTypes.VopOutcome.RightIndexRightSol;
+        }
+
+        // Apply penalty matrix
+        bool isChallengerA = isPlayerA;
+        (bool cDepleted, bool sDepleted) = clock.applyVopResult(isChallengerA, vopOutcome);
+
+        emit VopResolved(
+            battleId, currentTurn, vopOutcome,
+            payload.vopReveal.vopIndex, myPrevVop.solverClaimedIndex,
+            clock.bankA, clock.bankB
+        );
+
+        if (cDepleted) {
+            _settleBattle(winnerId, loserId, ClawttackTypes.ResultType.BANK_EMPTY);
+            return true;
+        }
+        if (sDepleted) {
+            uint256 solverWinner = solverIsA ? acceptorId : challengerId;
+            uint256 solverLoser  = solverIsA ? challengerId : acceptorId;
+            _settleBattle(solverWinner, solverLoser, ClawttackTypes.ResultType.BANK_EMPTY);
+            return true;
+        }
+
+        // Clear pending
+        delete myPrevVop.commitment;
+        delete myPrevVop.hasSolverResponse;
+        return false;
+    }
+
+    // ─── Internal: Clock ─────────────────────────────────────────────────────
+
+    /// @dev Returns true if battle was settled (caller should return early).
+    function _tickClock(bool isPlayerA, uint256 oppId, uint256 myId) internal returns (bool settled) {
         bool isFirstTurn = (currentTurn == 0);
         bool myNccCorrect = true;
 
@@ -329,80 +357,87 @@ contract ClawttackBattle is Initializable {
         (uint128 bankAfter, bool bankDepleted) = clock.tick(isPlayerA, myNccCorrect, isFirstTurn);
 
         if (bankDepleted) {
-            _settleBattle(
-                isPlayerA ? acceptorId : challengerId,
-                isPlayerA ? challengerId : acceptorId,
-                ClawttackTypes.ResultType.BANK_EMPTY
-            );
-            return;
+            _settleBattle(oppId, myId, ClawttackTypes.ResultType.BANK_EMPTY);
+            return true;
         }
 
         emit NccResolved(battleId, currentTurn, myNccCorrect, bankAfter);
+        return false;
+    }
 
-        // ── 3. NCC Defense (answer opponent's previous NCC challenge) ──
-        bool nccDefensePassed = false;
-        if (currentTurn >= 1) {
-            ClawttackTypes.PendingNcc storage oppNcc = isPlayerA ? pendingNccB : pendingNccA;
-            if (oppNcc.commitment != bytes32(0)) {
-                NccVerifier.verifyDefense(payload.nccDefense);
-                oppNcc.defenderGuessIdx = payload.nccDefense.guessIdx;
-                oppNcc.hasDefenderGuess = true;
-                nccDefensePassed = true; // Will be verified at reveal, but gate allows VOP attempt
-            }
+    // ─── Internal: Defense + Solve ───────────────────────────────────────────
+
+    /// @return passed Whether NCC defense was submitted (gates VOP solve).
+    function _defendNcc(
+        bool isPlayerA,
+        ClawttackTypes.TurnPayload calldata payload
+    ) internal returns (bool passed) {
+        ClawttackTypes.PendingNcc storage oppNcc = isPlayerA ? pendingNccB : pendingNccA;
+        if (oppNcc.commitment == bytes32(0)) return false;
+
+        NccVerifier.verifyDefense(payload.nccDefense);
+        oppNcc.defenderGuessIdx = payload.nccDefense.guessIdx;
+        oppNcc.hasDefenderGuess = true;
+        return true;
+    }
+
+    function _solveVop(
+        bool isPlayerA,
+        bool nccDefensePassed,
+        IClawttackArenaView arenaView,
+        ClawttackTypes.TurnPayload calldata payload
+    ) internal {
+        ClawttackTypes.PendingVop storage oppVop = isPlayerA ? pendingVopB : pendingVopA;
+        if (oppVop.commitment == bytes32(0)) return;
+
+        if (!nccDefensePassed) {
+            oppVop.hasSolverResponse = false;
+            return;
         }
 
-        // ── 3b. VOP Solve (NCC-gated — solver must have NCC defense to attempt VOP) ──
-        if (currentTurn >= 1) {
-            // The opponent's VOP commitment is stored in their pending VOP
-            ClawttackTypes.PendingVop storage oppVop = isPlayerA ? pendingVopB : pendingVopA;
+        oppVop.solverClaimedIndex = payload.vopSolve.vopClaimedIndex;
+        oppVop.solverSolution = payload.vopSolve.solution;
+        oppVop.hasSolverResponse = true;
 
-            if (oppVop.commitment != bytes32(0)) {
-                if (!nccDefensePassed) {
-                    // NCC gate failed — mark as no solver response
-                    // Penalties applied at reveal time (NccGateFailed outcome)
-                    oppVop.hasSolverResponse = false;
-                } else {
-                    // NCC gate passed — solver can attempt VOP
-                    oppVop.solverClaimedIndex = payload.vopSolve.vopClaimedIndex;
-                    oppVop.solverSolution = payload.vopSolve.solution;
-                    oppVop.hasSolverResponse = true;
-
-                    // Verify solution against claimed VOP (snapshot-based, try/catch for safety)
-                    if (payload.vopSolve.vopClaimedIndex < vopCount) {
-                        address claimedVop = IClawttackArenaView(arena).getVopByIndex(
-                            payload.vopSolve.vopClaimedIndex
-                        );
-                        try IVerifiableOraclePrimitive(claimedVop).verify(
-                            abi.encode(oppVop.commitBlockNumber, oppVop.instanceCommit),
-                            payload.vopSolve.solution,
-                            clock.deadline(isPlayerA)
-                        ) returns (bool passed) {
-                            oppVop.solverPassed = passed;
-                        } catch {
-                            oppVop.solverPassed = false;
-                        }
-                    } else {
-                        oppVop.solverPassed = false;
-                    }
-                }
+        uint256 vopCount = arenaView.getVopCount();
+        if (payload.vopSolve.vopClaimedIndex < vopCount) {
+            address claimedVop = arenaView.getVopByIndex(payload.vopSolve.vopClaimedIndex);
+            try IVerifiableOraclePrimitive(claimedVop).verify(
+                abi.encode(oppVop.commitBlockNumber, oppVop.instanceCommit),
+                payload.vopSolve.solution,
+                clock.deadline(isPlayerA)
+            ) returns (bool passed) {
+                oppVop.solverPassed = passed;
+            } catch {
+                oppVop.solverPassed = false;
             }
+        } else {
+            oppVop.solverPassed = false;
         }
+    }
 
-        // ── 4. NCC Attack (set challenge for opponent's next turn) ──
-        address wordDictionary = IClawttackArenaView(arena).wordDictionary();
+    // ─── Internal: Attack + Commit ───────────────────────────────────────────
 
-
+    function _commitNccAttack(
+        bool isPlayerA,
+        IClawttackArenaView arenaView,
+        ClawttackTypes.TurnPayload calldata payload
+    ) internal {
+        address wordDictionary = arenaView.wordDictionary();
         bytes memory submittedNarrative = bytes(payload.narrative);
         NccVerifier.verifyAttack(submittedNarrative, payload.nccAttack, wordDictionary);
 
-        // Store NCC attack
         ClawttackTypes.PendingNcc storage myNcc = isPlayerA ? pendingNccA : pendingNccB;
         myNcc.commitment = payload.nccAttack.nccCommitment;
         myNcc.candidateWordIndices = payload.nccAttack.candidateWordIndices;
         myNcc.defenderGuessIdx = 0;
         myNcc.hasDefenderGuess = false;
+    }
 
-        // ── 4b. VOP Commitment (commit VOP type for opponent to solve) ──
+    function _commitVop(
+        bool isPlayerA,
+        ClawttackTypes.TurnPayload calldata payload
+    ) internal {
         ClawttackTypes.PendingVop storage myVop = isPlayerA ? pendingVopA : pendingVopB;
         if (payload.vopCommit.vopCommitment == bytes32(0)) revert ClawttackErrors.NoSecretCommitted();
         myVop.commitment = payload.vopCommit.vopCommitment;
@@ -410,8 +445,16 @@ contract ClawttackBattle is Initializable {
         myVop.commitBlockNumber = uint64(block.number);
         myVop.hasSolverResponse = false;
         myVop.solverPassed = false;
+    }
 
-        // ── 5. Joker / Narrative Length ──
+    // ─── Internal: Narrative + State ─────────────────────────────────────────
+
+    function _verifyNarrative(
+        bool isPlayerA,
+        uint256 myId,
+        IClawttackArenaView arenaView,
+        ClawttackTypes.TurnPayload calldata payload
+    ) internal {
         uint256 narrativeLen = bytes(payload.narrative).length;
         bool isJoker = narrativeLen > MAX_NARRATIVE_LEN;
         if (isJoker) {
@@ -420,13 +463,12 @@ contract ClawttackBattle is Initializable {
             if (jokersLeft == 0) revert ClawttackErrors.NoJokersRemaining();
             if (isPlayerA) { jokersRemainingA--; } else { jokersRemainingB--; }
             emit JokerPlayed(
-                battleId,
-                isPlayerA ? challengerId : acceptorId,
+                battleId, myId,
                 isPlayerA ? jokersRemainingA : jokersRemainingB
             );
         }
 
-        // ── 6. Linguistic Verification ──
+        address wordDictionary = arenaView.wordDictionary();
         string memory targetWord = IWordDictionary(wordDictionary).word(targetWordIndex);
         string memory _currentPoison = currentTurn > 0 ? poisonWord : "";
         LinguisticParser.verifyLinguistics(payload.narrative, targetWord, _currentPoison);
@@ -439,8 +481,13 @@ contract ClawttackBattle is Initializable {
                 revert ClawttackErrors.InvalidPoisonWord();
             }
         }
+    }
 
-        // ── 7. Advance State ──
+    function _advanceState(
+        uint256 myId,
+        IClawttackArenaView arenaView,
+        ClawttackTypes.TurnPayload calldata payload
+    ) internal {
         sequenceHash = keccak256(
             abi.encodePacked(
                 DOMAIN_TYPE_TURN, sequenceHash, keccak256(bytes(payload.narrative))
@@ -449,27 +496,28 @@ contract ClawttackBattle is Initializable {
 
         currentTurn++;
 
+        address wordDictionary = arenaView.wordDictionary();
+        IWordDictionary dict = IWordDictionary(wordDictionary);
         uint256 randomness = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_TURN, sequenceHash, block.number)));
-        uint16 _wordCount = IWordDictionary(wordDictionary).wordCount();
+        uint16 _wordCount = dict.wordCount();
         targetWordIndex = uint16(randomness % _wordCount);
 
-        string memory nextTargetWord = IWordDictionary(wordDictionary).word(targetWordIndex);
+        string memory nextTargetWord = dict.word(targetWordIndex);
 
-        // Reroll if random target overlaps with custom poison (player can't control PRNG)
+        // Reroll if random target overlaps with custom poison
         uint256 rerollNonce = 0;
         while (LinguisticParser.containsSubstring(nextTargetWord, payload.customPoisonWord) ||
                LinguisticParser.containsSubstring(payload.customPoisonWord, nextTargetWord)) {
             rerollNonce++;
             randomness = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_TURN, sequenceHash, block.number, rerollNonce)));
             targetWordIndex = uint16(randomness % _wordCount);
-            nextTargetWord = IWordDictionary(wordDictionary).word(targetWordIndex);
+            nextTargetWord = dict.word(targetWordIndex);
         }
 
         poisonWord = payload.customPoisonWord;
 
         emit TurnSubmitted(
-            battleId,
-            isPlayerA ? challengerId : acceptorId,
+            battleId, myId,
             currentTurn,
             sequenceHash,
             targetWordIndex,
@@ -585,7 +633,7 @@ contract ClawttackBattle is Initializable {
         return (phase, currentTurn, clock.bankA, clock.bankB, sequenceHash, battleId);
     }
 
-    // ─── Internal ───────────────────────────────────────────────────────────
+    // ─── Internal: Settlement ───────────────────────────────────────────────
 
     function _settleBattle(
         uint256 winnerId,
@@ -594,7 +642,7 @@ contract ClawttackBattle is Initializable {
     ) internal {
         phase = BattlePhase.Settled;
 
-        IClawttackArenaView(arena).updateRatings(battleId, challengerId, acceptorId, winnerId, loserId, config.stake);
+        IClawttackArenaCallback(arena).settleBattle(battleId, winnerId, loserId, config.stake);
 
         if (totalPot > 0) {
             uint256 fee = (totalPot * IClawttackArenaView(arena).protocolFeeRate()) / BPS_DENOMINATOR;
