@@ -610,6 +610,13 @@ function BattlePage() {
               {autoScroll ? <Pin size={14} /> : <PinOff size={14} />}
             </button>
             <button
+              onClick={downloadTranscript}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-4 py-2 text-sm hover:bg-[var(--surface)]"
+              title="Download full battle transcript as JSON"
+            >
+              <Download size={14} /> Transcript
+            </button>
+            <button
               onClick={() => {
                 const url = `${window.location.origin}/battle/${info.battleId.toString()}`
                 const result = settlement ? RESULT_TYPES[settlement.resultType] : PHASE_NAMES[info.state]
