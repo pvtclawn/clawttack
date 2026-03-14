@@ -20,6 +20,7 @@ SDK_DIR = Path(__file__).resolve().parents[1]
 PROJECT_DIR = SDK_DIR.parent.parent
 RESULTS_DIR = PROJECT_DIR / 'battle-results'
 CHECKPOINT_DIR = RESULTS_DIR / 'checkpoints'
+AGENT_MAP_PATH = CHECKPOINT_DIR / 'agent-map.json'
 CAST = str(Path.home() / '.foundry' / 'bin' / 'cast')
 
 RPC = os.getenv('CLAWTTACK_RPC', 'https://sepolia.base.org')
@@ -37,6 +38,7 @@ BATTLE_TIMEOUT_SEC = int(os.getenv('CLAWTTACK_BATTLE_TIMEOUT_SEC', '1500'))
 OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', 'https://openrouter.ai/api/v1')
 OPENAI_MODEL = os.getenv('LLM_MODEL', 'google/gemini-2.5-flash-lite')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+AGENT_REGISTERED_TOPIC0 = '0xba9d3be5149ecab5ff8e380633795e5d9153c2f0e1ec952dd1de4611d661c9f5'
 
 
 def fail(msg: str) -> None:
@@ -56,6 +58,28 @@ def extract_address(text: str) -> str | None:
     return match.group(0) if match else None
 
 
+def extract_tx_hash(text: str) -> str | None:
+    for pattern in (r'transactionHash\s+(0x[a-fA-F0-9]{64})', r'"transactionHash":"(0x[a-fA-F0-9]{64})"'):
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1)
+    hashes = re.findall(r'0x[a-fA-F0-9]{64}', text)
+    return hashes[-1] if hashes else None
+
+
+def extract_agent_registered_id(text: str, owner_addr: str) -> int | None:
+    compact = re.sub(r'\s+', '', text)
+    pattern = re.compile(
+        rf'"topics":\["{AGENT_REGISTERED_TOPIC0}","(0x[a-fA-F0-9]{{64}})","(0x[a-fA-F0-9]{{64}})"\]'
+    )
+    for match in pattern.finditer(compact):
+        agent_id = int(match.group(1), 16)
+        topic_owner = f"0x{match.group(2)[-40:]}".lower()
+        if topic_owner == owner_addr.lower():
+            return agent_id
+    return None
+
+
 def parse_uint(text: str) -> int:
     token_match = re.search(r'0x[a-fA-F0-9]+|\d+', text.strip())
     if not token_match:
@@ -67,6 +91,11 @@ def parse_uint(text: str) -> int:
 def cast_call(to: str, sig: str, *args: str) -> str:
     cmd = [CAST, 'call', to, sig, *args, '--rpc-url', RPC]
     return run(cmd).stdout.strip()
+
+
+def cast_receipt(tx_hash: str) -> str:
+    cmd = [CAST, 'receipt', tx_hash, '--rpc-url', RPC]
+    return run(cmd, timeout=120).stdout.strip()
 
 
 def cast_send_account(account: str, to: str, sig: str, *args: str, value_wei: int = 0, timeout: int = 120, retries: int = 3) -> str:
@@ -114,27 +143,125 @@ def decrypt_keystore_key(account: str) -> str:
     return key_match.group(0)
 
 
-def find_agent_id(owner_addr: str) -> int | None:
+def load_agent_map() -> dict[str, dict[str, int]]:
+    if not AGENT_MAP_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(AGENT_MAP_PATH.read_text())
+        if isinstance(raw, dict):
+            return raw
+    except Exception:
+        pass
+    return {}
+
+
+def save_agent_map(agent_map: dict[str, dict[str, int]]) -> None:
+    AGENT_MAP_PATH.parent.mkdir(parents=True, exist_ok=True)
+    AGENT_MAP_PATH.write_text(json.dumps(agent_map, indent=2, sort_keys=True) + '\n')
+
+
+def get_cached_agent_id(owner_addr: str) -> int | None:
+    agent_map = load_agent_map()
+    arena_map = agent_map.get(ARENA.lower(), {})
+    cached = arena_map.get(owner_addr.lower())
+    return int(cached) if isinstance(cached, int) else None
+
+
+def persist_agent_id(owner_addr: str, agent_id: int) -> None:
+    agent_map = load_agent_map()
+    arena_key = ARENA.lower()
+    owner_key = owner_addr.lower()
+    if arena_key not in agent_map:
+        agent_map[arena_key] = {}
+    agent_map[arena_key][owner_key] = agent_id
+    save_agent_map(agent_map)
+
+
+def get_agent_owner(agent_id: int) -> str | None:
+    raw = cast_call(ARENA, 'agents(uint256)(address,uint32,uint32,uint32)', str(agent_id))
+    owner = extract_address(raw)
+    return owner.lower() if owner else None
+
+
+def find_agent_ids(owner_addr: str) -> list[int]:
     agents_count = parse_uint(cast_call(ARENA, 'agentsCount()(uint256)'))
+    matches: list[int] = []
     for idx in range(1, agents_count + 1):
-        raw = cast_call(ARENA, 'agents(uint256)(address,uint32,uint32,uint32)', str(idx))
-        owner = extract_address(raw)
-        if owner and owner.lower() == owner_addr:
-            return idx
-    return None
+        owner = get_agent_owner(idx)
+        if owner == owner_addr.lower():
+            matches.append(idx)
+    return matches
+
+
+def poll_for_agent_ids(owner_addr: str, *, timeout_sec: int = 24, interval_sec: int = 2) -> list[int]:
+    deadline = time.time() + timeout_sec
+    last_ids: list[int] = []
+    while time.time() < deadline:
+        ids = find_agent_ids(owner_addr)
+        if ids:
+            return ids
+        last_ids = ids
+        time.sleep(interval_sec)
+    return last_ids
+
+
+def poll_for_agent_owner(agent_id: int, owner_addr: str, *, timeout_sec: int = 24, interval_sec: int = 2) -> bool:
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        owner = get_agent_owner(agent_id)
+        if owner == owner_addr.lower():
+            return True
+        time.sleep(interval_sec)
+    return False
+
+
+def choose_stable_agent_id(owner_addr: str, candidate_ids: list[int]) -> int:
+    if not candidate_ids:
+        raise RuntimeError('No candidate agent IDs to choose from')
+
+    cached = get_cached_agent_id(owner_addr)
+    if cached is not None and cached in candidate_ids and get_agent_owner(cached) == owner_addr.lower():
+        return cached
+
+    return min(candidate_ids)
 
 
 def ensure_registered(account: str, owner_addr: str) -> int:
-    existing = find_agent_id(owner_addr)
-    if existing is not None:
-        return existing
+    existing_ids = find_agent_ids(owner_addr)
+    if existing_ids:
+        chosen = choose_stable_agent_id(owner_addr, existing_ids)
+        persist_agent_id(owner_addr, chosen)
+        if len(existing_ids) > 1:
+            print(f'  ℹ️ {account}: duplicate owned agent IDs on {ARENA}: {existing_ids} → using {chosen}')
+        return chosen
 
     registration_fee = parse_uint(cast_call(ARENA, 'agentRegistrationFee()(uint256)'))
-    cast_send_account(account, ARENA, 'registerAgent()', value_wei=registration_fee)
-    new_id = find_agent_id(owner_addr)
-    if new_id is None:
-        raise RuntimeError(f'Failed to register agent for account={account}')
-    return new_id
+    send_output = cast_send_account(account, ARENA, 'registerAgent()', value_wei=registration_fee)
+
+    registered_id = extract_agent_registered_id(send_output, owner_addr)
+    tx_hash = extract_tx_hash(send_output)
+
+    if registered_id is None and tx_hash is not None:
+        try:
+            registered_id = extract_agent_registered_id(cast_receipt(tx_hash), owner_addr)
+        except Exception:
+            registered_id = None
+
+    if registered_id is not None:
+        if poll_for_agent_owner(registered_id, owner_addr):
+            persist_agent_id(owner_addr, registered_id)
+            return registered_id
+        raise RuntimeError(
+            f'Registration tx succeeded for account={account} but agentId={registered_id} did not become owner-visible'
+        )
+
+    observed_ids = poll_for_agent_ids(owner_addr)
+    if observed_ids:
+        chosen = choose_stable_agent_id(owner_addr, observed_ids)
+        persist_agent_id(owner_addr, chosen)
+        return chosen
+
+    raise RuntimeError(f'Failed to register agent for account={account}')
 
 
 def create_battle(challenger_id: int) -> tuple[int, str]:
