@@ -542,6 +542,81 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             any(t.startswith('hard-invalid:transition-ledger-compaction-replay-guard-missing:') for t in per_battle['hardInvalidTriggers'])
         )
 
+    def test_compaction_defer_budget_exhausted_forces_hard_invalid(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xcd1',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I tracked deferred compaction retries and flagged budget exhaustion before handoff.',
+                    'B': 'I mirrored backpressure counters and logged fail-safe defer overflow at relay.',
+                },
+                'results': [
+                    {'txHash': '0x' + '1' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '2' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + '3' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'transitionLedgerCompactionDeferredCount': 7,
+                'transitionLedgerCompactionDeferBudget': 5,
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        quality = per_battle['authenticityModelQuality']
+        self.assertFalse(quality['transitionLedgerCompactionDeferBudgetWithinCap'])
+        self.assertEqual(quality['transitionLedgerCompactionDeferredCount'], 7)
+        self.assertEqual(quality['transitionLedgerCompactionDeferBudget'], 5)
+        self.assertIn(
+            'hard-invalid:compaction-failsafe-defer-budget-exhausted:count-7:budget-5',
+            per_battle['hardInvalidTriggers'],
+        )
+        self.assertEqual(
+            per_battle['topHardInvalidTrigger'],
+            'hard-invalid:compaction-failsafe-defer-budget-exhausted:count-7:budget-5',
+        )
+
+    def test_compaction_defer_budget_within_cap_does_not_trigger_hard_invalid(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xcd2',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I tracked deferred compaction retries and confirmed budget headroom before handoff.',
+                    'B': 'I mirrored backpressure counters and validated fail-safe defer bounds.',
+                },
+                'results': [
+                    {'txHash': '0x' + '4' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '5' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + '6' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'transitionLedgerCompactionDeferredCount': 3,
+                'transitionLedgerCompactionDeferBudget': 5,
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        quality = per_battle['authenticityModelQuality']
+        self.assertTrue(quality['transitionLedgerCompactionDeferBudgetWithinCap'])
+        self.assertFalse(
+            any(t.startswith('hard-invalid:compaction-failsafe-defer-budget-exhausted:') for t in per_battle['hardInvalidTriggers'])
+        )
+
     def test_migration_anchor_untrusted_source_forces_hard_invalid(self) -> None:
         per_battle = self._build_per_battle(
             log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',

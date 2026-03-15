@@ -67,6 +67,7 @@ HARD_INVALID_TRIGGER_PRIORITY_PREFIXES = [
     'hard-invalid:closure-key-classification-downgrade:',
     'hard-invalid:anchor-transition-carryover-scope-mismatch:',
     'hard-invalid:transition-ledger-compaction-replay-guard-missing',
+    'hard-invalid:compaction-failsafe-defer-budget-exhausted',
     'hard-invalid:migration-expiry-anchor-untrusted-source',
     'hard-invalid:safety-envelope-fingerprint-version-mismatch:',
     'hard-invalid:timing-window-profile-mismatch',
@@ -433,6 +434,12 @@ def evaluate_authenticity_model_quality(
         transition_ledger_replay_guard_present if transition_ledger_replay_guard_required else True
     )
 
+    compaction_deferred_count_raw = (metadata or {}).get('transitionLedgerCompactionDeferredCount')
+    compaction_deferred_count = int(compaction_deferred_count_raw) if isinstance(compaction_deferred_count_raw, (int, float)) else 0
+    compaction_defer_budget_raw = (metadata or {}).get('transitionLedgerCompactionDeferBudget')
+    compaction_defer_budget = int(compaction_defer_budget_raw) if isinstance(compaction_defer_budget_raw, (int, float)) else 5
+    compaction_defer_budget_within_cap = compaction_deferred_count <= compaction_defer_budget
+
     completeness_satisfied = (
         required_present
         and evidence_source_count >= 2
@@ -443,6 +450,7 @@ def evaluate_authenticity_model_quality(
         and migration_anchor_source_trusted
         and carryover_scope_digest_match
         and transition_ledger_replay_guard_invariant_satisfied
+        and compaction_defer_budget_within_cap
         and fingerprint_version_match
     )
     correctness_satisfied = True
@@ -482,6 +490,9 @@ def evaluate_authenticity_model_quality(
         'transitionLedgerReplayGuardHash': transition_ledger_replay_guard_hash,
         'transitionLedgerReplayGuardRequired': transition_ledger_replay_guard_required,
         'transitionLedgerReplayGuardInvariantSatisfied': transition_ledger_replay_guard_invariant_satisfied,
+        'transitionLedgerCompactionDeferredCount': compaction_deferred_count,
+        'transitionLedgerCompactionDeferBudget': compaction_defer_budget,
+        'transitionLedgerCompactionDeferBudgetWithinCap': compaction_defer_budget_within_cap,
         'decisionDeterminismFingerprint': computed_fingerprint,
         'reportedDecisionDeterminismFingerprint': reported_fingerprint,
         'fingerprintVersionMatch': fingerprint_version_match,
@@ -630,6 +641,13 @@ def evaluate_hard_invalid_triggers(
         reported_hash = authenticity_model_quality.get('transitionLedgerReplayGuardHash')
         triggers.append(
             f'hard-invalid:transition-ledger-compaction-replay-guard-missing:state-{state}:hash-{reported_hash}'
+        )
+
+    if not authenticity_model_quality.get('transitionLedgerCompactionDeferBudgetWithinCap', True):
+        deferred_count = authenticity_model_quality.get('transitionLedgerCompactionDeferredCount')
+        defer_budget = authenticity_model_quality.get('transitionLedgerCompactionDeferBudget')
+        triggers.append(
+            f'hard-invalid:compaction-failsafe-defer-budget-exhausted:count-{deferred_count}:budget-{defer_budget}'
         )
 
     if not authenticity_model_quality.get('migrationAnchorSourceTrusted', True):
@@ -1104,7 +1122,7 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- gameplay outcome: `{per_battle['gameplayOutcome']}`",
         f"- source of move A: `{per_battle['sourceOfMove']['A']['kind']}` (strategy `{per_battle['sourceOfMove']['A']['strategy']}` agent `{per_battle['sourceOfMove']['A']['agentName']}`)",
         f"- source of move B: `{per_battle['sourceOfMove']['B']['kind']}` (strategy `{per_battle['sourceOfMove']['B']['strategy']}` agent `{per_battle['sourceOfMove']['B']['agentName']}`)",
-        f"- authenticity model quality: correctness=`{per_battle['authenticityModelQuality']['correctnessSatisfied']}` completeness=`{per_battle['authenticityModelQuality']['completenessSatisfied']}` freshnessWindowProfileMatch=`{per_battle['authenticityModelQuality']['freshnessWindowProfileMatch']}` closurePolicyHashMatch=`{per_battle['authenticityModelQuality']['closureKeyClassificationPolicyHashMatch']}` migrationAnchorSourceTrusted=`{per_battle['authenticityModelQuality']['migrationAnchorSourceTrusted']}` carryoverScopeDigestMatch=`{per_battle['authenticityModelQuality']['anchorTransitionCarryoverScopeDigestMatch']}` replayGuardInvariantSatisfied=`{per_battle['authenticityModelQuality']['transitionLedgerReplayGuardInvariantSatisfied']}` fingerprintVersionMatch=`{per_battle['authenticityModelQuality']['fingerprintVersionMatch']}` failsClosed=`{per_battle['authenticityModelQuality']['failsClosed']}`",
+        f"- authenticity model quality: correctness=`{per_battle['authenticityModelQuality']['correctnessSatisfied']}` completeness=`{per_battle['authenticityModelQuality']['completenessSatisfied']}` freshnessWindowProfileMatch=`{per_battle['authenticityModelQuality']['freshnessWindowProfileMatch']}` closurePolicyHashMatch=`{per_battle['authenticityModelQuality']['closureKeyClassificationPolicyHashMatch']}` migrationAnchorSourceTrusted=`{per_battle['authenticityModelQuality']['migrationAnchorSourceTrusted']}` carryoverScopeDigestMatch=`{per_battle['authenticityModelQuality']['anchorTransitionCarryoverScopeDigestMatch']}` replayGuardInvariantSatisfied=`{per_battle['authenticityModelQuality']['transitionLedgerReplayGuardInvariantSatisfied']}` deferBudgetWithinCap=`{per_battle['authenticityModelQuality']['transitionLedgerCompactionDeferBudgetWithinCap']}` fingerprintVersionMatch=`{per_battle['authenticityModelQuality']['fingerprintVersionMatch']}` failsClosed=`{per_battle['authenticityModelQuality']['failsClosed']}`",
         f"- authenticity evidence sources: {', '.join(per_battle['authenticityModelQuality']['evidenceSources'])}",
         f"- timeout allowance aggregate: used=`{per_battle['authenticityModelQuality']['timeoutSubtypeAllowanceUsedAggregate']}` budget=`{per_battle['authenticityModelQuality']['timeoutSubtypeAllowanceBudgetAggregate']}` withinCap=`{per_battle['authenticityModelQuality']['aggregateAllowanceWithinCap']}`",
         f"- counts as proper battle: `{per_battle['countsAsProperBattle']}`",
