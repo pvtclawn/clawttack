@@ -65,6 +65,7 @@ HARD_INVALID_TRIGGER_PRIORITY_PREFIXES = [
     'hard-invalid:provenance-mismatch:',
     'hard-invalid:failure-class-derivation-mismatch:',
     'hard-invalid:timing-window-profile-mismatch',
+    'hard-invalid:timeout-allowance-aggregate-exceeded',
     'hard-invalid:severe-transcript-quality-failure',
     'hard-invalid:severe-execution-ambiguity:',
     'hard-invalid:pre-submit-collapse',
@@ -270,6 +271,18 @@ def normalize_authenticity_evidence_sources(
     return inferred
 
 
+def normalize_numeric_map(raw: Any) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, int] = {}
+    for key, value in raw.items():
+        if not isinstance(key, str) or not key.strip():
+            continue
+        if isinstance(value, (int, float)):
+            out[key.strip()] = int(value)
+    return out
+
+
 def evaluate_authenticity_model_quality(
     *,
     source_of_move: dict[str, dict[str, Any]],
@@ -294,11 +307,18 @@ def evaluate_authenticity_model_quality(
     )
     freshness_window_profile_match = reported_window_ms == profile_window_ms
 
+    timeout_budget = normalize_numeric_map((metadata or {}).get('timeoutSubtypeAllowanceBudget'))
+    timeout_used = normalize_numeric_map((metadata or {}).get('timeoutSubtypeAllowanceUsed'))
+    aggregate_budget = sum(timeout_budget.values())
+    aggregate_used = sum(timeout_used.values())
+    aggregate_allowance_within_cap = aggregate_used <= aggregate_budget if aggregate_budget > 0 else True
+
     completeness_satisfied = (
         required_present
         and evidence_source_count >= 2
         and independent_source_present
         and freshness_window_profile_match
+        and aggregate_allowance_within_cap
     )
     correctness_satisfied = True
     fails_closed = not (correctness_satisfied and completeness_satisfied)
@@ -312,6 +332,11 @@ def evaluate_authenticity_model_quality(
         'authenticityFreshnessWindowMsProfile': profile_window_ms,
         'evidenceFreshnessWindowMsReported': reported_window_ms,
         'freshnessWindowProfileMatch': freshness_window_profile_match,
+        'timeoutSubtypeAllowanceBudget': timeout_budget,
+        'timeoutSubtypeAllowanceUsed': timeout_used,
+        'timeoutSubtypeAllowanceBudgetAggregate': aggregate_budget,
+        'timeoutSubtypeAllowanceUsedAggregate': aggregate_used,
+        'aggregateAllowanceWithinCap': aggregate_allowance_within_cap,
         'correctnessSatisfied': correctness_satisfied,
         'completenessSatisfied': completeness_satisfied,
         'failsClosed': fails_closed,
@@ -443,6 +468,13 @@ def evaluate_hard_invalid_triggers(
         reported_window = authenticity_model_quality.get('evidenceFreshnessWindowMsReported')
         triggers.append(
             f'hard-invalid:timing-window-profile-mismatch:expected-{expected_window}:got-{reported_window}'
+        )
+
+    if not authenticity_model_quality.get('aggregateAllowanceWithinCap', True):
+        aggregate_budget = authenticity_model_quality.get('timeoutSubtypeAllowanceBudgetAggregate')
+        aggregate_used = authenticity_model_quality.get('timeoutSubtypeAllowanceUsedAggregate')
+        triggers.append(
+            f'hard-invalid:timeout-allowance-aggregate-exceeded:budget-{aggregate_budget}:used-{aggregate_used}'
         )
 
     if gameplay_outcome == 'pre-submit-failure' or (turns_mined == 0 and execution_outcome in {'runner-error', 'timeout', 'sigterm', 'unknown'}):
@@ -889,6 +921,7 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- source of move B: `{per_battle['sourceOfMove']['B']['kind']}` (strategy `{per_battle['sourceOfMove']['B']['strategy']}` agent `{per_battle['sourceOfMove']['B']['agentName']}`)",
         f"- authenticity model quality: correctness=`{per_battle['authenticityModelQuality']['correctnessSatisfied']}` completeness=`{per_battle['authenticityModelQuality']['completenessSatisfied']}` freshnessWindowProfileMatch=`{per_battle['authenticityModelQuality']['freshnessWindowProfileMatch']}` failsClosed=`{per_battle['authenticityModelQuality']['failsClosed']}`",
         f"- authenticity evidence sources: {', '.join(per_battle['authenticityModelQuality']['evidenceSources'])}",
+        f"- timeout allowance aggregate: used=`{per_battle['authenticityModelQuality']['timeoutSubtypeAllowanceUsedAggregate']}` budget=`{per_battle['authenticityModelQuality']['timeoutSubtypeAllowanceBudgetAggregate']}` withinCap=`{per_battle['authenticityModelQuality']['aggregateAllowanceWithinCap']}`",
         f"- counts as proper battle: `{per_battle['countsAsProperBattle']}`",
         f"- proper battle reasons: {', '.join(per_battle['properBattleReasons']) if per_battle['properBattleReasons'] else 'none'}",
         f"- top proper battle reason: `{per_battle['topProperBattleReason']}`",
