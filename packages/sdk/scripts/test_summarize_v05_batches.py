@@ -468,6 +468,80 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             any(t.startswith('hard-invalid:anchor-transition-carryover-scope-mismatch:') for t in per_battle['hardInvalidTriggers'])
         )
 
+    def test_compacted_tombstone_missing_replay_guard_forces_hard_invalid(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xtg1',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I tracked consumed transition ids and caught tombstone compaction missing guard identity.',
+                    'B': 'I mirrored replay checks and logged the missing replay guard hash before verdict.',
+                },
+                'results': [
+                    {'txHash': '0x' + '1' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '2' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + '3' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'transitionLedgerState': 'compacted-tombstone',
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        quality = per_battle['authenticityModelQuality']
+        self.assertTrue(quality['transitionLedgerReplayGuardRequired'])
+        self.assertFalse(quality['transitionLedgerReplayGuardInvariantSatisfied'])
+        self.assertIn(
+            'hard-invalid:transition-ledger-compaction-replay-guard-missing:state-compacted-tombstone:hash-None',
+            per_battle['hardInvalidTriggers'],
+        )
+        self.assertEqual(
+            per_battle['topHardInvalidTrigger'],
+            'hard-invalid:transition-ledger-compaction-replay-guard-missing:state-compacted-tombstone:hash-None',
+        )
+
+    def test_compacted_tombstone_with_replay_guard_does_not_trigger_hard_invalid(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xtg2',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I tracked consumed transition ids and validated guard continuity post compaction.',
+                    'B': 'I mirrored replay checks and confirmed tombstone replay guard persisted.',
+                },
+                'results': [
+                    {'txHash': '0x' + '4' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '5' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + '6' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'transitionLedgerState': 'compacted-tombstone',
+                'transitionLedgerReplayGuardHash': '0xabc123',
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        quality = per_battle['authenticityModelQuality']
+        self.assertTrue(quality['transitionLedgerReplayGuardRequired'])
+        self.assertTrue(quality['transitionLedgerReplayGuardInvariantSatisfied'])
+        self.assertFalse(
+            any(t.startswith('hard-invalid:transition-ledger-compaction-replay-guard-missing:') for t in per_battle['hardInvalidTriggers'])
+        )
+
     def test_migration_anchor_untrusted_source_forces_hard_invalid(self) -> None:
         per_battle = self._build_per_battle(
             log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
