@@ -10,15 +10,14 @@
     "packages/web"
   ],
   "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "e2e": "bun scripts/e2e-battle.ts",
     "test": "bun test --recursive packages/",
     "test:contracts": "cd packages/contracts && forge test",
     "typecheck": "bunx tsc --noEmit -p packages/protocol && bunx tsc --noEmit -p packages/relay && bunx tsc --noEmit -p packages/sdk && bunx tsc --noEmit -p packages/bot",
     "build:contracts": "cd packages/contracts && forge build",
     "generate:abi": "forge build -C packages/contracts && bunx wagmi generate",
-    "relay": "bun ./packages/relay/src/main.ts",
-    "auto-battle": "bun ./scripts/auto-battle.ts",
-    "battle": "bun ./scripts/full-battle.ts",
-    "battle:ai": "bun ./scripts/ai-battle.ts"
+    "relay": "bun ./packages/relay/src/main.ts"
   },
   "dependencies": {
     "@vercel/og": "^0.9.0",
@@ -27,6 +26,7 @@
     "incur": "^0.2.0"
   },
   "devDependencies": {
-    "@wagmi/cli": "^2.10.0"
+    "@wagmi/cli": "^2.10.0",
+    "viem": "^2.47.4"
   }
 }

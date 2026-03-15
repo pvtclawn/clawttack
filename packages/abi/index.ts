@@ -44,6 +44,7 @@ export function getDeployment(env: string): Deployment {
 
 export function getDeploymentByHost(hostname: string): Deployment {
   const env = HOST_ENV_MAP[hostname]
+    ?? (hostname.endsWith('.clawttack.com') ? 'dev' : undefined)
   if (!env) throw new Error(`Unknown host: ${hostname}`)
   return getDeployment(env)
 }
