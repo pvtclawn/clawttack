@@ -65,6 +65,7 @@ HARD_INVALID_TRIGGER_PRIORITY_PREFIXES = [
     'hard-invalid:provenance-mismatch:',
     'hard-invalid:failure-class-derivation-mismatch:',
     'hard-invalid:closure-key-classification-downgrade:',
+    'hard-invalid:anchor-transition-carryover-scope-mismatch:',
     'hard-invalid:migration-expiry-anchor-untrusted-source',
     'hard-invalid:safety-envelope-fingerprint-version-mismatch:',
     'hard-invalid:timing-window-profile-mismatch',
@@ -317,6 +318,11 @@ def compute_key_classification_policy_hash(policy: dict[str, list[str]]) -> str:
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
 
+def compute_anchor_transition_carryover_scope_digest(payload: dict[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=True)
+    return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+
+
 def evaluate_authenticity_model_quality(
     *,
     source_of_move: dict[str, dict[str, Any]],
@@ -382,6 +388,30 @@ def evaluate_authenticity_model_quality(
         else anchor_source_normalized in {'verifier', 'verifier-signed'}
     )
 
+    carryover_manifest = (metadata or {}).get('anchorTransitionCarryoverManifest')
+    if not isinstance(carryover_manifest, dict):
+        carryover_manifest = {}
+    from_epoch = int((metadata or {}).get('anchorTransitionFromEpoch')) if isinstance((metadata or {}).get('anchorTransitionFromEpoch'), (int, float)) else 0
+    to_epoch = int((metadata or {}).get('anchorTransitionToEpoch')) if isinstance((metadata or {}).get('anchorTransitionToEpoch'), (int, float)) else 0
+    carryover_scope_payload = {
+        'ruleVersion': rule_version,
+        'modeProfileHash': mode_profile_hash,
+        'fromEpoch': from_epoch,
+        'toEpoch': to_epoch,
+        'requiredLineageManifestHash': compute_decision_determinism_fingerprint(carryover_manifest),
+    }
+    expected_carryover_scope_digest = compute_anchor_transition_carryover_scope_digest(carryover_scope_payload)
+    reported_carryover_scope_digest = (
+        (metadata or {}).get('anchorTransitionCarryoverDigest')
+        if isinstance((metadata or {}).get('anchorTransitionCarryoverDigest'), str)
+        else None
+    )
+    carryover_scope_digest_match = (
+        reported_carryover_scope_digest == expected_carryover_scope_digest
+        if reported_carryover_scope_digest
+        else True
+    )
+
     completeness_satisfied = (
         required_present
         and evidence_source_count >= 2
@@ -390,6 +420,7 @@ def evaluate_authenticity_model_quality(
         and aggregate_allowance_within_cap
         and key_classification_policy_hash_match
         and migration_anchor_source_trusted
+        and carryover_scope_digest_match
         and fingerprint_version_match
     )
     correctness_satisfied = True
@@ -420,6 +451,11 @@ def evaluate_authenticity_model_quality(
         'policyMigrationEvaluationMode': migration_mode_normalized,
         'policyMigrationEvaluationAnchorSource': anchor_source_normalized,
         'migrationAnchorSourceTrusted': migration_anchor_source_trusted,
+        'anchorTransitionFromEpoch': from_epoch,
+        'anchorTransitionToEpoch': to_epoch,
+        'anchorTransitionCarryoverScopeDigestExpected': expected_carryover_scope_digest,
+        'anchorTransitionCarryoverScopeDigestReported': reported_carryover_scope_digest,
+        'anchorTransitionCarryoverScopeDigestMatch': carryover_scope_digest_match,
         'decisionDeterminismFingerprint': computed_fingerprint,
         'reportedDecisionDeterminismFingerprint': reported_fingerprint,
         'fingerprintVersionMatch': fingerprint_version_match,
@@ -554,6 +590,13 @@ def evaluate_hard_invalid_triggers(
         reported_policy_hash = authenticity_model_quality.get('closureKeyClassificationPolicyHashReported')
         triggers.append(
             f'hard-invalid:closure-key-classification-downgrade:expected-{expected_policy_hash}:reported-{reported_policy_hash}'
+        )
+
+    if not authenticity_model_quality.get('anchorTransitionCarryoverScopeDigestMatch', True):
+        expected_digest = authenticity_model_quality.get('anchorTransitionCarryoverScopeDigestExpected')
+        reported_digest = authenticity_model_quality.get('anchorTransitionCarryoverScopeDigestReported')
+        triggers.append(
+            f'hard-invalid:anchor-transition-carryover-scope-mismatch:expected-{expected_digest}:reported-{reported_digest}'
         )
 
     if not authenticity_model_quality.get('migrationAnchorSourceTrusted', True):
@@ -1028,7 +1071,7 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- gameplay outcome: `{per_battle['gameplayOutcome']}`",
         f"- source of move A: `{per_battle['sourceOfMove']['A']['kind']}` (strategy `{per_battle['sourceOfMove']['A']['strategy']}` agent `{per_battle['sourceOfMove']['A']['agentName']}`)",
         f"- source of move B: `{per_battle['sourceOfMove']['B']['kind']}` (strategy `{per_battle['sourceOfMove']['B']['strategy']}` agent `{per_battle['sourceOfMove']['B']['agentName']}`)",
-        f"- authenticity model quality: correctness=`{per_battle['authenticityModelQuality']['correctnessSatisfied']}` completeness=`{per_battle['authenticityModelQuality']['completenessSatisfied']}` freshnessWindowProfileMatch=`{per_battle['authenticityModelQuality']['freshnessWindowProfileMatch']}` closurePolicyHashMatch=`{per_battle['authenticityModelQuality']['closureKeyClassificationPolicyHashMatch']}` migrationAnchorSourceTrusted=`{per_battle['authenticityModelQuality']['migrationAnchorSourceTrusted']}` fingerprintVersionMatch=`{per_battle['authenticityModelQuality']['fingerprintVersionMatch']}` failsClosed=`{per_battle['authenticityModelQuality']['failsClosed']}`",
+        f"- authenticity model quality: correctness=`{per_battle['authenticityModelQuality']['correctnessSatisfied']}` completeness=`{per_battle['authenticityModelQuality']['completenessSatisfied']}` freshnessWindowProfileMatch=`{per_battle['authenticityModelQuality']['freshnessWindowProfileMatch']}` closurePolicyHashMatch=`{per_battle['authenticityModelQuality']['closureKeyClassificationPolicyHashMatch']}` migrationAnchorSourceTrusted=`{per_battle['authenticityModelQuality']['migrationAnchorSourceTrusted']}` carryoverScopeDigestMatch=`{per_battle['authenticityModelQuality']['anchorTransitionCarryoverScopeDigestMatch']}` fingerprintVersionMatch=`{per_battle['authenticityModelQuality']['fingerprintVersionMatch']}` failsClosed=`{per_battle['authenticityModelQuality']['failsClosed']}`",
         f"- authenticity evidence sources: {', '.join(per_battle['authenticityModelQuality']['evidenceSources'])}",
         f"- timeout allowance aggregate: used=`{per_battle['authenticityModelQuality']['timeoutSubtypeAllowanceUsedAggregate']}` budget=`{per_battle['authenticityModelQuality']['timeoutSubtypeAllowanceBudgetAggregate']}` withinCap=`{per_battle['authenticityModelQuality']['aggregateAllowanceWithinCap']}`",
         f"- counts as proper battle: `{per_battle['countsAsProperBattle']}`",
