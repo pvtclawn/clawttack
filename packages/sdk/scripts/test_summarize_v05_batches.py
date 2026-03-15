@@ -250,6 +250,46 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(per_battle['topClaimLimitingReason'], 'hard-invalid:source-of-move-unknown:A')
         self.assertEqual(per_battle['topClaimLimitingReasonSource'], 'hard-invalid-trigger')
 
+    def test_provenance_mismatch_forces_invalid_tier_and_surfaces_trigger(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xpm1',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I tracked the relay hop and tagged the forged route before the checkpoint rotated.',
+                    'B': 'I mirrored the handoff and rerouted the courier while the scanner logs rolled over.',
+                },
+                'results': [
+                    {'txHash': '0x' + 'a' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + 'b' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + 'c' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'sourceOfMove': {
+                    'A': {'kind': 'local-script', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        self.assertTrue(per_battle['invalidForProperBattle'])
+        self.assertEqual(per_battle['forcedVerdictTier'], 'invalid-for-proper-battle')
+        self.assertIn(
+            'hard-invalid:provenance-mismatch:A:expected-gateway-agent:got-local-script',
+            per_battle['hardInvalidTriggers'],
+        )
+        self.assertEqual(
+            per_battle['topHardInvalidTrigger'],
+            'hard-invalid:provenance-mismatch:A:expected-gateway-agent:got-local-script',
+        )
+        self.assertEqual(
+            per_battle['topClaimLimitingReason'],
+            'hard-invalid:provenance-mismatch:A:expected-gateway-agent:got-local-script',
+        )
+
     def test_markdown_renders_governed_verdict_block_section(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             payload = self._build_per_battle_with_tmp(

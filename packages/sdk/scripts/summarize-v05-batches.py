@@ -62,6 +62,7 @@ PROPER_BATTLE_REASON_PRIORITY_PREFIXES = [
 ]
 HARD_INVALID_TRIGGER_PRIORITY_PREFIXES = [
     'hard-invalid:source-of-move-unknown:',
+    'hard-invalid:provenance-mismatch:',
     'hard-invalid:severe-transcript-quality-failure',
     'hard-invalid:severe-execution-ambiguity:',
     'hard-invalid:pre-submit-collapse',
@@ -213,6 +214,21 @@ def normalize_source_of_move(metadata: dict[str, Any] | None) -> dict[str, dict[
     return out
 
 
+def expected_kind_for_strategy(strategy: Any) -> str | None:
+    if not isinstance(strategy, str):
+        return None
+    normalized = strategy.strip().lower()
+    if not normalized:
+        return None
+    if normalized in {'script', 'local-script'}:
+        return 'local-script'
+    if normalized in {'gateway', 'gateway-agent'}:
+        return 'gateway-agent'
+    if normalized in {'docker', 'docker-agent'}:
+        return 'docker-agent'
+    return None
+
+
 def classify_execution_outcome(
     *,
     log_text: str,
@@ -310,9 +326,17 @@ def evaluate_hard_invalid_triggers(
     triggers: list[str] = []
 
     for side in ('A', 'B'):
-        side_kind = source_of_move.get(side, {}).get('kind')
+        side_payload = source_of_move.get(side, {})
+        side_kind = side_payload.get('kind')
         if side_kind == 'unknown':
             triggers.append(f'hard-invalid:source-of-move-unknown:{side}')
+            continue
+
+        expected_kind = expected_kind_for_strategy(side_payload.get('strategy'))
+        if expected_kind and side_kind != expected_kind:
+            triggers.append(
+                f'hard-invalid:provenance-mismatch:{side}:expected-{expected_kind}:got-{side_kind}'
+            )
 
     if gameplay_outcome == 'pre-submit-failure' or (turns_mined == 0 and execution_outcome in {'runner-error', 'timeout', 'sigterm', 'unknown'}):
         triggers.append('hard-invalid:pre-submit-collapse')
