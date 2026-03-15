@@ -290,6 +290,47 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             'hard-invalid:provenance-mismatch:A:expected-gateway-agent:got-local-script',
         )
 
+    def test_timing_window_profile_mismatch_forces_hard_invalid_trigger(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xtw1',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I tracked the relay corridor and marked the forged lane before dawn patrol shifted.',
+                    'B': 'I mirrored the manifest handoff and rerouted the courier while scanners recalibrated.',
+                },
+                'results': [
+                    {'txHash': '0x' + '0' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '1' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + '2' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'authenticityFreshnessWindowMsProfile': 300000,
+                'evidenceFreshnessWindowMs': 900000,
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        quality = per_battle['authenticityModelQuality']
+        self.assertFalse(quality['freshnessWindowProfileMatch'])
+        self.assertEqual(quality['authenticityFreshnessWindowMsProfile'], 300000)
+        self.assertEqual(quality['evidenceFreshnessWindowMsReported'], 900000)
+        self.assertIn(
+            'hard-invalid:timing-window-profile-mismatch:expected-300000:got-900000',
+            per_battle['hardInvalidTriggers'],
+        )
+        self.assertEqual(
+            per_battle['topHardInvalidTrigger'],
+            'hard-invalid:timing-window-profile-mismatch:expected-300000:got-900000',
+        )
+
     def test_authenticity_model_quality_fails_closed_for_single_source_evidence(self) -> None:
         per_battle = self._build_per_battle(
             log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',

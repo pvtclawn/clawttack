@@ -63,6 +63,7 @@ PROPER_BATTLE_REASON_PRIORITY_PREFIXES = [
 HARD_INVALID_TRIGGER_PRIORITY_PREFIXES = [
     'hard-invalid:source-of-move-unknown:',
     'hard-invalid:provenance-mismatch:',
+    'hard-invalid:timing-window-profile-mismatch',
     'hard-invalid:severe-transcript-quality-failure',
     'hard-invalid:severe-execution-ambiguity:',
     'hard-invalid:pre-submit-collapse',
@@ -258,6 +259,7 @@ def evaluate_authenticity_model_quality(
     *,
     source_of_move: dict[str, dict[str, Any]],
     evidence_sources: list[str],
+    metadata: dict[str, Any] | None,
 ) -> dict[str, Any]:
     required_fields = ('kind', 'strategy')
     required_present = all(
@@ -266,7 +268,23 @@ def evaluate_authenticity_model_quality(
     )
     evidence_source_count = len(evidence_sources)
     independent_source_present = any(not source.startswith('metadata.') for source in evidence_sources)
-    completeness_satisfied = required_present and evidence_source_count >= 2 and independent_source_present
+
+    profile_window_raw = (metadata or {}).get('authenticityFreshnessWindowMsProfile')
+    reported_window_raw = (metadata or {}).get('evidenceFreshnessWindowMs')
+    profile_window_ms = int(profile_window_raw) if isinstance(profile_window_raw, (int, float)) else 300000
+    reported_window_ms = (
+        int(reported_window_raw)
+        if isinstance(reported_window_raw, (int, float))
+        else profile_window_ms
+    )
+    freshness_window_profile_match = reported_window_ms == profile_window_ms
+
+    completeness_satisfied = (
+        required_present
+        and evidence_source_count >= 2
+        and independent_source_present
+        and freshness_window_profile_match
+    )
     correctness_satisfied = True
     fails_closed = not (correctness_satisfied and completeness_satisfied)
 
@@ -276,6 +294,9 @@ def evaluate_authenticity_model_quality(
         'evidenceSources': evidence_sources,
         'evidenceSourceCount': evidence_source_count,
         'independentSourcePresent': independent_source_present,
+        'authenticityFreshnessWindowMsProfile': profile_window_ms,
+        'evidenceFreshnessWindowMsReported': reported_window_ms,
+        'freshnessWindowProfileMatch': freshness_window_profile_match,
         'correctnessSatisfied': correctness_satisfied,
         'completenessSatisfied': completeness_satisfied,
         'failsClosed': fails_closed,
@@ -375,6 +396,7 @@ def evaluate_hard_invalid_triggers(
     source_of_move: dict[str, dict[str, Any]],
     turns_mined: int,
     transcript_quality_failure_reasons: list[str],
+    authenticity_model_quality: dict[str, Any],
 ) -> list[str]:
     triggers: list[str] = []
 
@@ -390,6 +412,13 @@ def evaluate_hard_invalid_triggers(
             triggers.append(
                 f'hard-invalid:provenance-mismatch:{side}:expected-{expected_kind}:got-{side_kind}'
             )
+
+    if not authenticity_model_quality.get('freshnessWindowProfileMatch', True):
+        expected_window = authenticity_model_quality.get('authenticityFreshnessWindowMsProfile')
+        reported_window = authenticity_model_quality.get('evidenceFreshnessWindowMsReported')
+        triggers.append(
+            f'hard-invalid:timing-window-profile-mismatch:expected-{expected_window}:got-{reported_window}'
+        )
 
     if gameplay_outcome == 'pre-submit-failure' or (turns_mined == 0 and execution_outcome in {'runner-error', 'timeout', 'sigterm', 'unknown'}):
         triggers.append('hard-invalid:pre-submit-collapse')
@@ -609,6 +638,7 @@ def build_per_battle(
     authenticity_model_quality = evaluate_authenticity_model_quality(
         source_of_move=source_of_move,
         evidence_sources=evidence_sources,
+        metadata=metadata,
     )
 
     execution_outcome = classify_execution_outcome(
@@ -638,6 +668,7 @@ def build_per_battle(
         source_of_move=source_of_move,
         turns_mined=cp_summary['turnsMined'],
         transcript_quality_failure_reasons=transcript_quality['failureReasons'],
+        authenticity_model_quality=authenticity_model_quality,
     )
     ordered_proper_battle_reasons = sort_reasons_by_priority(
         proper_battle_reasons,
@@ -827,7 +858,7 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- gameplay outcome: `{per_battle['gameplayOutcome']}`",
         f"- source of move A: `{per_battle['sourceOfMove']['A']['kind']}` (strategy `{per_battle['sourceOfMove']['A']['strategy']}` agent `{per_battle['sourceOfMove']['A']['agentName']}`)",
         f"- source of move B: `{per_battle['sourceOfMove']['B']['kind']}` (strategy `{per_battle['sourceOfMove']['B']['strategy']}` agent `{per_battle['sourceOfMove']['B']['agentName']}`)",
-        f"- authenticity model quality: correctness=`{per_battle['authenticityModelQuality']['correctnessSatisfied']}` completeness=`{per_battle['authenticityModelQuality']['completenessSatisfied']}` failsClosed=`{per_battle['authenticityModelQuality']['failsClosed']}`",
+        f"- authenticity model quality: correctness=`{per_battle['authenticityModelQuality']['correctnessSatisfied']}` completeness=`{per_battle['authenticityModelQuality']['completenessSatisfied']}` freshnessWindowProfileMatch=`{per_battle['authenticityModelQuality']['freshnessWindowProfileMatch']}` failsClosed=`{per_battle['authenticityModelQuality']['failsClosed']}`",
         f"- authenticity evidence sources: {', '.join(per_battle['authenticityModelQuality']['evidenceSources'])}",
         f"- counts as proper battle: `{per_battle['countsAsProperBattle']}`",
         f"- proper battle reasons: {', '.join(per_battle['properBattleReasons']) if per_battle['properBattleReasons'] else 'none'}",
