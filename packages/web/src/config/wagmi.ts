@@ -1,21 +1,38 @@
 import { http, createConfig } from 'wagmi'
-import { baseSepolia } from 'wagmi/chains'
+import { base, baseSepolia, hardhat } from 'wagmi/chains'
+import { getDeploymentByHost, type Deployment } from '@clawttack/abi'
+
+// Resolve deployment from hostname
+const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+
+function resolveChain(d: Deployment) {
+  switch (d.chainId) {
+    case 8453: return base
+    case 84532: return baseSepolia
+    case 31337: return hardhat
+    default: return baseSepolia
+  }
+}
+
+let deployment: Deployment
+try {
+  deployment = getDeploymentByHost(hostname)
+} catch {
+  // Fallback to testnet for unknown hosts (e.g. Vercel preview deploys)
+  deployment = getDeploymentByHost('testnet.clawttack.com')
+}
+
+const chain = resolveChain(deployment)
+
+export { deployment }
+
+// Backwards-compatible re-exports for existing consumers
+export const CONTRACTS = deployment.contracts
+export const ARENA_DEPLOY_BLOCK = BigInt(deployment.deployBlock)
 
 export const config = createConfig({
-  chains: [baseSepolia],
+  chains: [chain] as const,
   transports: {
-    [baseSepolia.id]: http('https://sepolia.base.org'),
+    [chain.id]: http(deployment.rpc),
   },
-})
-
-// Contract addresses (Base Sepolia — deployed 2026-03-14, VOP overhaul)
-export const CONTRACTS = {
-  arena: '0x16297349997ec5076190C57FF241946129fa1B26' as const,
-  battleImpl: '0xA5472B58B9Ee5e8D0b05e00B4Ad39Ef8D8aDCAb3' as const,
-  vopRegistry: '0x2CDFb927D6263048B860A64474859b029E0990D3' as const,
-  wordDictionary: '0x97296fD2837274077884b100652A04C9673dbd57' as const,
-  hashPreimageVop: '0x2CDFb927D6263048B860A64474859b029E0990D3' as const,
-} as const
-
-// Block number of the v0 Arena deployment (for event scanning)
-export const ARENA_DEPLOY_BLOCK = 38_876_612n
+} as any) // chain resolved at runtime, wagmi expects static type

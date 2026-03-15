@@ -1,0 +1,12 @@
+{
+  "chainId": 84532,
+  "name": "base-sepolia",
+  "rpc": "https://sepolia.base.org",
+  "contracts": {
+    "arena": "0x16297349997ec5076190C57FF241946129fa1B26",
+    "battleImpl": "0xA5472B58B9Ee5e8D0b05e00B4Ad39Ef8D8aDCAb3",
+    "wordDictionary": "0x97296fD2837274077884b100652A04C9673dbd57",
+    "hashPreimageVop": "0x2CDFb927D6263048B860A64474859b029E0990D3"
+  },
+  "deployBlock": 38876612
+}

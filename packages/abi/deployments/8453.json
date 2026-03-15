@@ -1,0 +1,12 @@
+{
+  "chainId": 8453,
+  "name": "base-mainnet",
+  "rpc": "https://mainnet.base.org",
+  "contracts": {
+    "arena": "0x0000000000000000000000000000000000000000",
+    "battleImpl": "0x0000000000000000000000000000000000000000",
+    "wordDictionary": "0x0000000000000000000000000000000000000000",
+    "hashPreimageVop": "0x0000000000000000000000000000000000000000"
+  },
+  "deployBlock": 0
+}
