@@ -18,51 +18,77 @@ SPEC.loader.exec_module(MODULE)
 class SummarizeV05BatchesClassificationTest(unittest.TestCase):
     def _build_per_battle(self, *, log_text: str, checkpoint: dict, metadata: dict) -> dict:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            results = root / 'battle-results'
-            checkpoints = results / 'checkpoints'
-            metadata_dir = results / 'metadata'
-            summaries = results / 'summaries'
-            results.mkdir(parents=True, exist_ok=True)
-            checkpoints.mkdir(parents=True, exist_ok=True)
-            metadata_dir.mkdir(parents=True, exist_ok=True)
-            summaries.mkdir(parents=True, exist_ok=True)
+            payload = self._build_per_battle_with_tmp(
+                root=Path(tmp),
+                log_text=log_text,
+                checkpoint=checkpoint,
+                metadata=metadata,
+            )
+            return payload['per_battle']
 
-            log_path = results / 'batch-99-123.log'
-            checkpoint_path = checkpoints / 'batch-99-123.json'
-            metadata_path = metadata_dir / 'batch-99-123.json'
-            log_path.write_text(log_text, encoding='utf-8')
-            checkpoint_path.write_text(json.dumps(checkpoint), encoding='utf-8')
-            metadata_path.write_text(json.dumps(metadata), encoding='utf-8')
+    def _build_per_battle_with_tmp(
+        self,
+        *,
+        root: Path,
+        log_text: str,
+        checkpoint: dict,
+        metadata: dict,
+    ) -> dict:
+        results = root / 'battle-results'
+        checkpoints = results / 'checkpoints'
+        metadata_dir = results / 'metadata'
+        summaries = results / 'summaries'
+        results.mkdir(parents=True, exist_ok=True)
+        checkpoints.mkdir(parents=True, exist_ok=True)
+        metadata_dir.mkdir(parents=True, exist_ok=True)
+        summaries.mkdir(parents=True, exist_ok=True)
 
-            previous = (
+        log_path = results / 'batch-99-123.log'
+        checkpoint_path = checkpoints / 'batch-99-123.json'
+        metadata_path = metadata_dir / 'batch-99-123.json'
+        log_path.write_text(log_text, encoding='utf-8')
+        checkpoint_path.write_text(json.dumps(checkpoint), encoding='utf-8')
+        metadata_path.write_text(json.dumps(metadata), encoding='utf-8')
+
+        previous = (
+            MODULE.ROOT,
+            MODULE.RESULTS_DIR,
+            MODULE.CHECKPOINTS_DIR,
+            MODULE.METADATA_DIR,
+            MODULE.SUMMARIES_DIR,
+        )
+        MODULE.ROOT = root
+        MODULE.RESULTS_DIR = results
+        MODULE.CHECKPOINTS_DIR = checkpoints
+        MODULE.METADATA_DIR = metadata_dir
+        MODULE.SUMMARIES_DIR = summaries
+        try:
+            per_battle = MODULE.build_per_battle(
+                log_path,
+                checkpoint_path,
+                control_label='baseline',
+                intervention_label='resumed-agent',
+                max_turns_configured=120,
+            )
+            return {
+                'per_battle': per_battle,
+                'root': root,
+                'results': results,
+                'checkpoints': checkpoints,
+                'metadata_dir': metadata_dir,
+                'summaries': summaries,
+                'log_path': log_path,
+                'checkpoint_path': checkpoint_path,
+                'metadata_path': metadata_path,
+            }
+        finally:
+            (
                 MODULE.ROOT,
                 MODULE.RESULTS_DIR,
                 MODULE.CHECKPOINTS_DIR,
                 MODULE.METADATA_DIR,
                 MODULE.SUMMARIES_DIR,
-            )
-            MODULE.ROOT = root
-            MODULE.RESULTS_DIR = results
-            MODULE.CHECKPOINTS_DIR = checkpoints
-            MODULE.METADATA_DIR = metadata_dir
-            MODULE.SUMMARIES_DIR = summaries
-            try:
-                return MODULE.build_per_battle(
-                    log_path,
-                    checkpoint_path,
-                    control_label='baseline',
-                    intervention_label='resumed-agent',
-                    max_turns_configured=120,
-                )
-            finally:
-                (
-                    MODULE.ROOT,
-                    MODULE.RESULTS_DIR,
-                    MODULE.CHECKPOINTS_DIR,
-                    MODULE.METADATA_DIR,
-                    MODULE.SUMMARIES_DIR,
-                ) = previous
+            ) = previous
 
     def test_interrupted_run_is_not_mislabeled_as_gameplay_success(self) -> None:
         per_battle = self._build_per_battle(
@@ -102,6 +128,10 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(per_battle['topProperBattleReason'], 'execution-outcome:supervisor-interrupted')
         self.assertEqual(per_battle['topClaimLimitingReason'], 'execution-outcome:supervisor-interrupted')
         self.assertEqual(per_battle['topClaimLimitingReasonSource'], 'proper-battle-reason')
+        self.assertEqual(per_battle['governedVerdictBlock']['displayedTier'], 'non-credit-unclassified')
+        self.assertEqual(per_battle['governedVerdictBlock']['creditStatus'], 'non-credit')
+        self.assertEqual(per_battle['governedVerdictBlock']['adjacentReason'], 'execution-outcome:supervisor-interrupted')
+        self.assertFalse(per_battle['governedVerdictBlock']['followUpInterpretationInsideBlockAllowed'])
         self.assertIn('execution-outcome:supervisor-interrupted', per_battle['properBattleReasons'])
         self.assertIn('gameplay-outcome:mid-battle-interrupted', per_battle['properBattleReasons'])
 
@@ -181,6 +211,7 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(per_battle['topHardInvalidTrigger'], 'hard-invalid:severe-transcript-quality-failure')
         self.assertEqual(per_battle['topClaimLimitingReason'], 'hard-invalid:severe-transcript-quality-failure')
         self.assertEqual(per_battle['topClaimLimitingReasonSource'], 'hard-invalid-trigger')
+        self.assertEqual(per_battle['governedVerdictBlock']['displayedTier'], 'invalid-for-proper-battle')
 
     def test_unknown_source_of_move_priority_beats_other_invalid_reasons(self) -> None:
         per_battle = self._build_per_battle(
@@ -213,6 +244,41 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(per_battle['topHardInvalidTrigger'], 'hard-invalid:source-of-move-unknown:A')
         self.assertEqual(per_battle['topClaimLimitingReason'], 'hard-invalid:source-of-move-unknown:A')
         self.assertEqual(per_battle['topClaimLimitingReasonSource'], 'hard-invalid-trigger')
+
+    def test_markdown_renders_governed_verdict_block_section(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = self._build_per_battle_with_tmp(
+                root=Path(tmp),
+                log_text='''\n🎮 turn=0 side=A bankA=400 bankB=400\n🎮 turn=1 side=B bankA=370 bankB=400\n''',
+                checkpoint={
+                    'battle': '0xabc',
+                    'lastTurn': 1,
+                    'lastNarrativeByAgent': {
+                        'A': 'Another storm pressed against the safehouse glass as I checked the relay map and marked the forged route before dawn.',
+                        'B': 'At the airport gate we traced the courier handoff and caught the fake manifest before the decoy inspector could leave.',
+                    },
+                    'results': [
+                        {'txHash': '0x' + '1' * 64, 'bankA': '400', 'bankB': '400'},
+                        {'txHash': '0x' + '2' * 64, 'bankA': '370', 'bankB': '400'},
+                    ],
+                },
+                metadata={
+                    'executionOutcome': 'started',
+                    'sourceOfMove': {
+                        'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                        'B': {'kind': 'local-script', 'strategy': 'script', 'agentName': None},
+                    },
+                },
+            )
+            md_path = payload['summaries'] / 'governed-block.md'
+            MODULE.write_markdown(md_path, payload['per_battle'])
+            md_text = md_path.read_text(encoding='utf-8')
+
+        self.assertIn('## governed verdict block', md_text)
+        self.assertIn('- field order: displayedTier, creditStatus, adjacentReason', md_text)
+        self.assertIn('- displayed tier: `non-credit-unclassified`', md_text)
+        self.assertIn('- adjacent reason: `execution-outcome:supervisor-interrupted` (proper-battle-reason)', md_text)
+        self.assertIn('- follow-up interpretation inside block allowed: `False`', md_text)
 
 
 if __name__ == '__main__':

@@ -435,6 +435,39 @@ def summarize_checkpoint(checkpoint: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+
+def build_governed_verdict_block(
+    *,
+    counts_as_proper_battle: bool,
+    forced_verdict_tier: str | None,
+    top_claim_limiting_reason: str | None,
+    top_claim_limiting_reason_source: str | None,
+) -> dict[str, Any]:
+    displayed_tier = (
+        forced_verdict_tier
+        if forced_verdict_tier
+        else 'proper-battle' if counts_as_proper_battle
+        else 'non-credit-unclassified'
+    )
+    credit_status = 'credit' if counts_as_proper_battle else 'non-credit'
+    field_order = [
+        'displayedTier',
+        'creditStatus',
+        'adjacentReason',
+    ]
+    return {
+        'scopeVersion': 'v1',
+        'sectionKey': 'governed-verdict-block',
+        'fieldOrder': field_order,
+        'displayedTier': displayed_tier,
+        'creditStatus': credit_status,
+        'adjacentReason': top_claim_limiting_reason,
+        'adjacentReasonSource': top_claim_limiting_reason_source,
+        'followUpInterpretationInsideBlockAllowed': False,
+        'postBlockInterpretationAllowed': True,
+    }
+
+
 def observed_mechanics(per_battle: dict[str, Any], log_text: str, log_summary: dict[str, Any]) -> list[str]:
     observed: list[str] = []
     if per_battle['turnsMined'] >= 1:
@@ -517,6 +550,13 @@ def build_per_battle(
         else 'proper-battle-reason' if top_proper_battle_reason
         else None
     )
+    forced_verdict_tier = 'invalid-for-proper-battle' if ordered_hard_invalid_triggers else None
+    governed_verdict_block = build_governed_verdict_block(
+        counts_as_proper_battle=counts_as_proper_battle,
+        forced_verdict_tier=forced_verdict_tier,
+        top_claim_limiting_reason=top_claim_limiting_reason,
+        top_claim_limiting_reason_source=top_claim_limiting_reason_source,
+    )
 
     out = {
         'batchKey': batch_key(log_path),
@@ -552,7 +592,8 @@ def build_per_battle(
         'hardInvalidTriggers': ordered_hard_invalid_triggers,
         'topHardInvalidTrigger': top_hard_invalid_trigger,
         'invalidForProperBattle': bool(ordered_hard_invalid_triggers),
-        'forcedVerdictTier': 'invalid-for-proper-battle' if ordered_hard_invalid_triggers else None,
+        'forcedVerdictTier': forced_verdict_tier,
+        'governedVerdictBlock': governed_verdict_block,
         'countsAsProperBattle': counts_as_proper_battle,
         'properBattleReasons': ordered_proper_battle_reasons,
         'topProperBattleReason': top_proper_battle_reason,
@@ -601,6 +642,7 @@ def write_json(path: Path, payload: Any) -> None:
 def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
     shared = per_battle['sharedRegimeMetrics']
     target = per_battle['interventionTargetMetrics']
+    governed = per_battle['governedVerdictBlock']
     lines = [
         f"# {per_battle['batchKey']}",
         '',
@@ -612,6 +654,16 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- settled: `{per_battle['settled']}` | unsettled: `{per_battle['unsettled']}`",
         f"- txs: `{len(per_battle['txHashes'])}`",
         f"- bank delta: A `{per_battle['bankAStart']}` -> `{per_battle['bankAEnd']}`, B `{per_battle['bankBStart']}` -> `{per_battle['bankBEnd']}`",
+        '',
+        '## governed verdict block',
+        f"- scope version: `{governed['scopeVersion']}`",
+        f"- section key: `{governed['sectionKey']}`",
+        f"- field order: {', '.join(governed['fieldOrder'])}",
+        f"- displayed tier: `{governed['displayedTier']}`",
+        f"- credit status: `{governed['creditStatus']}`",
+        f"- adjacent reason: `{governed['adjacentReason']}` ({governed['adjacentReasonSource']})",
+        f"- follow-up interpretation inside block allowed: `{governed['followUpInterpretationInsideBlockAllowed']}`",
+        f"- post-block interpretation allowed: `{governed['postBlockInterpretationAllowed']}`",
         '',
         '## classification contract',
         f"- execution outcome: `{per_battle['executionOutcome']}`",
