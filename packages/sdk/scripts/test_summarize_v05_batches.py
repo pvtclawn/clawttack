@@ -278,6 +278,10 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             md_path = payload['summaries'] / 'governed-block.md'
             MODULE.write_markdown(md_path, payload['per_battle'])
             md_text = md_path.read_text(encoding='utf-8')
+            parity = MODULE.evaluate_governed_block_surface_parity(
+                payload['per_battle']['governedVerdictBlock'],
+                md_text,
+            )
 
         self.assertIn('## governed verdict block', md_text)
         self.assertIn('- field order: displayedTier, rawTier, creditStatus, adjacentReason', md_text)
@@ -286,6 +290,47 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertIn('- raw tier: `non-credit-unclassified` (audit-only)', md_text)
         self.assertIn('- adjacent reason: `execution-outcome:supervisor-interrupted` (proper-battle-reason)', md_text)
         self.assertIn('- follow-up interpretation inside block allowed: `False`', md_text)
+        self.assertEqual(parity['scope'], 'current-artifact-surfaces:json+markdown')
+        self.assertEqual(parity['status'], 'aligned')
+        self.assertTrue(all(parity['checks'].values()))
+
+    def test_surface_parity_check_handles_invalid_governed_block(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = self._build_per_battle_with_tmp(
+                root=Path(tmp),
+                log_text='''\ntemplate=relay\n''',
+                checkpoint={
+                    'battle': '0xbbb',
+                    'lastTurn': 1,
+                    'lastNarrativeByAgent': {
+                        'A': 'relay holds firm. Sequence remains coherent. relay holds firm. Sequence remains coherent.',
+                        'B': 'relay holds firm. Sequence remains coherent. relay holds firm. Sequence remains coherent.',
+                    },
+                    'results': [
+                        {'txHash': '0x' + '3' * 64, 'bankA': '400', 'bankB': '400'},
+                        {'txHash': '0x' + '4' * 64, 'bankA': '370', 'bankB': '400'},
+                    ],
+                },
+                metadata={
+                    'executionOutcome': 'clean-exit',
+                    'sourceOfMove': {
+                        'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                        'B': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    },
+                },
+            )
+            md_path = payload['summaries'] / 'governed-invalid.md'
+            MODULE.write_markdown(md_path, payload['per_battle'])
+            md_text = md_path.read_text(encoding='utf-8')
+            parity = MODULE.evaluate_governed_block_surface_parity(
+                payload['per_battle']['governedVerdictBlock'],
+                md_text,
+            )
+
+        self.assertEqual(payload['per_battle']['governedVerdictBlock']['displayedTier'], 'non-credit / invalid')
+        self.assertEqual(payload['per_battle']['governedVerdictBlock']['rawTier'], 'invalid-for-proper-battle')
+        self.assertEqual(parity['status'], 'aligned')
+        self.assertTrue(all(parity['checks'].values()))
 
 
 if __name__ == '__main__':

@@ -663,6 +663,49 @@ def write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')
 
 
+def extract_markdown_section(markdown_text: str, heading: str, next_heading: str | None = None) -> str:
+    try:
+        start = markdown_text.index(heading)
+    except ValueError:
+        return ''
+    end = len(markdown_text)
+    if next_heading:
+        try:
+            end = markdown_text.index(next_heading, start + len(heading))
+        except ValueError:
+            end = len(markdown_text)
+    return markdown_text[start:end].strip()
+
+
+def evaluate_governed_block_surface_parity(
+    governed_block: dict[str, Any],
+    markdown_text: str,
+) -> dict[str, Any]:
+    section = extract_markdown_section(markdown_text, '## governed verdict block', '## classification contract')
+    field_order_line = f"- field order: {', '.join(governed_block['fieldOrder'])}"
+    primary_line = f"- primary label field: `{governed_block['primaryLabelField']}`"
+    displayed_line = f"- displayed tier: `{governed_block['displayedTier']}`"
+    raw_line = f"- raw tier: `{governed_block['rawTier']}` ({governed_block['rawTierRole']})"
+    section_present = bool(section)
+    displayed_index = section.find(displayed_line) if section_present else -1
+    raw_index = section.find(raw_line) if section_present else -1
+    checks = {
+        'sectionPresent': section_present,
+        'fieldOrderAligned': field_order_line in section,
+        'primaryLabelAligned': primary_line in section,
+        'displayedTierRendered': displayed_line in section,
+        'rawTierRendered': raw_line in section,
+        'displayedTierBeforeRawTier': displayed_index != -1 and raw_index != -1 and displayed_index < raw_index,
+        'rawTierMarkedAuditOnly': '(audit-only)' in raw_line,
+    }
+    return {
+        'scope': 'current-artifact-surfaces:json+markdown',
+        'status': 'aligned' if all(checks.values()) else 'mismatch',
+        'checks': checks,
+        'sectionHeading': '## governed verdict block',
+    }
+
+
 def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
     shared = per_battle['sharedRegimeMetrics']
     target = per_battle['interventionTargetMetrics']
