@@ -70,6 +70,10 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             checkpoint={
                 'battle': '0xabc',
                 'lastTurn': 1,
+                'lastNarrativeByAgent': {
+                    'A': 'Another storm pressed against the safehouse glass as I checked the relay map and marked the forged route before dawn.',
+                    'B': 'At the airport gate we traced the courier handoff and caught the fake manifest before the decoy inspector could leave.',
+                },
                 'results': [
                     {'txHash': '0x' + '1' * 64, 'bankA': '400', 'bankB': '400'},
                     {'txHash': '0x' + '2' * 64, 'bankA': '370', 'bankB': '400'},
@@ -88,6 +92,9 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(per_battle['gameplayOutcome'], 'mid-battle-interrupted')
         self.assertEqual(per_battle['sourceOfMove']['A']['kind'], 'gateway-agent')
         self.assertEqual(per_battle['sourceOfMove']['B']['kind'], 'local-script')
+        self.assertTrue(per_battle['transcriptQuality']['constraintSignalsVisible'])
+        self.assertTrue(per_battle['transcriptQuality']['sceneCoherenceHint'])
+        self.assertEqual(per_battle['transcriptQualityFailureReasons'], [])
         self.assertFalse(per_battle['countsAsProperBattle'])
         self.assertIn('execution-outcome:supervisor-interrupted', per_battle['properBattleReasons'])
         self.assertIn('gameplay-outcome:mid-battle-interrupted', per_battle['properBattleReasons'])
@@ -98,6 +105,10 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             checkpoint={
                 'battle': '0xdef',
                 'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'Beneath the warehouse crane I caught the switched crate and tagged the false timestamp before the watchers could react.',
+                    'B': 'Our runner slipped past the checkpoint and exposed the forged customs seal while the harbor lights cut through the rain.',
+                },
                 'results': [
                     {'txHash': '0x' + '3' * 64, 'bankA': '400', 'bankB': '400'},
                     {'txHash': '0x' + '4' * 64, 'bankA': '370', 'bankB': '400'},
@@ -115,8 +126,44 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
 
         self.assertEqual(per_battle['executionOutcome'], 'clean-exit')
         self.assertEqual(per_battle['gameplayOutcome'], 'terminal')
+        self.assertTrue(per_battle['transcriptQuality']['sceneCoherenceHint'])
+        self.assertEqual(per_battle['transcriptQuality']['repetitionRisk'], 'low')
+        self.assertEqual(per_battle['transcriptQualityFailureReasons'], [])
         self.assertFalse(per_battle['countsAsProperBattle'])
         self.assertEqual(per_battle['properBattleReasons'], ['proper-battle-rubric-pending'])
+
+    def test_template_like_boilerplate_surfaces_explicit_transcript_quality_failures(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\ntemplate=relay\ntemplate=relay\n''',
+            checkpoint={
+                'battle': '0xghi',
+                'lastTurn': 1,
+                'lastNarrativeByAgent': {
+                    'A': 'relay holds firm. Sequence remains coherent. relay holds firm. Sequence remains coherent.',
+                    'B': 'relay holds firm. Sequence remains coherent. relay holds firm. Sequence remains coherent.',
+                },
+                'results': [
+                    {'txHash': '0x' + '6' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '7' * 64, 'bankA': '370', 'bankB': '400'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                },
+            },
+        )
+
+        self.assertTrue(per_battle['transcriptQuality']['constraintSignalsVisible'])
+        self.assertEqual(per_battle['transcriptQuality']['repetitionRisk'], 'elevated')
+        self.assertTrue(per_battle['transcriptQuality']['fallbackMasqueradeRisk'])
+        self.assertTrue(per_battle['transcriptQuality']['signals']['fallbackPhraseDetected'])
+        self.assertTrue(per_battle['transcriptQuality']['signals']['templateMarkerDetected'])
+        self.assertTrue(per_battle['transcriptQuality']['signals']['repeatedSampleDetected'])
+        self.assertIn('repetition-risk-elevated', per_battle['transcriptQualityFailureReasons'])
+        self.assertIn('fallback-masquerade-risk', per_battle['transcriptQualityFailureReasons'])
 
 
 if __name__ == '__main__':

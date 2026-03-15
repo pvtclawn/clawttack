@@ -39,6 +39,20 @@ COMPARABILITY_REASON_ORDER = [
 DEFAULT_CONTROL_LABEL = 'baseline-same-regime'
 DEFAULT_INTERVENTION_LABEL = 'same-regime'
 LATER_TURN_THRESHOLD = 3
+WORD_RE = re.compile(r"[A-Za-z']+")
+KNOWN_FALLBACK_PHRASES = [
+    'Sequence remains coherent.',
+    'Timing stays aligned.',
+    'Route pressure is contained.',
+    'Signal path remains stable.',
+]
+KNOWN_TEMPLATE_MARKERS = [
+    'ledger marks',
+    'chain keeps',
+    'relay holds firm',
+]
+MIN_SCENE_WORDS = 8
+LOW_UNIQUE_RATIO_THRESHOLD = 0.55
 
 
 def load_text(path: Path) -> str:
@@ -253,6 +267,85 @@ def evaluate_proper_battle_contract(
     return False, reasons
 
 
+def word_tokens(text: str) -> list[str]:
+    return [token.lower() for token in WORD_RE.findall(text)]
+
+
+def extract_narrative_samples(checkpoint: dict[str, Any] | None) -> dict[str, str]:
+    raw = (checkpoint or {}).get('lastNarrativeByAgent')
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for side in ('A', 'B'):
+        value = raw.get(side)
+        if isinstance(value, str) and value.strip():
+            out[side] = value.strip()
+    return out
+
+
+def unique_token_ratio(text: str) -> float:
+    tokens = word_tokens(text)
+    if not tokens:
+        return 0.0
+    return len(set(tokens)) / len(tokens)
+
+
+def evaluate_transcript_quality(*, checkpoint: dict[str, Any] | None, log_text: str) -> dict[str, Any]:
+    narrative_samples = extract_narrative_samples(checkpoint)
+    sample_values = list(narrative_samples.values())
+    normalized_samples = [' '.join(word_tokens(text)) for text in sample_values]
+    fallback_phrase_detected = any(
+        phrase.lower() in text.lower()
+        for text in sample_values
+        for phrase in KNOWN_FALLBACK_PHRASES
+    )
+    template_marker_detected = any(
+        marker.lower() in text.lower()
+        for text in sample_values
+        for marker in KNOWN_TEMPLATE_MARKERS
+    )
+    repeated_sample_detected = len(normalized_samples) >= 2 and len(set(normalized_samples)) < len(normalized_samples)
+    low_unique_ratio_detected = any(
+        len(word_tokens(text)) >= MIN_SCENE_WORDS and unique_token_ratio(text) < LOW_UNIQUE_RATIO_THRESHOLD
+        for text in sample_values
+    )
+    scene_coherence_hint = bool(sample_values) and all(
+        len(word_tokens(text)) >= MIN_SCENE_WORDS and any(ch in text for ch in '.!?,;:')
+        for text in sample_values
+    )
+    repetition_risk = 'elevated' if any(
+        [fallback_phrase_detected, repeated_sample_detected, low_unique_ratio_detected]
+    ) else 'low'
+    fallback_masquerade_risk = fallback_phrase_detected or template_marker_detected
+
+    failure_reasons: list[str] = []
+    if not sample_values:
+        failure_reasons.append('no-narrative-samples')
+    if sample_values and not scene_coherence_hint:
+        failure_reasons.append('scene-coherence-weak')
+    if repetition_risk == 'elevated':
+        failure_reasons.append('repetition-risk-elevated')
+    if fallback_masquerade_risk:
+        failure_reasons.append('fallback-masquerade-risk')
+
+    return {
+        'narrativeSamples': narrative_samples,
+        'narrativeSampleCount': len(sample_values),
+        'constraintSignalsVisible': bool(sample_values),
+        'repetitionRisk': repetition_risk,
+        'sceneCoherenceHint': scene_coherence_hint,
+        'fallbackMasqueradeRisk': fallback_masquerade_risk,
+        'failureReasons': failure_reasons,
+        'signals': {
+            'fallbackPhraseDetected': fallback_phrase_detected,
+            'templateMarkerDetected': template_marker_detected,
+            'repeatedSampleDetected': repeated_sample_detected,
+            'lowUniqueRatioDetected': low_unique_ratio_detected,
+            'logHasTemplateMarkers': bool(re.search(r'template=[a-z]+', log_text)),
+        },
+    }
+
+
 def summarize_checkpoint(checkpoint: dict[str, Any] | None) -> dict[str, Any]:
     results = (checkpoint or {}).get('results', [])
     turns_mined = len(results)
@@ -269,6 +362,7 @@ def summarize_checkpoint(checkpoint: dict[str, Any] | None) -> dict[str, Any]:
         'bankAEnd': last.get('bankA') if last else None,
         'bankBEnd': last.get('bankB') if last else None,
         'lastTurn': checkpoint.get('lastTurn') if checkpoint else None,
+        'narrativeSamples': extract_narrative_samples(checkpoint),
     }
 
 
@@ -321,6 +415,10 @@ def build_per_battle(
         source_of_move=source_of_move,
         turns_mined=cp_summary['turnsMined'],
     )
+    transcript_quality = evaluate_transcript_quality(
+        checkpoint=checkpoint,
+        log_text=log_text,
+    )
 
     out = {
         'batchKey': batch_key(log_path),
@@ -351,6 +449,8 @@ def build_per_battle(
         'executionOutcome': execution_outcome,
         'gameplayOutcome': gameplay_outcome,
         'sourceOfMove': source_of_move,
+        'transcriptQuality': transcript_quality,
+        'transcriptQualityFailureReasons': transcript_quality['failureReasons'],
         'countsAsProperBattle': counts_as_proper_battle,
         'properBattleReasons': proper_battle_reasons,
         'failureClass': failure_class,
@@ -415,6 +515,14 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- source of move B: `{per_battle['sourceOfMove']['B']['kind']}` (strategy `{per_battle['sourceOfMove']['B']['strategy']}` agent `{per_battle['sourceOfMove']['B']['agentName']}`)",
         f"- counts as proper battle: `{per_battle['countsAsProperBattle']}`",
         f"- proper battle reasons: {', '.join(per_battle['properBattleReasons']) if per_battle['properBattleReasons'] else 'none'}",
+        '',
+        '## transcript-quality checks',
+        f"- narrative sample count: `{per_battle['transcriptQuality']['narrativeSampleCount']}`",
+        f"- constraint signals visible: `{per_battle['transcriptQuality']['constraintSignalsVisible']}`",
+        f"- scene coherence hint: `{per_battle['transcriptQuality']['sceneCoherenceHint']}`",
+        f"- repetition risk: `{per_battle['transcriptQuality']['repetitionRisk']}`",
+        f"- fallback masquerade risk: `{per_battle['transcriptQuality']['fallbackMasqueradeRisk']}`",
+        f"- transcript-quality failure reasons: {', '.join(per_battle['transcriptQualityFailureReasons']) if per_battle['transcriptQualityFailureReasons'] else 'none'}",
         '',
         '## shared-regime metrics',
         f"- first mover A: `{shared['firstMoverA']}`",
