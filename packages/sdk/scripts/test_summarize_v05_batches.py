@@ -583,6 +583,62 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             'hard-invalid:compaction-failsafe-defer-budget-exhausted:count-7:budget-5',
         )
 
+    def test_fairness_active_key_inflation_uses_dust_key_exclusion_and_claim_limiting_trigger(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xfa11',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I isolated the hot relay lane and ignored dust chatter before finalizing the queue.',
+                    'B': 'I mirrored the defer ledger and exposed denominator padding before the checkpoint sealed.',
+                },
+                'results': [
+                    {'txHash': '0x' + '7' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '8' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + '9' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'fairnessModelActiveKeyMinContribution': 2,
+                'fairnessModelDustInflationRatioThreshold': 0.60,
+                'transitionLedgerKeyDeferredCounts': {
+                    'hot-a': 5,
+                    'hot-b': 4,
+                    'dust-1': 1,
+                    'dust-2': 1,
+                    'dust-3': 1,
+                    'dust-4': 1,
+                },
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        quality = per_battle['authenticityModelQuality']
+        self.assertEqual(quality['fairnessModelObservedKeyCount'], 6)
+        self.assertEqual(quality['fairnessModelNonDustActiveKeyCount'], 2)
+        self.assertEqual(quality['fairnessModelDustKeyCount'], 4)
+        self.assertAlmostEqual(quality['fairnessModelDustKeyRatio'], 4 / 6)
+        self.assertTrue(quality['fairnessModelActiveKeyInflationSuspected'])
+        self.assertIn(
+            'hard-invalid:fairness-active-key-inflation-suspected:observed-6:dust-4:ratio-0.6666666666666666:threshold-0.6',
+            per_battle['hardInvalidTriggers'],
+        )
+        self.assertEqual(
+            per_battle['topHardInvalidTrigger'],
+            'hard-invalid:fairness-active-key-inflation-suspected:observed-6:dust-4:ratio-0.6666666666666666:threshold-0.6',
+        )
+        self.assertEqual(
+            per_battle['topClaimLimitingReason'],
+            'hard-invalid:fairness-active-key-inflation-suspected:observed-6:dust-4:ratio-0.6666666666666666:threshold-0.6',
+        )
+        self.assertEqual(per_battle['topClaimLimitingReasonSource'], 'hard-invalid-trigger')
+
     def test_compaction_defer_budget_within_cap_does_not_trigger_hard_invalid(self) -> None:
         per_battle = self._build_per_battle(
             log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
@@ -1082,6 +1138,57 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(parity['scope'], 'current-artifact-surfaces:json+markdown')
         self.assertEqual(parity['status'], 'aligned')
         self.assertTrue(all(parity['checks'].values()))
+
+    def test_markdown_surfaces_fairness_active_key_inflation_trigger(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = self._build_per_battle_with_tmp(
+                root=Path(tmp),
+                log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+                checkpoint={
+                    'battle': '0xfa12',
+                    'lastTurn': 2,
+                    'lastNarrativeByAgent': {
+                        'A': 'I isolated the hot relay lane and ignored dust chatter before finalizing the queue.',
+                        'B': 'I mirrored the defer ledger and exposed denominator padding before the checkpoint sealed.',
+                    },
+                    'results': [
+                        {'txHash': '0x' + 'a' * 64, 'bankA': '400', 'bankB': '400'},
+                        {'txHash': '0x' + 'b' * 64, 'bankA': '370', 'bankB': '400'},
+                        {'txHash': '0x' + 'c' * 64, 'bankA': '340', 'bankB': '390'},
+                    ],
+                },
+                metadata={
+                    'executionOutcome': 'clean-exit',
+                    'fairnessModelActiveKeyMinContribution': 2,
+                    'fairnessModelDustInflationRatioThreshold': 0.60,
+                    'transitionLedgerKeyDeferredCounts': {
+                        'hot-a': 5,
+                        'hot-b': 4,
+                        'dust-1': 1,
+                        'dust-2': 1,
+                        'dust-3': 1,
+                        'dust-4': 1,
+                    },
+                    'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                    'sourceOfMove': {
+                        'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                        'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                    },
+                },
+            )
+            md_path = payload['summaries'] / 'fairness-active-key-inflation.md'
+            MODULE.write_markdown(md_path, payload['per_battle'])
+            md_text = md_path.read_text(encoding='utf-8')
+
+        self.assertIn('activeKeyInflationSuspected=`True`', md_text)
+        self.assertIn(
+            '- top hard invalid trigger: `hard-invalid:fairness-active-key-inflation-suspected:observed-6:dust-4:ratio-0.6666666666666666:threshold-0.6`',
+            md_text,
+        )
+        self.assertIn(
+            '- top claim-limiting reason: `hard-invalid:fairness-active-key-inflation-suspected:observed-6:dust-4:ratio-0.6666666666666666:threshold-0.6` (hard-invalid-trigger)',
+            md_text,
+        )
 
     def test_surface_parity_check_handles_invalid_governed_block(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
