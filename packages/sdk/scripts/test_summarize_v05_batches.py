@@ -99,6 +99,9 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(per_battle['hardInvalidTriggers'], [])
         self.assertIsNone(per_battle['forcedVerdictTier'])
         self.assertFalse(per_battle['countsAsProperBattle'])
+        self.assertEqual(per_battle['topProperBattleReason'], 'execution-outcome:supervisor-interrupted')
+        self.assertEqual(per_battle['topClaimLimitingReason'], 'execution-outcome:supervisor-interrupted')
+        self.assertEqual(per_battle['topClaimLimitingReasonSource'], 'proper-battle-reason')
         self.assertIn('execution-outcome:supervisor-interrupted', per_battle['properBattleReasons'])
         self.assertIn('gameplay-outcome:mid-battle-interrupted', per_battle['properBattleReasons'])
 
@@ -136,6 +139,8 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(per_battle['hardInvalidTriggers'], [])
         self.assertIsNone(per_battle['forcedVerdictTier'])
         self.assertFalse(per_battle['countsAsProperBattle'])
+        self.assertEqual(per_battle['topProperBattleReason'], 'proper-battle-rubric-pending')
+        self.assertEqual(per_battle['topClaimLimitingReason'], 'proper-battle-rubric-pending')
         self.assertEqual(per_battle['properBattleReasons'], ['proper-battle-rubric-pending'])
 
     def test_template_like_boilerplate_surfaces_explicit_transcript_quality_failures(self) -> None:
@@ -173,14 +178,24 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertTrue(per_battle['invalidForProperBattle'])
         self.assertEqual(per_battle['forcedVerdictTier'], 'invalid-for-proper-battle')
         self.assertIn('hard-invalid:severe-transcript-quality-failure', per_battle['hardInvalidTriggers'])
+        self.assertEqual(per_battle['topHardInvalidTrigger'], 'hard-invalid:severe-transcript-quality-failure')
+        self.assertEqual(per_battle['topClaimLimitingReason'], 'hard-invalid:severe-transcript-quality-failure')
+        self.assertEqual(per_battle['topClaimLimitingReasonSource'], 'hard-invalid-trigger')
 
-    def test_unknown_source_of_move_forces_invalid_status(self) -> None:
+    def test_unknown_source_of_move_priority_beats_other_invalid_reasons(self) -> None:
         per_battle = self._build_per_battle(
-            log_text='''\n''',
+            log_text='''\ntemplate=relay\n''',
             checkpoint={
                 'battle': '0xjkl',
-                'lastTurn': 0,
-                'results': [],
+                'lastTurn': 1,
+                'lastNarrativeByAgent': {
+                    'A': 'relay holds firm. Sequence remains coherent. relay holds firm. Sequence remains coherent.',
+                    'B': 'relay holds firm. Sequence remains coherent. relay holds firm. Sequence remains coherent.',
+                },
+                'results': [
+                    {'txHash': '0x' + '8' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '9' * 64, 'bankA': '370', 'bankB': '400'},
+                ],
             },
             metadata={
                 'executionOutcome': 'clean-exit',
@@ -194,6 +209,10 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertTrue(per_battle['invalidForProperBattle'])
         self.assertEqual(per_battle['forcedVerdictTier'], 'invalid-for-proper-battle')
         self.assertIn('hard-invalid:source-of-move-unknown:A', per_battle['hardInvalidTriggers'])
+        self.assertIn('hard-invalid:severe-transcript-quality-failure', per_battle['hardInvalidTriggers'])
+        self.assertEqual(per_battle['topHardInvalidTrigger'], 'hard-invalid:source-of-move-unknown:A')
+        self.assertEqual(per_battle['topClaimLimitingReason'], 'hard-invalid:source-of-move-unknown:A')
+        self.assertEqual(per_battle['topClaimLimitingReasonSource'], 'hard-invalid-trigger')
 
 
 if __name__ == '__main__':

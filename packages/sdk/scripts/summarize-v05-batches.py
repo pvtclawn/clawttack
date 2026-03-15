@@ -53,6 +53,19 @@ KNOWN_TEMPLATE_MARKERS = [
 ]
 MIN_SCENE_WORDS = 8
 LOW_UNIQUE_RATIO_THRESHOLD = 0.55
+PROPER_BATTLE_REASON_PRIORITY_PREFIXES = [
+    'source-of-move-unknown:',
+    'execution-outcome:',
+    'gameplay-outcome:',
+    'insufficient-live-turn-evidence',
+    'proper-battle-rubric-pending',
+]
+HARD_INVALID_TRIGGER_PRIORITY_PREFIXES = [
+    'hard-invalid:source-of-move-unknown:',
+    'hard-invalid:severe-transcript-quality-failure',
+    'hard-invalid:severe-execution-ambiguity:',
+    'hard-invalid:pre-submit-collapse',
+]
 
 
 def load_text(path: Path) -> str:
@@ -267,6 +280,25 @@ def evaluate_proper_battle_contract(
     return False, reasons
 
 
+def reason_priority_index(reason: str, priority_prefixes: list[str]) -> tuple[int, str]:
+    for index, prefix in enumerate(priority_prefixes):
+        if reason.startswith(prefix):
+            return index, reason
+    return len(priority_prefixes), reason
+
+
+
+def sort_reasons_by_priority(reasons: list[str], priority_prefixes: list[str]) -> list[str]:
+    return sorted(reasons, key=lambda reason: reason_priority_index(reason, priority_prefixes))
+
+
+
+def select_top_reason(reasons: list[str], priority_prefixes: list[str]) -> str | None:
+    ordered = sort_reasons_by_priority(reasons, priority_prefixes)
+    return ordered[0] if ordered else None
+
+
+
 def evaluate_hard_invalid_triggers(
     *,
     execution_outcome: str,
@@ -463,6 +495,28 @@ def build_per_battle(
         turns_mined=cp_summary['turnsMined'],
         transcript_quality_failure_reasons=transcript_quality['failureReasons'],
     )
+    ordered_proper_battle_reasons = sort_reasons_by_priority(
+        proper_battle_reasons,
+        PROPER_BATTLE_REASON_PRIORITY_PREFIXES,
+    )
+    ordered_hard_invalid_triggers = sort_reasons_by_priority(
+        hard_invalid_triggers,
+        HARD_INVALID_TRIGGER_PRIORITY_PREFIXES,
+    )
+    top_proper_battle_reason = select_top_reason(
+        ordered_proper_battle_reasons,
+        PROPER_BATTLE_REASON_PRIORITY_PREFIXES,
+    )
+    top_hard_invalid_trigger = select_top_reason(
+        ordered_hard_invalid_triggers,
+        HARD_INVALID_TRIGGER_PRIORITY_PREFIXES,
+    )
+    top_claim_limiting_reason = top_hard_invalid_trigger or top_proper_battle_reason
+    top_claim_limiting_reason_source = (
+        'hard-invalid-trigger' if top_hard_invalid_trigger
+        else 'proper-battle-reason' if top_proper_battle_reason
+        else None
+    )
 
     out = {
         'batchKey': batch_key(log_path),
@@ -495,11 +549,15 @@ def build_per_battle(
         'sourceOfMove': source_of_move,
         'transcriptQuality': transcript_quality,
         'transcriptQualityFailureReasons': transcript_quality['failureReasons'],
-        'hardInvalidTriggers': hard_invalid_triggers,
-        'invalidForProperBattle': bool(hard_invalid_triggers),
-        'forcedVerdictTier': 'invalid-for-proper-battle' if hard_invalid_triggers else None,
+        'hardInvalidTriggers': ordered_hard_invalid_triggers,
+        'topHardInvalidTrigger': top_hard_invalid_trigger,
+        'invalidForProperBattle': bool(ordered_hard_invalid_triggers),
+        'forcedVerdictTier': 'invalid-for-proper-battle' if ordered_hard_invalid_triggers else None,
         'countsAsProperBattle': counts_as_proper_battle,
-        'properBattleReasons': proper_battle_reasons,
+        'properBattleReasons': ordered_proper_battle_reasons,
+        'topProperBattleReason': top_proper_battle_reason,
+        'topClaimLimitingReason': top_claim_limiting_reason,
+        'topClaimLimitingReasonSource': top_claim_limiting_reason_source,
         'failureClass': failure_class,
         'failureDetail': failure_detail,
     }
@@ -562,9 +620,12 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- source of move B: `{per_battle['sourceOfMove']['B']['kind']}` (strategy `{per_battle['sourceOfMove']['B']['strategy']}` agent `{per_battle['sourceOfMove']['B']['agentName']}`)",
         f"- counts as proper battle: `{per_battle['countsAsProperBattle']}`",
         f"- proper battle reasons: {', '.join(per_battle['properBattleReasons']) if per_battle['properBattleReasons'] else 'none'}",
+        f"- top proper battle reason: `{per_battle['topProperBattleReason']}`",
         f"- invalid for proper battle: `{per_battle['invalidForProperBattle']}`",
         f"- forced verdict tier: `{per_battle['forcedVerdictTier']}`",
         f"- hard invalid triggers: {', '.join(per_battle['hardInvalidTriggers']) if per_battle['hardInvalidTriggers'] else 'none'}",
+        f"- top hard invalid trigger: `{per_battle['topHardInvalidTrigger']}`",
+        f"- top claim-limiting reason: `{per_battle['topClaimLimitingReason']}` ({per_battle['topClaimLimitingReasonSource']})",
         '',
         '## transcript-quality checks',
         f"- narrative sample count: `{per_battle['transcriptQuality']['narrativeSampleCount']}`",
