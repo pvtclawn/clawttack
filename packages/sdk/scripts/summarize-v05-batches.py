@@ -64,6 +64,7 @@ HARD_INVALID_TRIGGER_PRIORITY_PREFIXES = [
     'hard-invalid:source-of-move-unknown:',
     'hard-invalid:provenance-mismatch:',
     'hard-invalid:failure-class-derivation-mismatch:',
+    'hard-invalid:closure-key-classification-downgrade:',
     'hard-invalid:safety-envelope-fingerprint-version-mismatch:',
     'hard-invalid:timing-window-profile-mismatch',
     'hard-invalid:timeout-allowance-aggregate-exceeded',
@@ -289,6 +290,32 @@ def compute_decision_determinism_fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
 
 
+def normalize_key_classification_policy(raw: Any) -> dict[str, list[str]]:
+    if not isinstance(raw, dict):
+        raw = {}
+
+    def _normalized_list(value: Any) -> list[str]:
+        if not isinstance(value, list):
+            return []
+        out: list[str] = []
+        for item in value:
+            if isinstance(item, str) and item.strip():
+                token = item.strip()
+                if token not in out:
+                    out.append(token)
+        return sorted(out)
+
+    return {
+        'requiredCoreEvidenceKeys': _normalized_list(raw.get('requiredCoreEvidenceKeys')),
+        'optionalEvidenceKeys': _normalized_list(raw.get('optionalEvidenceKeys')),
+    }
+
+
+def compute_key_classification_policy_hash(policy: dict[str, list[str]]) -> str:
+    canonical = json.dumps(policy, sort_keys=True, separators=(',', ':'), ensure_ascii=True)
+    return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+
+
 def evaluate_authenticity_model_quality(
     *,
     source_of_move: dict[str, dict[str, Any]],
@@ -324,6 +351,12 @@ def evaluate_authenticity_model_quality(
     rule_hash = (metadata or {}).get('ruleHash') if isinstance((metadata or {}).get('ruleHash'), str) else 'rule-default'
     mode_profile_hash = hashlib.sha256(mode_profile.encode('utf-8')).hexdigest()[:16]
 
+    policy = normalize_key_classification_policy((metadata or {}).get('closureKeyClassificationPolicy'))
+    expected_policy_hash = compute_key_classification_policy_hash(policy)
+    manifest = (metadata or {}).get('evidenceClosureManifest') if isinstance((metadata or {}).get('evidenceClosureManifest'), dict) else {}
+    reported_policy_hash = manifest.get('closureKeyClassificationPolicyHash') if isinstance(manifest.get('closureKeyClassificationPolicyHash'), str) else None
+    key_classification_policy_hash_match = (reported_policy_hash == expected_policy_hash) if reported_policy_hash else True
+
     fingerprint_payload = {
         'ruleVersion': rule_version,
         'ruleHash': rule_hash,
@@ -344,6 +377,7 @@ def evaluate_authenticity_model_quality(
         and independent_source_present
         and freshness_window_profile_match
         and aggregate_allowance_within_cap
+        and key_classification_policy_hash_match
         and fingerprint_version_match
     )
     correctness_satisfied = True
@@ -367,6 +401,10 @@ def evaluate_authenticity_model_quality(
         'ruleHash': rule_hash,
         'modeProfile': mode_profile,
         'modeProfileHash': mode_profile_hash,
+        'closureKeyClassificationPolicy': policy,
+        'closureKeyClassificationPolicyHashExpected': expected_policy_hash,
+        'closureKeyClassificationPolicyHashReported': reported_policy_hash,
+        'closureKeyClassificationPolicyHashMatch': key_classification_policy_hash_match,
         'decisionDeterminismFingerprint': computed_fingerprint,
         'reportedDecisionDeterminismFingerprint': reported_fingerprint,
         'fingerprintVersionMatch': fingerprint_version_match,
@@ -495,6 +533,13 @@ def evaluate_hard_invalid_triggers(
             triggers.append(
                 f'hard-invalid:failure-class-derivation-mismatch:derived-{normalized_derived}:reported-{normalized_reported}'
             )
+
+    if not authenticity_model_quality.get('closureKeyClassificationPolicyHashMatch', True):
+        expected_policy_hash = authenticity_model_quality.get('closureKeyClassificationPolicyHashExpected')
+        reported_policy_hash = authenticity_model_quality.get('closureKeyClassificationPolicyHashReported')
+        triggers.append(
+            f'hard-invalid:closure-key-classification-downgrade:expected-{expected_policy_hash}:reported-{reported_policy_hash}'
+        )
 
     if not authenticity_model_quality.get('fingerprintVersionMatch', True):
         rule_version = authenticity_model_quality.get('ruleVersion')
@@ -961,7 +1006,7 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- gameplay outcome: `{per_battle['gameplayOutcome']}`",
         f"- source of move A: `{per_battle['sourceOfMove']['A']['kind']}` (strategy `{per_battle['sourceOfMove']['A']['strategy']}` agent `{per_battle['sourceOfMove']['A']['agentName']}`)",
         f"- source of move B: `{per_battle['sourceOfMove']['B']['kind']}` (strategy `{per_battle['sourceOfMove']['B']['strategy']}` agent `{per_battle['sourceOfMove']['B']['agentName']}`)",
-        f"- authenticity model quality: correctness=`{per_battle['authenticityModelQuality']['correctnessSatisfied']}` completeness=`{per_battle['authenticityModelQuality']['completenessSatisfied']}` freshnessWindowProfileMatch=`{per_battle['authenticityModelQuality']['freshnessWindowProfileMatch']}` fingerprintVersionMatch=`{per_battle['authenticityModelQuality']['fingerprintVersionMatch']}` failsClosed=`{per_battle['authenticityModelQuality']['failsClosed']}`",
+        f"- authenticity model quality: correctness=`{per_battle['authenticityModelQuality']['correctnessSatisfied']}` completeness=`{per_battle['authenticityModelQuality']['completenessSatisfied']}` freshnessWindowProfileMatch=`{per_battle['authenticityModelQuality']['freshnessWindowProfileMatch']}` closurePolicyHashMatch=`{per_battle['authenticityModelQuality']['closureKeyClassificationPolicyHashMatch']}` fingerprintVersionMatch=`{per_battle['authenticityModelQuality']['fingerprintVersionMatch']}` failsClosed=`{per_battle['authenticityModelQuality']['failsClosed']}`",
         f"- authenticity evidence sources: {', '.join(per_battle['authenticityModelQuality']['evidenceSources'])}",
         f"- timeout allowance aggregate: used=`{per_battle['authenticityModelQuality']['timeoutSubtypeAllowanceUsedAggregate']}` budget=`{per_battle['authenticityModelQuality']['timeoutSubtypeAllowanceBudgetAggregate']}` withinCap=`{per_battle['authenticityModelQuality']['aggregateAllowanceWithinCap']}`",
         f"- counts as proper battle: `{per_battle['countsAsProperBattle']}`",

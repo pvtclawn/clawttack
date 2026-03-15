@@ -475,6 +475,83 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             'hard-invalid:timing-window-profile-mismatch:expected-300000:got-900000',
         )
 
+    def test_closure_policy_hash_mismatch_forces_hard_invalid_trigger(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xcp1',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I tracked provenance partitions and flagged the downgraded evidence set.',
+                    'B': 'I mirrored closure manifest inputs and logged the policy drift attempt.',
+                },
+                'results': [
+                    {'txHash': '0x' + '1' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '2' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + '3' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'closureKeyClassificationPolicy': {
+                    'requiredCoreEvidenceKeys': ['sourceOfMove.A.kind', 'sourceOfMove.B.kind'],
+                    'optionalEvidenceKeys': ['checkpoint.results'],
+                },
+                'evidenceClosureManifest': {
+                    'closureKeyClassificationPolicyHash': 'deadbeef',
+                },
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        quality = per_battle['authenticityModelQuality']
+        self.assertFalse(quality['closureKeyClassificationPolicyHashMatch'])
+        self.assertEqual(quality['closureKeyClassificationPolicyHashReported'], 'deadbeef')
+        self.assertIn(
+            'hard-invalid:closure-key-classification-downgrade:',
+            per_battle['topHardInvalidTrigger'],
+        )
+
+    def test_closure_policy_hash_match_does_not_trigger_hard_invalid(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xcp2',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I tracked provenance partitions and confirmed stable required-core policy.',
+                    'B': 'I mirrored closure manifest inputs and validated policy hash parity.',
+                },
+                'results': [
+                    {'txHash': '0x' + '4' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '5' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + '6' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'closureKeyClassificationPolicy': {
+                    'requiredCoreEvidenceKeys': ['sourceOfMove.A.kind', 'sourceOfMove.B.kind'],
+                    'optionalEvidenceKeys': ['checkpoint.results'],
+                },
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        quality = per_battle['authenticityModelQuality']
+        self.assertTrue(quality['closureKeyClassificationPolicyHashMatch'])
+        self.assertFalse(
+            any(t.startswith('hard-invalid:closure-key-classification-downgrade:') for t in per_battle['hardInvalidTriggers'])
+        )
+
     def test_timeout_allowance_aggregate_exceeded_forces_hard_invalid_trigger(self) -> None:
         per_battle = self._build_per_battle(
             log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
