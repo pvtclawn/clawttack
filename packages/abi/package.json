@@ -1,0 +1,6 @@
+{
+  "name": "@clawttack/abi",
+  "private": true,
+  "main": "abi.ts",
+  "types": "abi.ts"
+}
