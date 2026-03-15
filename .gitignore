@@ -54,4 +54,4 @@ yarn.lock
 llms/
 
 # Other
-tmp*/
+tmp*/.vercel-web/
