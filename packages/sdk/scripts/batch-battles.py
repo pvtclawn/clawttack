@@ -21,6 +21,7 @@ SDK_DIR = Path(__file__).resolve().parents[1]
 PROJECT_DIR = SDK_DIR.parent.parent
 RESULTS_DIR = PROJECT_DIR / 'battle-results'
 CHECKPOINT_DIR = RESULTS_DIR / 'checkpoints'
+METADATA_DIR = RESULTS_DIR / 'metadata'
 AGENT_MAP_PATH = CHECKPOINT_DIR / 'agent-map.json'
 CAST = str(Path.home() / '.foundry' / 'bin' / 'cast')
 
@@ -36,6 +37,9 @@ TARGET_AGENT_ID = int(os.getenv('CLAWTTACK_TARGET_AGENT_ID', '0'))
 MAX_JOKERS = int(os.getenv('CLAWTTACK_MAX_JOKERS', '2'))
 STRATEGY_A = os.getenv('CLAWTTACK_STRATEGY_A', 'llm')
 STRATEGY_B = os.getenv('CLAWTTACK_STRATEGY_B', 'llm')
+FIGHTER_AGENT = os.getenv('CLAWTTACK_FIGHTER_AGENT', 'fighter')
+FIGHTER_AGENT_A = os.getenv('CLAWTTACK_FIGHTER_AGENT_A', FIGHTER_AGENT)
+FIGHTER_AGENT_B = os.getenv('CLAWTTACK_FIGHTER_AGENT_B', FIGHTER_AGENT)
 BATTLE_TIMEOUT_SEC = int(os.getenv('CLAWTTACK_BATTLE_TIMEOUT_SEC', '1500'))
 OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', 'https://openrouter.ai/api/v1')
 OPENAI_MODEL = os.getenv('LLM_MODEL', 'google/gemini-2.5-flash-lite')
@@ -413,9 +417,44 @@ def configure_rpc_endpoints() -> None:
     ACTIVE_RPC_INDEX = 0
 
 
-def run_battle_loop(battle_addr: str, opponent_key: str, seed: int, battle_id: int) -> int:
-    log_path = RESULTS_DIR / f'batch-{battle_id}-{seed}.log'
-    checkpoint_path = CHECKPOINT_DIR / f'batch-{battle_id}-{seed}.json'
+def source_of_move_for(side: str, strategy: str) -> dict[str, str | None]:
+    normalized = (strategy or '').strip().lower()
+    agent_name = FIGHTER_AGENT_A if side == 'A' else FIGHTER_AGENT_B
+    if normalized == 'script':
+        return {
+            'kind': 'local-script',
+            'strategy': normalized,
+            'agentName': None,
+        }
+    if normalized in {'gateway', 'agent', 'llm'}:
+        return {
+            'kind': 'gateway-agent',
+            'strategy': normalized,
+            'agentName': agent_name,
+        }
+    if normalized in {'docker', 'docker-agent'}:
+        return {
+            'kind': 'docker-agent',
+            'strategy': normalized,
+            'agentName': agent_name,
+        }
+    return {
+        'kind': 'unknown',
+        'strategy': normalized or None,
+        'agentName': agent_name if normalized else None,
+    }
+
+
+def write_run_metadata(path: Path, payload: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n')
+
+
+def run_battle_loop(battle_addr: str, opponent_key: str, seed: int, battle_id: int) -> dict[str, object]:
+    batch_key = f'batch-{battle_id}-{seed}'
+    log_path = RESULTS_DIR / f'{batch_key}.log'
+    checkpoint_path = CHECKPOINT_DIR / f'{batch_key}.json'
+    metadata_path = METADATA_DIR / f'{batch_key}.json'
 
     env = os.environ.copy()
     env.update({
@@ -433,17 +472,42 @@ def run_battle_loop(battle_addr: str, opponent_key: str, seed: int, battle_id: i
     if OPENAI_API_KEY:
         env['OPENAI_API_KEY'] = OPENAI_API_KEY
 
-    with log_path.open('w') as log_file:
-        proc = subprocess.run(
-            ['bun', 'run', 'scripts/v05-battle-loop.ts'],
-            cwd=SDK_DIR,
-            env=env,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            timeout=BATTLE_TIMEOUT_SEC,
-        )
+    metadata: dict[str, object] = {
+        'batchKey': batch_key,
+        'battleId': battle_id,
+        'battleAddress': battle_addr,
+        'logPath': str(log_path),
+        'checkpointPath': str(checkpoint_path),
+        'strategyA': STRATEGY_A,
+        'strategyB': STRATEGY_B,
+        'sourceOfMove': {
+            'A': source_of_move_for('A', STRATEGY_A),
+            'B': source_of_move_for('B', STRATEGY_B),
+        },
+        'executionOutcome': 'started',
+        'exitCode': None,
+        'timeoutSec': BATTLE_TIMEOUT_SEC,
+    }
+    write_run_metadata(metadata_path, metadata)
 
-    return proc.returncode
+    try:
+        with log_path.open('w') as log_file:
+            proc = subprocess.run(
+                ['bun', 'run', 'scripts/v05-battle-loop.ts'],
+                cwd=SDK_DIR,
+                env=env,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                timeout=BATTLE_TIMEOUT_SEC,
+            )
+        metadata['exitCode'] = proc.returncode
+        metadata['executionOutcome'] = 'clean-exit' if proc.returncode == 0 else 'runner-error'
+        write_run_metadata(metadata_path, metadata)
+        return metadata
+    except subprocess.TimeoutExpired:
+        metadata['executionOutcome'] = 'timeout'
+        write_run_metadata(metadata_path, metadata)
+        raise
 
 
 if __name__ == '__main__':
@@ -464,6 +528,7 @@ if __name__ == '__main__':
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+    METADATA_DIR.mkdir(parents=True, exist_ok=True)
     configure_rpc_endpoints()
 
     try:
@@ -501,7 +566,8 @@ if __name__ == '__main__':
             print(f'  Waiting warmup ~{WARMUP_WAIT_SEC}s ...')
             time.sleep(WARMUP_WAIT_SEC)
 
-            code = run_battle_loop(battle_addr, jr_private_key, seed, battle_id)
+            loop_result = run_battle_loop(battle_addr, jr_private_key, seed, battle_id)
+            code = int(loop_result.get('exitCode') or -1)
             print(f'  battle-loop exit code: {code}')
             if code == 0:
                 success += 1

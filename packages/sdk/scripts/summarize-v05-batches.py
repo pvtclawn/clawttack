@@ -12,6 +12,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[3]
 RESULTS_DIR = ROOT / 'battle-results'
 CHECKPOINTS_DIR = RESULTS_DIR / 'checkpoints'
+METADATA_DIR = RESULTS_DIR / 'metadata'
 SUMMARIES_DIR = RESULTS_DIR / 'summaries'
 
 KNOWN_MECHANICS = [
@@ -165,6 +166,93 @@ def classify_failure(error_line: str | None) -> str:
     return 'runtime/generic'
 
 
+def normalize_source_of_move(metadata: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
+    raw = (metadata or {}).get('sourceOfMove') if isinstance(metadata, dict) else None
+    out: dict[str, dict[str, Any]] = {}
+    for side in ('A', 'B'):
+        value = raw.get(side) if isinstance(raw, dict) else None
+        if not isinstance(value, dict):
+            out[side] = {
+                'kind': 'unknown',
+                'strategy': None,
+                'agentName': None,
+            }
+            continue
+        out[side] = {
+            'kind': value.get('kind') or 'unknown',
+            'strategy': value.get('strategy'),
+            'agentName': value.get('agentName'),
+        }
+    return out
+
+
+def classify_execution_outcome(
+    *,
+    log_text: str,
+    failure_class: str,
+    metadata: dict[str, Any] | None,
+    turns_mined: int,
+) -> str:
+    metadata_outcome = (metadata or {}).get('executionOutcome')
+    if isinstance(metadata_outcome, str) and metadata_outcome.strip():
+        normalized = metadata_outcome.strip().lower()
+        if normalized == 'started':
+            return 'supervisor-interrupted' if turns_mined > 0 else 'unknown'
+        return normalized
+
+    if 'sigterm' in log_text.lower():
+        return 'sigterm'
+    if 'timed out' in log_text.lower() or 'timeout' in log_text.lower():
+        return 'timeout'
+    if failure_class != 'none':
+        return 'runner-error'
+    if '✅ v05 loop complete' in log_text:
+        return 'clean-exit'
+    if turns_mined > 0:
+        return 'supervisor-interrupted'
+    return 'unknown'
+
+
+def classify_gameplay_outcome(
+    *,
+    log_summary: dict[str, Any],
+    turns_mined: int,
+    execution_outcome: str,
+) -> str:
+    if log_summary.get('settledHint'):
+        return 'terminal'
+    if turns_mined <= 0 and execution_outcome in {'runner-error', 'timeout', 'sigterm'}:
+        return 'pre-submit-failure'
+    if turns_mined > 0 and execution_outcome in {'supervisor-interrupted', 'timeout', 'sigterm'}:
+        return 'mid-battle-interrupted'
+    if turns_mined > 0:
+        return 'non-terminal'
+    return 'unknown'
+
+
+def evaluate_proper_battle_contract(
+    *,
+    execution_outcome: str,
+    gameplay_outcome: str,
+    source_of_move: dict[str, dict[str, Any]],
+    turns_mined: int,
+) -> tuple[bool, list[str]]:
+    reasons: list[str] = []
+    if execution_outcome != 'clean-exit':
+        reasons.append(f'execution-outcome:{execution_outcome}')
+    if gameplay_outcome != 'terminal':
+        reasons.append(f'gameplay-outcome:{gameplay_outcome}')
+    if turns_mined < 2:
+        reasons.append('insufficient-live-turn-evidence')
+    for side in ('A', 'B'):
+        side_kind = source_of_move.get(side, {}).get('kind')
+        if side_kind == 'unknown':
+            reasons.append(f'source-of-move-unknown:{side}')
+    if not reasons:
+        reasons.append('proper-battle-rubric-pending')
+    return False, reasons
+
+
 def summarize_checkpoint(checkpoint: dict[str, Any] | None) -> dict[str, Any]:
     results = (checkpoint or {}).get('results', [])
     turns_mined = len(results)
@@ -208,16 +296,37 @@ def build_per_battle(
     log_text = load_text(log_path)
     log_summary = parse_log(log_text)
     checkpoint = load_json(checkpoint_path) if checkpoint_path else None
+    metadata_path = METADATA_DIR / f'{log_path.stem}.json'
+    metadata = load_json(metadata_path)
     cp_summary = summarize_checkpoint(checkpoint)
     stage = stage_from_summary(log_summary, checkpoint)
 
     failure_detail = log_summary['errorLine']
     failure_class = classify_failure(failure_detail)
+    source_of_move = normalize_source_of_move(metadata)
+    execution_outcome = classify_execution_outcome(
+        log_text=log_text,
+        failure_class=failure_class,
+        metadata=metadata,
+        turns_mined=cp_summary['turnsMined'],
+    )
+    gameplay_outcome = classify_gameplay_outcome(
+        log_summary=log_summary,
+        turns_mined=cp_summary['turnsMined'],
+        execution_outcome=execution_outcome,
+    )
+    counts_as_proper_battle, proper_battle_reasons = evaluate_proper_battle_contract(
+        execution_outcome=execution_outcome,
+        gameplay_outcome=gameplay_outcome,
+        source_of_move=source_of_move,
+        turns_mined=cp_summary['turnsMined'],
+    )
 
     out = {
         'batchKey': batch_key(log_path),
         'logPath': str(log_path.relative_to(ROOT)),
         'checkpointPath': str(checkpoint_path.relative_to(ROOT)) if checkpoint_path else None,
+        'metadataPath': str(metadata_path.relative_to(ROOT)) if metadata_path.exists() else None,
         'controlLabel': control_label,
         'interventionLabel': intervention_label,
         'battleId': log_summary['battleId'],
@@ -239,6 +348,11 @@ def build_per_battle(
         'bankBEnd': cp_summary['bankBEnd'],
         'templatesSeen': sorted(set(log_summary['templatesSeen'])),
         'accepted': log_summary['accepted'],
+        'executionOutcome': execution_outcome,
+        'gameplayOutcome': gameplay_outcome,
+        'sourceOfMove': source_of_move,
+        'countsAsProperBattle': counts_as_proper_battle,
+        'properBattleReasons': proper_battle_reasons,
         'failureClass': failure_class,
         'failureDetail': failure_detail,
     }
@@ -293,6 +407,14 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- settled: `{per_battle['settled']}` | unsettled: `{per_battle['unsettled']}`",
         f"- txs: `{len(per_battle['txHashes'])}`",
         f"- bank delta: A `{per_battle['bankAStart']}` -> `{per_battle['bankAEnd']}`, B `{per_battle['bankBStart']}` -> `{per_battle['bankBEnd']}`",
+        '',
+        '## classification contract',
+        f"- execution outcome: `{per_battle['executionOutcome']}`",
+        f"- gameplay outcome: `{per_battle['gameplayOutcome']}`",
+        f"- source of move A: `{per_battle['sourceOfMove']['A']['kind']}` (strategy `{per_battle['sourceOfMove']['A']['strategy']}` agent `{per_battle['sourceOfMove']['A']['agentName']}`)",
+        f"- source of move B: `{per_battle['sourceOfMove']['B']['kind']}` (strategy `{per_battle['sourceOfMove']['B']['strategy']}` agent `{per_battle['sourceOfMove']['B']['agentName']}`)",
+        f"- counts as proper battle: `{per_battle['countsAsProperBattle']}`",
+        f"- proper battle reasons: {', '.join(per_battle['properBattleReasons']) if per_battle['properBattleReasons'] else 'none'}",
         '',
         '## shared-regime metrics',
         f"- first mover A: `{shared['firstMoverA']}`",
