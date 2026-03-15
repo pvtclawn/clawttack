@@ -267,6 +267,43 @@ def evaluate_proper_battle_contract(
     return False, reasons
 
 
+def evaluate_hard_invalid_triggers(
+    *,
+    execution_outcome: str,
+    gameplay_outcome: str,
+    source_of_move: dict[str, dict[str, Any]],
+    turns_mined: int,
+    transcript_quality_failure_reasons: list[str],
+) -> list[str]:
+    triggers: list[str] = []
+
+    for side in ('A', 'B'):
+        side_kind = source_of_move.get(side, {}).get('kind')
+        if side_kind == 'unknown':
+            triggers.append(f'hard-invalid:source-of-move-unknown:{side}')
+
+    if gameplay_outcome == 'pre-submit-failure' or (turns_mined == 0 and execution_outcome in {'runner-error', 'timeout', 'sigterm', 'unknown'}):
+        triggers.append('hard-invalid:pre-submit-collapse')
+
+    if execution_outcome in {'timeout', 'sigterm', 'unknown'}:
+        triggers.append(f'hard-invalid:severe-execution-ambiguity:{execution_outcome}')
+    elif execution_outcome == 'supervisor-interrupted' and turns_mined < 2:
+        triggers.append('hard-invalid:severe-execution-ambiguity:supervisor-interrupted-insufficient-evidence')
+
+    failure_reason_set = set(transcript_quality_failure_reasons)
+    if {
+        'repetition-risk-elevated',
+        'fallback-masquerade-risk',
+    }.issubset(failure_reason_set):
+        triggers.append('hard-invalid:severe-transcript-quality-failure')
+
+    deduped: list[str] = []
+    for trigger in triggers:
+        if trigger not in deduped:
+            deduped.append(trigger)
+    return deduped
+
+
 def word_tokens(text: str) -> list[str]:
     return [token.lower() for token in WORD_RE.findall(text)]
 
@@ -419,6 +456,13 @@ def build_per_battle(
         checkpoint=checkpoint,
         log_text=log_text,
     )
+    hard_invalid_triggers = evaluate_hard_invalid_triggers(
+        execution_outcome=execution_outcome,
+        gameplay_outcome=gameplay_outcome,
+        source_of_move=source_of_move,
+        turns_mined=cp_summary['turnsMined'],
+        transcript_quality_failure_reasons=transcript_quality['failureReasons'],
+    )
 
     out = {
         'batchKey': batch_key(log_path),
@@ -451,6 +495,9 @@ def build_per_battle(
         'sourceOfMove': source_of_move,
         'transcriptQuality': transcript_quality,
         'transcriptQualityFailureReasons': transcript_quality['failureReasons'],
+        'hardInvalidTriggers': hard_invalid_triggers,
+        'invalidForProperBattle': bool(hard_invalid_triggers),
+        'forcedVerdictTier': 'invalid-for-proper-battle' if hard_invalid_triggers else None,
         'countsAsProperBattle': counts_as_proper_battle,
         'properBattleReasons': proper_battle_reasons,
         'failureClass': failure_class,
@@ -515,6 +562,9 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- source of move B: `{per_battle['sourceOfMove']['B']['kind']}` (strategy `{per_battle['sourceOfMove']['B']['strategy']}` agent `{per_battle['sourceOfMove']['B']['agentName']}`)",
         f"- counts as proper battle: `{per_battle['countsAsProperBattle']}`",
         f"- proper battle reasons: {', '.join(per_battle['properBattleReasons']) if per_battle['properBattleReasons'] else 'none'}",
+        f"- invalid for proper battle: `{per_battle['invalidForProperBattle']}`",
+        f"- forced verdict tier: `{per_battle['forcedVerdictTier']}`",
+        f"- hard invalid triggers: {', '.join(per_battle['hardInvalidTriggers']) if per_battle['hardInvalidTriggers'] else 'none'}",
         '',
         '## transcript-quality checks',
         f"- narrative sample count: `{per_battle['transcriptQuality']['narrativeSampleCount']}`",

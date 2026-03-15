@@ -95,6 +95,9 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertTrue(per_battle['transcriptQuality']['constraintSignalsVisible'])
         self.assertTrue(per_battle['transcriptQuality']['sceneCoherenceHint'])
         self.assertEqual(per_battle['transcriptQualityFailureReasons'], [])
+        self.assertFalse(per_battle['invalidForProperBattle'])
+        self.assertEqual(per_battle['hardInvalidTriggers'], [])
+        self.assertIsNone(per_battle['forcedVerdictTier'])
         self.assertFalse(per_battle['countsAsProperBattle'])
         self.assertIn('execution-outcome:supervisor-interrupted', per_battle['properBattleReasons'])
         self.assertIn('gameplay-outcome:mid-battle-interrupted', per_battle['properBattleReasons'])
@@ -129,6 +132,9 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertTrue(per_battle['transcriptQuality']['sceneCoherenceHint'])
         self.assertEqual(per_battle['transcriptQuality']['repetitionRisk'], 'low')
         self.assertEqual(per_battle['transcriptQualityFailureReasons'], [])
+        self.assertFalse(per_battle['invalidForProperBattle'])
+        self.assertEqual(per_battle['hardInvalidTriggers'], [])
+        self.assertIsNone(per_battle['forcedVerdictTier'])
         self.assertFalse(per_battle['countsAsProperBattle'])
         self.assertEqual(per_battle['properBattleReasons'], ['proper-battle-rubric-pending'])
 
@@ -164,6 +170,30 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertTrue(per_battle['transcriptQuality']['signals']['repeatedSampleDetected'])
         self.assertIn('repetition-risk-elevated', per_battle['transcriptQualityFailureReasons'])
         self.assertIn('fallback-masquerade-risk', per_battle['transcriptQualityFailureReasons'])
+        self.assertTrue(per_battle['invalidForProperBattle'])
+        self.assertEqual(per_battle['forcedVerdictTier'], 'invalid-for-proper-battle')
+        self.assertIn('hard-invalid:severe-transcript-quality-failure', per_battle['hardInvalidTriggers'])
+
+    def test_unknown_source_of_move_forces_invalid_status(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n''',
+            checkpoint={
+                'battle': '0xjkl',
+                'lastTurn': 0,
+                'results': [],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'sourceOfMove': {
+                    'A': {'kind': 'unknown', 'strategy': None, 'agentName': None},
+                    'B': {'kind': 'local-script', 'strategy': 'script', 'agentName': None},
+                },
+            },
+        )
+
+        self.assertTrue(per_battle['invalidForProperBattle'])
+        self.assertEqual(per_battle['forcedVerdictTier'], 'invalid-for-proper-battle')
+        self.assertIn('hard-invalid:source-of-move-unknown:A', per_battle['hardInvalidTriggers'])
 
 
 if __name__ == '__main__':
