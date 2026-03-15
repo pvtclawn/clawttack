@@ -290,6 +290,75 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             'hard-invalid:provenance-mismatch:A:expected-gateway-agent:got-local-script',
         )
 
+    def test_failure_class_derivation_mismatch_forces_hard_invalid_trigger(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n❌ Error: timed out waiting for gateway response\n''',
+            checkpoint={
+                'battle': '0xfc1',
+                'lastTurn': 1,
+                'lastNarrativeByAgent': {
+                    'A': 'I watched the relay corridor and logged the dropped response before retry budget reset.',
+                    'B': 'I mirrored the handoff path and tracked the timeout spike across channels.',
+                },
+                'results': [
+                    {'txHash': '0x' + '7' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '8' * 64, 'bankA': '370', 'bankB': '400'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'timeout',
+                'failureClass': 'none',
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        self.assertEqual(per_battle['failureClass'], 'runtime/generic')
+        self.assertEqual(per_battle['reportedFailureClass'], 'none')
+        self.assertIn(
+            'hard-invalid:failure-class-derivation-mismatch:derived-runtime/generic:reported-none',
+            per_battle['hardInvalidTriggers'],
+        )
+        self.assertEqual(
+            per_battle['topHardInvalidTrigger'],
+            'hard-invalid:failure-class-derivation-mismatch:derived-runtime/generic:reported-none',
+        )
+
+    def test_failure_class_derivation_match_does_not_add_mismatch_trigger(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n❌ Error: timed out waiting for gateway response\n''',
+            checkpoint={
+                'battle': '0xfc2',
+                'lastTurn': 1,
+                'lastNarrativeByAgent': {
+                    'A': 'I watched the relay corridor and logged the dropped response before retry budget reset.',
+                    'B': 'I mirrored the handoff path and tracked the timeout spike across channels.',
+                },
+                'results': [
+                    {'txHash': '0x' + '9' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + 'a' * 64, 'bankA': '370', 'bankB': '400'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'timeout',
+                'failureClass': 'runtime/generic',
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        self.assertEqual(per_battle['failureClass'], 'runtime/generic')
+        self.assertEqual(per_battle['reportedFailureClass'], 'runtime/generic')
+        self.assertFalse(
+            any(t.startswith('hard-invalid:failure-class-derivation-mismatch:') for t in per_battle['hardInvalidTriggers'])
+        )
+
     def test_timing_window_profile_mismatch_forces_hard_invalid_trigger(self) -> None:
         per_battle = self._build_per_battle(
             log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',

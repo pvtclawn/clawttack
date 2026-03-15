@@ -63,6 +63,7 @@ PROPER_BATTLE_REASON_PRIORITY_PREFIXES = [
 HARD_INVALID_TRIGGER_PRIORITY_PREFIXES = [
     'hard-invalid:source-of-move-unknown:',
     'hard-invalid:provenance-mismatch:',
+    'hard-invalid:failure-class-derivation-mismatch:',
     'hard-invalid:timing-window-profile-mismatch',
     'hard-invalid:severe-transcript-quality-failure',
     'hard-invalid:severe-execution-ambiguity:',
@@ -227,6 +228,20 @@ def expected_kind_for_strategy(strategy: Any) -> str | None:
         return 'gateway-agent'
     if normalized in {'docker', 'docker-agent'}:
         return 'docker-agent'
+    return None
+
+
+def extract_reported_failure_class(metadata: dict[str, Any] | None) -> str | None:
+    if not isinstance(metadata, dict):
+        return None
+    direct = metadata.get('failureClass')
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+    timing_ctx = metadata.get('timingWindowCalibrationContext')
+    if isinstance(timing_ctx, dict):
+        nested = timing_ctx.get('failureClass')
+        if isinstance(nested, str) and nested.strip():
+            return nested.strip()
     return None
 
 
@@ -397,6 +412,8 @@ def evaluate_hard_invalid_triggers(
     turns_mined: int,
     transcript_quality_failure_reasons: list[str],
     authenticity_model_quality: dict[str, Any],
+    failure_class: str,
+    reported_failure_class: str | None,
 ) -> list[str]:
     triggers: list[str] = []
 
@@ -411,6 +428,14 @@ def evaluate_hard_invalid_triggers(
         if expected_kind and side_kind != expected_kind:
             triggers.append(
                 f'hard-invalid:provenance-mismatch:{side}:expected-{expected_kind}:got-{side_kind}'
+            )
+
+    if isinstance(reported_failure_class, str) and reported_failure_class.strip():
+        normalized_reported = reported_failure_class.strip().lower()
+        normalized_derived = (failure_class or 'none').strip().lower()
+        if normalized_reported != normalized_derived:
+            triggers.append(
+                f'hard-invalid:failure-class-derivation-mismatch:derived-{normalized_derived}:reported-{normalized_reported}'
             )
 
     if not authenticity_model_quality.get('freshnessWindowProfileMatch', True):
@@ -629,6 +654,7 @@ def build_per_battle(
 
     failure_detail = log_summary['errorLine']
     failure_class = classify_failure(failure_detail)
+    reported_failure_class = extract_reported_failure_class(metadata)
     source_of_move = normalize_source_of_move(metadata)
     evidence_sources = normalize_authenticity_evidence_sources(
         metadata=metadata,
@@ -669,6 +695,8 @@ def build_per_battle(
         turns_mined=cp_summary['turnsMined'],
         transcript_quality_failure_reasons=transcript_quality['failureReasons'],
         authenticity_model_quality=authenticity_model_quality,
+        failure_class=failure_class,
+        reported_failure_class=reported_failure_class,
     )
     ordered_proper_battle_reasons = sort_reasons_by_priority(
         proper_battle_reasons,
@@ -743,6 +771,7 @@ def build_per_battle(
         'topClaimLimitingReason': top_claim_limiting_reason,
         'topClaimLimitingReasonSource': top_claim_limiting_reason_source,
         'failureClass': failure_class,
+        'reportedFailureClass': reported_failure_class,
         'failureDetail': failure_detail,
     }
     observed = observed_mechanics(out, log_text, log_summary)
