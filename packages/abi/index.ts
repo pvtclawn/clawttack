@@ -1,5 +1,5 @@
 // Deployment types and loader for multi-environment contract addresses
-// Single source of truth: packages/abi/deployments/{chainId}.json
+// Single source of truth: packages/abi/deployments/{env}.json
 
 export interface Deployment {
   chainId: number
@@ -14,46 +14,48 @@ export interface Deployment {
   deployBlock: number
 }
 
-// Static imports for all deployments (avoids dynamic require)
-import baseSepolia from './deployments/84532.json'
-import baseMainnet from './deployments/8453.json'
-import local from './deployments/31337.json'
+// Static imports for all deployments
+import mainnet from './deployments/mainnet.json'
+import testnet from './deployments/testnet.json'
+import dev from './deployments/dev.json'
+import local from './deployments/local.json'
 
-const deployments: Record<number, Deployment> = {
-  84532: baseSepolia as Deployment,
-  8453: baseMainnet as Deployment,
-  31337: local as Deployment,
+const deployments: Record<string, Deployment> = {
+  mainnet: mainnet as Deployment,
+  testnet: testnet as Deployment,
+  dev: dev as Deployment,
+  local: local as Deployment,
 }
 
-// Hostname → chainId mapping for web environments
-const HOST_CHAIN_MAP: Record<string, number> = {
-  'clawttack.com':         8453,
-  'www.clawttack.com':     8453,
-  'testnet.clawttack.com': 84532,
-  'dev.clawttack.com':     84532,
-  'localhost':             31337,
+// Hostname → environment mapping
+const HOST_ENV_MAP: Record<string, string> = {
+  'clawttack.com':         'mainnet',
+  'www.clawttack.com':     'mainnet',
+  'testnet.clawttack.com': 'testnet',
+  'dev.clawttack.com':     'dev',
+  'localhost':             'local',
 }
 
-export function getDeployment(chainId: number): Deployment {
-  const d = deployments[chainId]
-  if (!d) throw new Error(`No deployment found for chainId ${chainId}`)
+export function getDeployment(env: string): Deployment {
+  const d = deployments[env]
+  if (!d) throw new Error(`No deployment found for env "${env}"`)
   return d
 }
 
 export function getDeploymentByHost(hostname: string): Deployment {
-  const chainId = HOST_CHAIN_MAP[hostname]
-  if (!chainId) throw new Error(`Unknown host: ${hostname}`)
-  return getDeployment(chainId)
+  const env = HOST_ENV_MAP[hostname]
+  if (!env) throw new Error(`Unknown host: ${hostname}`)
+  return getDeployment(env)
 }
 
-export function getChainIdByHost(hostname: string): number {
-  const chainId = HOST_CHAIN_MAP[hostname]
-  if (!chainId) throw new Error(`Unknown host: ${hostname}`)
-  return chainId
+export function getEnvByHost(hostname: string): string {
+  const env = HOST_ENV_MAP[hostname]
+  if (!env) throw new Error(`Unknown host: ${hostname}`)
+  return env
 }
 
-export function getAllDeployments(): Deployment[] {
-  return Object.values(deployments)
+export function getAllDeployments(): Record<string, Deployment> {
+  return deployments
 }
 
 // Re-export ABIs
