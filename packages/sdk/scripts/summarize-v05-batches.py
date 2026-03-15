@@ -68,6 +68,7 @@ HARD_INVALID_TRIGGER_PRIORITY_PREFIXES = [
     'hard-invalid:anchor-transition-carryover-scope-mismatch:',
     'hard-invalid:transition-ledger-compaction-replay-guard-missing',
     'hard-invalid:compaction-failsafe-defer-budget-exhausted',
+    'hard-invalid:fairness-active-key-inflation-suspected',
     'hard-invalid:migration-expiry-anchor-untrusted-source',
     'hard-invalid:safety-envelope-fingerprint-version-mismatch:',
     'hard-invalid:timing-window-profile-mismatch',
@@ -146,6 +147,177 @@ def stage_from_summary(log_summary: dict[str, Any], checkpoint: dict[str, Any] |
     if log_summary.get('clawnAgentId') is not None:
         return 'bootstrap'
     return 'unknown'
+
+
+def normalize_completion_milestone_status(value: Any) -> str:
+    if isinstance(value, bool):
+        return 'observed' if value else 'absent'
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {'observed', 'absent', 'indeterminate'}:
+            return normalized
+    return 'indeterminate'
+
+
+def build_completion_milestone(
+    *,
+    log_observed: Any,
+    chain_observed: Any,
+    log_method: str,
+    chain_method: str,
+    log_authority: str = 'runner-log',
+    chain_authority: str = 'on-chain-state',
+) -> dict[str, Any]:
+    log_status = normalize_completion_milestone_status(log_observed)
+    chain_status = normalize_completion_milestone_status(chain_observed)
+    if chain_status == 'observed':
+        overall_status = 'observed'
+        resolved_by = chain_authority
+    elif log_status == 'observed':
+        overall_status = 'observed'
+        resolved_by = log_authority
+    elif chain_status == 'indeterminate' or log_status == 'indeterminate':
+        overall_status = 'indeterminate'
+        resolved_by = 'indeterminate'
+    else:
+        overall_status = 'absent'
+        resolved_by = 'none'
+
+    if chain_status != log_status:
+        divergence = 'observability-gap'
+    else:
+        divergence = 'none'
+
+    return {
+        'status': overall_status,
+        'logObserved': log_status,
+        'chainObserved': chain_status,
+        'logObservationMethod': log_method,
+        'chainObservationMethod': chain_method,
+        'logObservationAuthority': log_authority,
+        'chainObservationAuthority': chain_authority,
+        'resolvedBy': resolved_by,
+        'divergence': divergence,
+    }
+
+
+def build_completion_evidence(
+    *,
+    log_summary: dict[str, Any],
+    checkpoint_summary: dict[str, Any],
+    metadata: dict[str, Any] | None,
+) -> dict[str, Any]:
+    metadata_completion = (metadata or {}).get('completionEvidence')
+    metadata_completion = metadata_completion if isinstance(metadata_completion, dict) else {}
+
+    milestone_overrides = {
+        key: value for key, value in metadata_completion.items()
+        if key in {'created', 'accepted', 'multiTurnReached', 'terminalObserved'} and isinstance(value, dict)
+    }
+
+    created = build_completion_milestone(
+        log_observed=log_summary.get('battleId') is not None,
+        chain_observed=log_summary.get('battleId') is not None,
+        log_method='runner-log:create-token',
+        chain_method='artifact-battle-id',
+    )
+    if 'created' in milestone_overrides:
+        created = {
+            **created,
+            **milestone_overrides['created'],
+            'status': normalize_completion_milestone_status(milestone_overrides['created'].get('status', created['status'])),
+            'logObserved': normalize_completion_milestone_status(milestone_overrides['created'].get('logObserved', created['logObserved'])),
+            'chainObserved': normalize_completion_milestone_status(milestone_overrides['created'].get('chainObserved', created['chainObserved'])),
+        }
+
+    accepted = build_completion_milestone(
+        log_observed=log_summary.get('accepted', False),
+        chain_observed=(metadata or {}).get('acceptedOnChain', log_summary.get('accepted', False)),
+        log_method='runner-log:accepted-battle-token',
+        chain_method='metadata.acceptedOnChain',
+    )
+    if 'accepted' in milestone_overrides:
+        accepted = {
+            **accepted,
+            **milestone_overrides['accepted'],
+            'status': normalize_completion_milestone_status(milestone_overrides['accepted'].get('status', accepted['status'])),
+            'logObserved': normalize_completion_milestone_status(milestone_overrides['accepted'].get('logObserved', accepted['logObserved'])),
+            'chainObserved': normalize_completion_milestone_status(milestone_overrides['accepted'].get('chainObserved', accepted['chainObserved'])),
+        }
+
+    multi_turn_reached = build_completion_milestone(
+        log_observed=checkpoint_summary.get('turnsMined', 0) >= 2,
+        chain_observed=checkpoint_summary.get('turnsMined', 0) >= 2,
+        log_method='checkpoint.results>=2',
+        chain_method='checkpoint.results>=2',
+    )
+    if 'multiTurnReached' in milestone_overrides:
+        multi_turn_reached = {
+            **multi_turn_reached,
+            **milestone_overrides['multiTurnReached'],
+            'status': normalize_completion_milestone_status(milestone_overrides['multiTurnReached'].get('status', multi_turn_reached['status'])),
+            'logObserved': normalize_completion_milestone_status(milestone_overrides['multiTurnReached'].get('logObserved', multi_turn_reached['logObserved'])),
+            'chainObserved': normalize_completion_milestone_status(milestone_overrides['multiTurnReached'].get('chainObserved', multi_turn_reached['chainObserved'])),
+        }
+
+    terminal_chain_observed = (metadata or {}).get('terminalOnChain', log_summary.get('settledHint', False))
+    terminal_observed = build_completion_milestone(
+        log_observed=log_summary.get('settledHint', False),
+        chain_observed=terminal_chain_observed,
+        log_method='runner-log:settled|winner|resulttype-token',
+        chain_method='metadata.terminalOnChain',
+    )
+    if 'terminalObserved' in milestone_overrides:
+        terminal_observed = {
+            **terminal_observed,
+            **milestone_overrides['terminalObserved'],
+            'status': normalize_completion_milestone_status(milestone_overrides['terminalObserved'].get('status', terminal_observed['status'])),
+            'logObserved': normalize_completion_milestone_status(milestone_overrides['terminalObserved'].get('logObserved', terminal_observed['logObserved'])),
+            'chainObserved': normalize_completion_milestone_status(milestone_overrides['terminalObserved'].get('chainObserved', terminal_observed['chainObserved'])),
+        }
+
+    divergence_boundary = 'none'
+    for key, milestone in (
+        ('created', created),
+        ('accepted', accepted),
+        ('multiTurnReached', multi_turn_reached),
+        ('terminalObserved', terminal_observed),
+    ):
+        if milestone.get('divergence') != 'none':
+            divergence_boundary = key
+            break
+
+    terminal_kind = (metadata_completion.get('terminalKind') if isinstance(metadata_completion.get('terminalKind'), str) else None)
+    if not terminal_kind:
+        terminal_kind = (metadata or {}).get('terminalKind') if isinstance((metadata or {}).get('terminalKind'), str) else None
+    if not terminal_kind:
+        terminal_kind = 'winner' if log_summary.get('settledHint') else 'none'
+
+    proper_battle_satisfied_raw = metadata_completion.get('properBattleSatisfied')
+    if not isinstance(proper_battle_satisfied_raw, bool):
+        proper_battle_satisfied_raw = False
+
+    classification = 'observability-gap' if divergence_boundary != 'none' else (
+        'settlement-gap' if terminal_observed['status'] == 'absent' else 'none'
+    )
+
+    return {
+        'battleId': metadata_completion.get('battleId', log_summary.get('battleId')),
+        'battleAddress': metadata_completion.get('battleAddress', log_summary.get('battleAddress')),
+        'created': created,
+        'accepted': accepted,
+        'multiTurnReached': multi_turn_reached,
+        'terminalObserved': terminal_observed,
+        'divergenceBoundary': divergence_boundary,
+        'classification': classification,
+        'terminalKind': terminal_kind,
+        'properBattleSatisfied': proper_battle_satisfied_raw,
+        'authorityOrder': [
+            'receipt-or-event',
+            'on-chain-state',
+            'runner-log',
+        ],
+    }
 
 
 def classify_failure(error_line: str | None) -> str:
@@ -440,6 +612,21 @@ def evaluate_authenticity_model_quality(
     compaction_defer_budget = int(compaction_defer_budget_raw) if isinstance(compaction_defer_budget_raw, (int, float)) else 5
     compaction_defer_budget_within_cap = compaction_deferred_count <= compaction_defer_budget
 
+    key_defer_counts = normalize_numeric_map((metadata or {}).get('transitionLedgerKeyDeferredCounts'))
+    active_key_min_contribution_raw = (metadata or {}).get('fairnessModelActiveKeyMinContribution')
+    active_key_min_contribution = int(active_key_min_contribution_raw) if isinstance(active_key_min_contribution_raw, (int, float)) else 2
+    non_dust_keys = [key for key, count in key_defer_counts.items() if count >= active_key_min_contribution]
+    dust_keys = [key for key, count in key_defer_counts.items() if count < active_key_min_contribution]
+    total_keys_observed = len(key_defer_counts)
+    dust_key_ratio = (len(dust_keys) / total_keys_observed) if total_keys_observed > 0 else 0.0
+    dust_inflation_ratio_threshold_raw = (metadata or {}).get('fairnessModelDustInflationRatioThreshold')
+    dust_inflation_ratio_threshold = (
+        float(dust_inflation_ratio_threshold_raw)
+        if isinstance(dust_inflation_ratio_threshold_raw, (int, float))
+        else 0.60
+    )
+    active_key_inflation_suspected = total_keys_observed >= 5 and dust_key_ratio > dust_inflation_ratio_threshold
+
     completeness_satisfied = (
         required_present
         and evidence_source_count >= 2
@@ -451,6 +638,7 @@ def evaluate_authenticity_model_quality(
         and carryover_scope_digest_match
         and transition_ledger_replay_guard_invariant_satisfied
         and compaction_defer_budget_within_cap
+        and not active_key_inflation_suspected
         and fingerprint_version_match
     )
     correctness_satisfied = True
@@ -493,6 +681,13 @@ def evaluate_authenticity_model_quality(
         'transitionLedgerCompactionDeferredCount': compaction_deferred_count,
         'transitionLedgerCompactionDeferBudget': compaction_defer_budget,
         'transitionLedgerCompactionDeferBudgetWithinCap': compaction_defer_budget_within_cap,
+        'fairnessModelActiveKeyMinContribution': active_key_min_contribution,
+        'fairnessModelObservedKeyCount': total_keys_observed,
+        'fairnessModelNonDustActiveKeyCount': len(non_dust_keys),
+        'fairnessModelDustKeyCount': len(dust_keys),
+        'fairnessModelDustKeyRatio': dust_key_ratio,
+        'fairnessModelDustInflationRatioThreshold': dust_inflation_ratio_threshold,
+        'fairnessModelActiveKeyInflationSuspected': active_key_inflation_suspected,
         'decisionDeterminismFingerprint': computed_fingerprint,
         'reportedDecisionDeterminismFingerprint': reported_fingerprint,
         'fingerprintVersionMatch': fingerprint_version_match,
@@ -648,6 +843,15 @@ def evaluate_hard_invalid_triggers(
         defer_budget = authenticity_model_quality.get('transitionLedgerCompactionDeferBudget')
         triggers.append(
             f'hard-invalid:compaction-failsafe-defer-budget-exhausted:count-{deferred_count}:budget-{defer_budget}'
+        )
+
+    if authenticity_model_quality.get('fairnessModelActiveKeyInflationSuspected', False):
+        observed = authenticity_model_quality.get('fairnessModelObservedKeyCount')
+        dust = authenticity_model_quality.get('fairnessModelDustKeyCount')
+        ratio = authenticity_model_quality.get('fairnessModelDustKeyRatio')
+        threshold = authenticity_model_quality.get('fairnessModelDustInflationRatioThreshold')
+        triggers.append(
+            f'hard-invalid:fairness-active-key-inflation-suspected:observed-{observed}:dust-{dust}:ratio-{ratio}:threshold-{threshold}'
         )
 
     if not authenticity_model_quality.get('migrationAnchorSourceTrusted', True):
@@ -963,6 +1167,12 @@ def build_per_battle(
         top_claim_limiting_reason_source=top_claim_limiting_reason_source,
     )
 
+    completion_evidence = build_completion_evidence(
+        log_summary=log_summary,
+        checkpoint_summary=cp_summary,
+        metadata=metadata,
+    )
+
     out = {
         'batchKey': batch_key(log_path),
         'logPath': str(log_path.relative_to(ROOT)),
@@ -989,6 +1199,7 @@ def build_per_battle(
         'bankBEnd': cp_summary['bankBEnd'],
         'templatesSeen': sorted(set(log_summary['templatesSeen'])),
         'accepted': log_summary['accepted'],
+        'completionEvidence': completion_evidence,
         'executionOutcome': execution_outcome,
         'gameplayOutcome': gameplay_outcome,
         'sourceOfMove': source_of_move,
@@ -1093,6 +1304,7 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
     shared = per_battle['sharedRegimeMetrics']
     target = per_battle['interventionTargetMetrics']
     governed = per_battle['governedVerdictBlock']
+    completion = per_battle['completionEvidence']
     lines = [
         f"# {per_battle['batchKey']}",
         '',
@@ -1104,6 +1316,17 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- settled: `{per_battle['settled']}` | unsettled: `{per_battle['unsettled']}`",
         f"- txs: `{len(per_battle['txHashes'])}`",
         f"- bank delta: A `{per_battle['bankAStart']}` -> `{per_battle['bankAEnd']}`, B `{per_battle['bankBStart']}` -> `{per_battle['bankBEnd']}`",
+        '',
+        '## completion evidence',
+        f"- classification: `{completion['classification']}`",
+        f"- divergence boundary: `{completion['divergenceBoundary']}`",
+        f"- terminal kind: `{completion['terminalKind']}`",
+        f"- proper battle satisfied: `{completion['properBattleSatisfied']}`",
+        f"- authority order: {', '.join(completion['authorityOrder'])}",
+        f"- created: status=`{completion['created']['status']}` log=`{completion['created']['logObserved']}` chain=`{completion['created']['chainObserved']}` resolvedBy=`{completion['created']['resolvedBy']}`",
+        f"- accepted: status=`{completion['accepted']['status']}` log=`{completion['accepted']['logObserved']}` chain=`{completion['accepted']['chainObserved']}` resolvedBy=`{completion['accepted']['resolvedBy']}`",
+        f"- multiTurnReached: status=`{completion['multiTurnReached']['status']}` log=`{completion['multiTurnReached']['logObserved']}` chain=`{completion['multiTurnReached']['chainObserved']}` resolvedBy=`{completion['multiTurnReached']['resolvedBy']}`",
+        f"- terminalObserved: status=`{completion['terminalObserved']['status']}` log=`{completion['terminalObserved']['logObserved']}` chain=`{completion['terminalObserved']['chainObserved']}` resolvedBy=`{completion['terminalObserved']['resolvedBy']}`",
         '',
         '## governed verdict block',
         f"- scope version: `{governed['scopeVersion']}`",
@@ -1122,7 +1345,7 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- gameplay outcome: `{per_battle['gameplayOutcome']}`",
         f"- source of move A: `{per_battle['sourceOfMove']['A']['kind']}` (strategy `{per_battle['sourceOfMove']['A']['strategy']}` agent `{per_battle['sourceOfMove']['A']['agentName']}`)",
         f"- source of move B: `{per_battle['sourceOfMove']['B']['kind']}` (strategy `{per_battle['sourceOfMove']['B']['strategy']}` agent `{per_battle['sourceOfMove']['B']['agentName']}`)",
-        f"- authenticity model quality: correctness=`{per_battle['authenticityModelQuality']['correctnessSatisfied']}` completeness=`{per_battle['authenticityModelQuality']['completenessSatisfied']}` freshnessWindowProfileMatch=`{per_battle['authenticityModelQuality']['freshnessWindowProfileMatch']}` closurePolicyHashMatch=`{per_battle['authenticityModelQuality']['closureKeyClassificationPolicyHashMatch']}` migrationAnchorSourceTrusted=`{per_battle['authenticityModelQuality']['migrationAnchorSourceTrusted']}` carryoverScopeDigestMatch=`{per_battle['authenticityModelQuality']['anchorTransitionCarryoverScopeDigestMatch']}` replayGuardInvariantSatisfied=`{per_battle['authenticityModelQuality']['transitionLedgerReplayGuardInvariantSatisfied']}` deferBudgetWithinCap=`{per_battle['authenticityModelQuality']['transitionLedgerCompactionDeferBudgetWithinCap']}` fingerprintVersionMatch=`{per_battle['authenticityModelQuality']['fingerprintVersionMatch']}` failsClosed=`{per_battle['authenticityModelQuality']['failsClosed']}`",
+        f"- authenticity model quality: correctness=`{per_battle['authenticityModelQuality']['correctnessSatisfied']}` completeness=`{per_battle['authenticityModelQuality']['completenessSatisfied']}` freshnessWindowProfileMatch=`{per_battle['authenticityModelQuality']['freshnessWindowProfileMatch']}` closurePolicyHashMatch=`{per_battle['authenticityModelQuality']['closureKeyClassificationPolicyHashMatch']}` migrationAnchorSourceTrusted=`{per_battle['authenticityModelQuality']['migrationAnchorSourceTrusted']}` carryoverScopeDigestMatch=`{per_battle['authenticityModelQuality']['anchorTransitionCarryoverScopeDigestMatch']}` replayGuardInvariantSatisfied=`{per_battle['authenticityModelQuality']['transitionLedgerReplayGuardInvariantSatisfied']}` deferBudgetWithinCap=`{per_battle['authenticityModelQuality']['transitionLedgerCompactionDeferBudgetWithinCap']}` activeKeyInflationSuspected=`{per_battle['authenticityModelQuality']['fairnessModelActiveKeyInflationSuspected']}` fingerprintVersionMatch=`{per_battle['authenticityModelQuality']['fingerprintVersionMatch']}` failsClosed=`{per_battle['authenticityModelQuality']['failsClosed']}`",
         f"- authenticity evidence sources: {', '.join(per_battle['authenticityModelQuality']['evidenceSources'])}",
         f"- timeout allowance aggregate: used=`{per_battle['authenticityModelQuality']['timeoutSubtypeAllowanceUsedAggregate']}` budget=`{per_battle['authenticityModelQuality']['timeoutSubtypeAllowanceBudgetAggregate']}` withinCap=`{per_battle['authenticityModelQuality']['aggregateAllowanceWithinCap']}`",
         f"- counts as proper battle: `{per_battle['countsAsProperBattle']}`",

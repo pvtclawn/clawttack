@@ -175,6 +175,85 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(per_battle['topProperBattleReason'], 'proper-battle-rubric-pending')
         self.assertEqual(per_battle['topClaimLimitingReason'], 'proper-battle-rubric-pending')
         self.assertEqual(per_battle['properBattleReasons'], ['proper-battle-rubric-pending'])
+        self.assertEqual(per_battle['completionEvidence']['terminalObserved']['status'], 'observed')
+        self.assertEqual(per_battle['completionEvidence']['terminalObserved']['resolvedBy'], 'on-chain-state')
+        self.assertEqual(per_battle['completionEvidence']['terminalKind'], 'winner')
+        self.assertFalse(per_battle['completionEvidence']['properBattleSatisfied'])
+
+    def test_completion_evidence_distinguishes_observability_gap_from_true_settlement_gap(self) -> None:
+        observability_gap = self._build_per_battle(
+            log_text='''\nCreated battle #7 at 0x1234567890abcdef1234567890abcdef12345678\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xobs1',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I pinned the relay handoff and watched the terminal state surface only from the chain side.',
+                    'B': 'I kept the runner quiet while the chain-side observer recorded the closing edge.',
+                },
+                'results': [
+                    {'txHash': '0x' + '1' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '2' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + '3' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'terminalOnChain': True,
+                'acceptedOnChain': True,
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+                'completionEvidence': {
+                    'accepted': {'logObserved': 'absent', 'chainObserved': 'observed'},
+                    'terminalObserved': {'logObserved': 'absent', 'chainObserved': 'observed'},
+                    'terminalKind': 'timeout',
+                    'properBattleSatisfied': False,
+                },
+            },
+        )
+        settlement_gap = self._build_per_battle(
+            log_text='''\nCreated battle #8 at 0xabcdefabcdefabcdefabcdefabcdefabcdefabcd\nAccepted battle\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xgap1',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I kept pressing the lane but no terminal edge materialized anywhere we could verify.',
+                    'B': 'I mirrored the closeout path and still found no terminal proof from logs or chain state.',
+                },
+                'results': [
+                    {'txHash': '0x' + '4' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + '5' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + '6' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'terminalOnChain': False,
+                'acceptedOnChain': True,
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+                'completionEvidence': {
+                    'terminalObserved': {'logObserved': 'absent', 'chainObserved': 'absent'},
+                    'terminalKind': 'none',
+                    'properBattleSatisfied': False,
+                },
+            },
+        )
+
+        self.assertEqual(observability_gap['completionEvidence']['classification'], 'observability-gap')
+        self.assertEqual(observability_gap['completionEvidence']['divergenceBoundary'], 'accepted')
+        self.assertEqual(observability_gap['completionEvidence']['accepted']['resolvedBy'], 'on-chain-state')
+        self.assertEqual(observability_gap['completionEvidence']['terminalObserved']['status'], 'observed')
+        self.assertFalse(observability_gap['completionEvidence']['properBattleSatisfied'])
+
+        self.assertEqual(settlement_gap['completionEvidence']['classification'], 'settlement-gap')
+        self.assertEqual(settlement_gap['completionEvidence']['terminalObserved']['status'], 'absent')
+        self.assertEqual(settlement_gap['completionEvidence']['terminalObserved']['resolvedBy'], 'none')
+        self.assertEqual(settlement_gap['completionEvidence']['divergenceBoundary'], 'none')
+        self.assertFalse(settlement_gap['completionEvidence']['properBattleSatisfied'])
 
     def test_template_like_boilerplate_surfaces_explicit_transcript_quality_failures(self) -> None:
         per_battle = self._build_per_battle(
@@ -1189,6 +1268,52 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             '- top claim-limiting reason: `hard-invalid:fairness-active-key-inflation-suspected:observed-6:dust-4:ratio-0.6666666666666666:threshold-0.6` (hard-invalid-trigger)',
             md_text,
         )
+
+    def test_markdown_surfaces_completion_evidence_observability_gap_language(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = self._build_per_battle_with_tmp(
+                root=Path(tmp),
+                log_text='''\nCreated battle #9 at 0x9999999999999999999999999999999999999999\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+                checkpoint={
+                    'battle': '0xmd1',
+                    'lastTurn': 2,
+                    'lastNarrativeByAgent': {
+                        'A': 'I watched the chain-side closeout appear while the runner log stayed stubbornly silent.',
+                        'B': 'I held the transcript steady and let the observability gap expose itself cleanly.',
+                    },
+                    'results': [
+                        {'txHash': '0x' + 'd' * 64, 'bankA': '400', 'bankB': '400'},
+                        {'txHash': '0x' + 'e' * 64, 'bankA': '370', 'bankB': '400'},
+                        {'txHash': '0x' + 'f' * 64, 'bankA': '340', 'bankB': '390'},
+                    ],
+                },
+                metadata={
+                    'executionOutcome': 'clean-exit',
+                    'terminalOnChain': True,
+                    'acceptedOnChain': True,
+                    'sourceOfMove': {
+                        'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                        'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                    },
+                    'completionEvidence': {
+                        'accepted': {'logObserved': 'absent', 'chainObserved': 'observed'},
+                        'terminalObserved': {'logObserved': 'absent', 'chainObserved': 'observed'},
+                        'terminalKind': 'timeout',
+                        'properBattleSatisfied': False,
+                    },
+                },
+            )
+            md_path = payload['summaries'] / 'completion-evidence.md'
+            MODULE.write_markdown(md_path, payload['per_battle'])
+            md_text = md_path.read_text(encoding='utf-8')
+
+        self.assertIn('## completion evidence', md_text)
+        self.assertIn('- classification: `observability-gap`', md_text)
+        self.assertIn('- divergence boundary: `accepted`', md_text)
+        self.assertIn('- terminal kind: `timeout`', md_text)
+        self.assertIn('- proper battle satisfied: `False`', md_text)
+        self.assertIn('accepted: status=`observed` log=`absent` chain=`observed` resolvedBy=`on-chain-state`', md_text)
+        self.assertIn('terminalObserved: status=`observed` log=`absent` chain=`observed` resolvedBy=`on-chain-state`', md_text)
 
     def test_surface_parity_check_handles_invalid_governed_block(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
