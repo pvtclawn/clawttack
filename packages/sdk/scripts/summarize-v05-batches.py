@@ -445,6 +445,15 @@ def governed_block_display_tier(*, counts_as_proper_battle: bool, forced_verdict
 
 
 
+def governed_block_raw_tier(*, counts_as_proper_battle: bool, forced_verdict_tier: str | None) -> str:
+    if counts_as_proper_battle:
+        return 'proper-battle'
+    if forced_verdict_tier:
+        return forced_verdict_tier
+    return 'non-credit-unclassified'
+
+
+
 def build_governed_verdict_block(
     *,
     counts_as_proper_battle: bool,
@@ -456,9 +465,14 @@ def build_governed_verdict_block(
         counts_as_proper_battle=counts_as_proper_battle,
         forced_verdict_tier=forced_verdict_tier,
     )
+    raw_tier = governed_block_raw_tier(
+        counts_as_proper_battle=counts_as_proper_battle,
+        forced_verdict_tier=forced_verdict_tier,
+    )
     credit_status = 'credit' if counts_as_proper_battle else 'non-credit'
     field_order = [
         'displayedTier',
+        'rawTier',
         'creditStatus',
         'adjacentReason',
     ]
@@ -466,7 +480,10 @@ def build_governed_verdict_block(
         'scopeVersion': 'v1',
         'sectionKey': 'governed-verdict-block',
         'fieldOrder': field_order,
+        'primaryLabelField': 'displayedTier',
         'displayedTier': displayed_tier,
+        'rawTier': raw_tier,
+        'rawTierRole': 'audit-only',
         'creditStatus': credit_status,
         'adjacentReason': top_claim_limiting_reason,
         'adjacentReasonSource': top_claim_limiting_reason_source,
@@ -666,7 +683,9 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- scope version: `{governed['scopeVersion']}`",
         f"- section key: `{governed['sectionKey']}`",
         f"- field order: {', '.join(governed['fieldOrder'])}",
+        f"- primary label field: `{governed['primaryLabelField']}`",
         f"- displayed tier: `{governed['displayedTier']}`",
+        f"- raw tier: `{governed['rawTier']}` ({governed['rawTierRole']})",
         f"- credit status: `{governed['creditStatus']}`",
         f"- adjacent reason: `{governed['adjacentReason']}` ({governed['adjacentReasonSource']})",
         f"- follow-up interpretation inside block allowed: `{governed['followUpInterpretationInsideBlockAllowed']}`",

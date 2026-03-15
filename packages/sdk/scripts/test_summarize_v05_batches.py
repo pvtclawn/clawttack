@@ -128,7 +128,10 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(per_battle['topProperBattleReason'], 'execution-outcome:supervisor-interrupted')
         self.assertEqual(per_battle['topClaimLimitingReason'], 'execution-outcome:supervisor-interrupted')
         self.assertEqual(per_battle['topClaimLimitingReasonSource'], 'proper-battle-reason')
+        self.assertEqual(per_battle['governedVerdictBlock']['primaryLabelField'], 'displayedTier')
         self.assertEqual(per_battle['governedVerdictBlock']['displayedTier'], 'non-credit / exploratory')
+        self.assertEqual(per_battle['governedVerdictBlock']['rawTier'], 'non-credit-unclassified')
+        self.assertEqual(per_battle['governedVerdictBlock']['rawTierRole'], 'audit-only')
         self.assertEqual(per_battle['governedVerdictBlock']['creditStatus'], 'non-credit')
         self.assertEqual(per_battle['governedVerdictBlock']['adjacentReason'], 'execution-outcome:supervisor-interrupted')
         self.assertFalse(per_battle['governedVerdictBlock']['followUpInterpretationInsideBlockAllowed'])
@@ -212,6 +215,8 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(per_battle['topClaimLimitingReason'], 'hard-invalid:severe-transcript-quality-failure')
         self.assertEqual(per_battle['topClaimLimitingReasonSource'], 'hard-invalid-trigger')
         self.assertEqual(per_battle['governedVerdictBlock']['displayedTier'], 'non-credit / invalid')
+        self.assertEqual(per_battle['governedVerdictBlock']['rawTier'], 'invalid-for-proper-battle')
+        self.assertEqual(per_battle['governedVerdictBlock']['rawTierRole'], 'audit-only')
 
     def test_unknown_source_of_move_priority_beats_other_invalid_reasons(self) -> None:
         per_battle = self._build_per_battle(
@@ -275,8 +280,10 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             md_text = md_path.read_text(encoding='utf-8')
 
         self.assertIn('## governed verdict block', md_text)
-        self.assertIn('- field order: displayedTier, creditStatus, adjacentReason', md_text)
+        self.assertIn('- field order: displayedTier, rawTier, creditStatus, adjacentReason', md_text)
+        self.assertIn('- primary label field: `displayedTier`', md_text)
         self.assertIn('- displayed tier: `non-credit / exploratory`', md_text)
+        self.assertIn('- raw tier: `non-credit-unclassified` (audit-only)', md_text)
         self.assertIn('- adjacent reason: `execution-outcome:supervisor-interrupted` (proper-battle-reason)', md_text)
         self.assertIn('- follow-up interpretation inside block allowed: `False`', md_text)
 
