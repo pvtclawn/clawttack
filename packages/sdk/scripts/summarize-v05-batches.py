@@ -229,6 +229,59 @@ def expected_kind_for_strategy(strategy: Any) -> str | None:
     return None
 
 
+def normalize_authenticity_evidence_sources(
+    *,
+    metadata: dict[str, Any] | None,
+    turns_mined: int,
+    battle_id_present: bool,
+) -> list[str]:
+    explicit = (metadata or {}).get('authenticityEvidenceSources') if isinstance(metadata, dict) else None
+    if isinstance(explicit, list):
+        normalized: list[str] = []
+        for item in explicit:
+            if isinstance(item, str) and item.strip():
+                value = item.strip()
+                if value not in normalized:
+                    normalized.append(value)
+        if normalized:
+            return normalized
+
+    inferred = ['metadata.sourceOfMove']
+    if turns_mined > 0:
+        inferred.append('checkpoint.results')
+    if battle_id_present:
+        inferred.append('log.battle-created')
+    return inferred
+
+
+def evaluate_authenticity_model_quality(
+    *,
+    source_of_move: dict[str, dict[str, Any]],
+    evidence_sources: list[str],
+) -> dict[str, Any]:
+    required_fields = ('kind', 'strategy')
+    required_present = all(
+        all(source_of_move.get(side, {}).get(field) not in (None, '') for field in required_fields)
+        for side in ('A', 'B')
+    )
+    evidence_source_count = len(evidence_sources)
+    independent_source_present = any(not source.startswith('metadata.') for source in evidence_sources)
+    completeness_satisfied = required_present and evidence_source_count >= 2 and independent_source_present
+    correctness_satisfied = True
+    fails_closed = not (correctness_satisfied and completeness_satisfied)
+
+    return {
+        'requiredFields': list(required_fields),
+        'requiredFieldsPresent': required_present,
+        'evidenceSources': evidence_sources,
+        'evidenceSourceCount': evidence_source_count,
+        'independentSourcePresent': independent_source_present,
+        'correctnessSatisfied': correctness_satisfied,
+        'completenessSatisfied': completeness_satisfied,
+        'failsClosed': fails_closed,
+    }
+
+
 def classify_execution_outcome(
     *,
     log_text: str,
@@ -548,6 +601,16 @@ def build_per_battle(
     failure_detail = log_summary['errorLine']
     failure_class = classify_failure(failure_detail)
     source_of_move = normalize_source_of_move(metadata)
+    evidence_sources = normalize_authenticity_evidence_sources(
+        metadata=metadata,
+        turns_mined=cp_summary['turnsMined'],
+        battle_id_present=log_summary.get('battleId') is not None,
+    )
+    authenticity_model_quality = evaluate_authenticity_model_quality(
+        source_of_move=source_of_move,
+        evidence_sources=evidence_sources,
+    )
+
     execution_outcome = classify_execution_outcome(
         log_text=log_text,
         failure_class=failure_class,
@@ -635,6 +698,7 @@ def build_per_battle(
         'executionOutcome': execution_outcome,
         'gameplayOutcome': gameplay_outcome,
         'sourceOfMove': source_of_move,
+        'authenticityModelQuality': authenticity_model_quality,
         'transcriptQuality': transcript_quality,
         'transcriptQualityFailureReasons': transcript_quality['failureReasons'],
         'hardInvalidTriggers': ordered_hard_invalid_triggers,
@@ -763,6 +827,8 @@ def write_markdown(path: Path, per_battle: dict[str, Any]) -> None:
         f"- gameplay outcome: `{per_battle['gameplayOutcome']}`",
         f"- source of move A: `{per_battle['sourceOfMove']['A']['kind']}` (strategy `{per_battle['sourceOfMove']['A']['strategy']}` agent `{per_battle['sourceOfMove']['A']['agentName']}`)",
         f"- source of move B: `{per_battle['sourceOfMove']['B']['kind']}` (strategy `{per_battle['sourceOfMove']['B']['strategy']}` agent `{per_battle['sourceOfMove']['B']['agentName']}`)",
+        f"- authenticity model quality: correctness=`{per_battle['authenticityModelQuality']['correctnessSatisfied']}` completeness=`{per_battle['authenticityModelQuality']['completenessSatisfied']}` failsClosed=`{per_battle['authenticityModelQuality']['failsClosed']}`",
+        f"- authenticity evidence sources: {', '.join(per_battle['authenticityModelQuality']['evidenceSources'])}",
         f"- counts as proper battle: `{per_battle['countsAsProperBattle']}`",
         f"- proper battle reasons: {', '.join(per_battle['properBattleReasons']) if per_battle['properBattleReasons'] else 'none'}",
         f"- top proper battle reason: `{per_battle['topProperBattleReason']}`",
