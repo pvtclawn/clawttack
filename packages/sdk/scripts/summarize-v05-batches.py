@@ -436,6 +436,15 @@ def summarize_checkpoint(checkpoint: dict[str, Any] | None) -> dict[str, Any]:
 
 
 
+def governed_block_display_tier(*, counts_as_proper_battle: bool, forced_verdict_tier: str | None) -> str:
+    if counts_as_proper_battle:
+        return 'proper-battle'
+    if forced_verdict_tier == 'invalid-for-proper-battle':
+        return 'non-credit / invalid'
+    return 'non-credit / exploratory'
+
+
+
 def build_governed_verdict_block(
     *,
     counts_as_proper_battle: bool,
@@ -443,11 +452,9 @@ def build_governed_verdict_block(
     top_claim_limiting_reason: str | None,
     top_claim_limiting_reason_source: str | None,
 ) -> dict[str, Any]:
-    displayed_tier = (
-        forced_verdict_tier
-        if forced_verdict_tier
-        else 'proper-battle' if counts_as_proper_battle
-        else 'non-credit-unclassified'
+    displayed_tier = governed_block_display_tier(
+        counts_as_proper_battle=counts_as_proper_battle,
+        forced_verdict_tier=forced_verdict_tier,
     )
     credit_status = 'credit' if counts_as_proper_battle else 'non-credit'
     field_order = [

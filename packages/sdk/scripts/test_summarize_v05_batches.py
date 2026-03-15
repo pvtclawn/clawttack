@@ -128,7 +128,7 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(per_battle['topProperBattleReason'], 'execution-outcome:supervisor-interrupted')
         self.assertEqual(per_battle['topClaimLimitingReason'], 'execution-outcome:supervisor-interrupted')
         self.assertEqual(per_battle['topClaimLimitingReasonSource'], 'proper-battle-reason')
-        self.assertEqual(per_battle['governedVerdictBlock']['displayedTier'], 'non-credit-unclassified')
+        self.assertEqual(per_battle['governedVerdictBlock']['displayedTier'], 'non-credit / exploratory')
         self.assertEqual(per_battle['governedVerdictBlock']['creditStatus'], 'non-credit')
         self.assertEqual(per_battle['governedVerdictBlock']['adjacentReason'], 'execution-outcome:supervisor-interrupted')
         self.assertFalse(per_battle['governedVerdictBlock']['followUpInterpretationInsideBlockAllowed'])
@@ -211,7 +211,7 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
         self.assertEqual(per_battle['topHardInvalidTrigger'], 'hard-invalid:severe-transcript-quality-failure')
         self.assertEqual(per_battle['topClaimLimitingReason'], 'hard-invalid:severe-transcript-quality-failure')
         self.assertEqual(per_battle['topClaimLimitingReasonSource'], 'hard-invalid-trigger')
-        self.assertEqual(per_battle['governedVerdictBlock']['displayedTier'], 'invalid-for-proper-battle')
+        self.assertEqual(per_battle['governedVerdictBlock']['displayedTier'], 'non-credit / invalid')
 
     def test_unknown_source_of_move_priority_beats_other_invalid_reasons(self) -> None:
         per_battle = self._build_per_battle(
@@ -276,7 +276,7 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
 
         self.assertIn('## governed verdict block', md_text)
         self.assertIn('- field order: displayedTier, creditStatus, adjacentReason', md_text)
-        self.assertIn('- displayed tier: `non-credit-unclassified`', md_text)
+        self.assertIn('- displayed tier: `non-credit / exploratory`', md_text)
         self.assertIn('- adjacent reason: `execution-outcome:supervisor-interrupted` (proper-battle-reason)', md_text)
         self.assertIn('- follow-up interpretation inside block allowed: `False`', md_text)
 
