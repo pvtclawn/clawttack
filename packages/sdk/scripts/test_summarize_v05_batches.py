@@ -359,6 +359,81 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             any(t.startswith('hard-invalid:failure-class-derivation-mismatch:') for t in per_battle['hardInvalidTriggers'])
         )
 
+    def test_safety_envelope_fingerprint_version_mismatch_forces_hard_invalid(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xsf1',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I traced the timeout envelope and pinned the drift before rule handoff.',
+                    'B': 'I mirrored the profile path and logged the replay attempt at the relay.',
+                },
+                'results': [
+                    {'txHash': '0x' + 'b' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + 'c' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + 'd' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'battleMode': 'agent-vs-script',
+                'ruleVersion': 'v1',
+                'ruleHash': 'rule-abc',
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'timeoutCapSafetyEnvelope': {
+                    'decisionDeterminismFingerprint': 'deadbeef',
+                },
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        quality = per_battle['authenticityModelQuality']
+        self.assertFalse(quality['fingerprintVersionMatch'])
+        self.assertEqual(quality['reportedDecisionDeterminismFingerprint'], 'deadbeef')
+        self.assertIn(
+            'hard-invalid:safety-envelope-fingerprint-version-mismatch:',
+            per_battle['topHardInvalidTrigger'],
+        )
+
+    def test_safety_envelope_without_reported_fingerprint_does_not_trigger_mismatch(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xsf2',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I traced the timeout envelope and pinned the drift before rule handoff.',
+                    'B': 'I mirrored the profile path and logged the replay attempt at the relay.',
+                },
+                'results': [
+                    {'txHash': '0x' + 'e' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + 'f' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + '1' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'battleMode': 'agent-vs-script',
+                'ruleVersion': 'v1',
+                'ruleHash': 'rule-abc',
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        quality = per_battle['authenticityModelQuality']
+        self.assertTrue(quality['fingerprintVersionMatch'])
+        self.assertFalse(
+            any(t.startswith('hard-invalid:safety-envelope-fingerprint-version-mismatch:') for t in per_battle['hardInvalidTriggers'])
+        )
+
     def test_timing_window_profile_mismatch_forces_hard_invalid_trigger(self) -> None:
         per_battle = self._build_per_battle(
             log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
