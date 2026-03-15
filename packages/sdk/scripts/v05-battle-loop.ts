@@ -28,6 +28,8 @@ const FIGHTER_AGENT = process.env.CLAWTTACK_FIGHTER_AGENT?.trim() || 'fighter'
 const MAX_TURNS = Number.parseInt(process.env.CLAWTTACK_MAX_TURNS || '120', 10)
 const CHECKPOINT_PATH = process.env.CLAWTTACK_CHECKPOINT_PATH?.trim()
   || `${process.env.HOME}/.openclaw/workspace/projects/clawttack/battle-results/checkpoints/v05-${BATTLE_ADDRESS.toLowerCase()}.json`
+const SIDECAR_PATH = process.env.CLAWTTACK_METADATA_PATH?.trim()
+  || `${process.env.HOME}/.openclaw/workspace/projects/clawttack/battle-results/metadata/v05-${BATTLE_ADDRESS.toLowerCase()}.json`
 
 const MAIN_KEY_PATH = `${process.env.HOME}/.foundry/keystores/clawn`
 const SECRETS_PATH = `${process.env.HOME}/.config/pvtclawn/secrets.json`
@@ -93,6 +95,29 @@ type Checkpoint = {
   }>
 }
 
+export type ObservationStatus = 'observed' | 'absent' | 'indeterminate'
+
+export type RunContextSidecar = {
+  battleId: number | null
+  battleAddress: string
+  checkpointPath: string
+  metadataPath: string
+  acceptedOnChain: ObservationStatus
+  terminalOnChain: ObservationStatus
+  acceptedObservationMethod: string | null
+  terminalObservationMethod: string | null
+  acceptedObservationError: string | null
+  terminalObservationError: string | null
+  terminalKind: string
+  sourceOfMove: {
+    A: { kind: string }
+    B: { kind: string }
+  }
+  firstMissingBoundary: string | null
+  lastUpdatedAt: string
+  lastUpdateSource: string
+}
+
 function mustEnv(name: string): string {
   const v = process.env[name]?.trim()
   if (!v) throw new Error(`Missing env var: ${name}`)
@@ -127,6 +152,57 @@ function loadCheckpoint(): Checkpoint {
 function saveCheckpoint(cp: Checkpoint): void {
   ensureDir(CHECKPOINT_PATH)
   writeFileSync(CHECKPOINT_PATH, JSON.stringify(cp, null, 2))
+}
+
+export function defaultRunContextSidecar(): RunContextSidecar {
+  return {
+    battleId: null,
+    battleAddress: BATTLE_ADDRESS.toLowerCase(),
+    checkpointPath: CHECKPOINT_PATH,
+    metadataPath: SIDECAR_PATH,
+    acceptedOnChain: 'indeterminate',
+    terminalOnChain: 'indeterminate',
+    acceptedObservationMethod: null,
+    terminalObservationMethod: null,
+    acceptedObservationError: null,
+    terminalObservationError: null,
+    terminalKind: 'none',
+    sourceOfMove: {
+      A: { kind: STRATEGY_A === 'gateway' ? 'gateway-agent' : 'local-script' },
+      B: { kind: STRATEGY_B === 'gateway' ? 'gateway-agent' : STRATEGY_B === 'docker-agent' ? 'docker-agent' : 'local-script' },
+    },
+    firstMissingBoundary: null,
+    lastUpdatedAt: new Date(0).toISOString(),
+    lastUpdateSource: 'uninitialized',
+  }
+}
+
+export function updateRunContextSidecar(
+  current: RunContextSidecar,
+  patch: Partial<RunContextSidecar>,
+  source: string,
+): RunContextSidecar {
+  const nextBattleId = patch.battleId ?? current.battleId
+  const nextBattleAddress = (patch.battleAddress ?? current.battleAddress).toLowerCase()
+  if (current.battleId !== null && nextBattleId !== current.battleId) {
+    throw new Error(`Run-context sidecar battleId mismatch: ${current.battleId} != ${String(nextBattleId)}`)
+  }
+  if (current.battleAddress && nextBattleAddress !== current.battleAddress.toLowerCase()) {
+    throw new Error(`Run-context sidecar battleAddress mismatch: ${current.battleAddress} != ${nextBattleAddress}`)
+  }
+  return {
+    ...current,
+    ...patch,
+    battleId: nextBattleId,
+    battleAddress: nextBattleAddress,
+    lastUpdatedAt: new Date().toISOString(),
+    lastUpdateSource: source,
+  }
+}
+
+function saveRunContextSidecar(sidecar: RunContextSidecar): void {
+  ensureDir(SIDECAR_PATH)
+  writeFileSync(SIDECAR_PATH, JSON.stringify(sidecar, null, 2))
 }
 
 function encodePackedHash(types: string[], values: unknown[]): `0x${string}` {
@@ -642,6 +718,8 @@ async function main(): Promise<void> {
 
   const cp = loadCheckpoint()
   const firstMoverA = Boolean(await battleRead.firstMoverA())
+  let sidecar = defaultRunContextSidecar()
+  saveRunContextSidecar(sidecar)
 
   console.log(`🏟️  v05 loop on ${BATTLE_ADDRESS}`)
   console.log(`🔑 A wallet: ${walletA.address}`)
@@ -653,7 +731,20 @@ async function main(): Promise<void> {
     const phase = Number(phaseRaw)
     const turn = Number(turnRaw)
 
+    sidecar = updateRunContextSidecar(sidecar, {
+      battleId: Number(battleId),
+      terminalOnChain: phase === 1 ? 'absent' : 'observed',
+      terminalObservationMethod: 'battle.getBattleState.phase',
+      terminalObservationError: null,
+      terminalKind: phase === 1 ? 'none' : 'phase-exit',
+    }, 'battle-state-poll')
+    saveRunContextSidecar(sidecar)
+
     if (phase !== 1) {
+      sidecar = updateRunContextSidecar(sidecar, {
+        firstMissingBoundary: sidecar.firstMissingBoundary ?? null,
+      }, 'loop-stop-terminal-phase')
+      saveRunContextSidecar(sidecar)
       console.log(`🏁 stop: phase=${phase} turn=${turn} bankA=${bankA} bankB=${bankB}`)
       break
     }
@@ -762,6 +853,13 @@ async function main(): Promise<void> {
     console.log('   [submit-turn] payload assembled, estimating/sending submitTurn')
     const rc = await submitWithRetry(battle, payload)
 
+    sidecar = updateRunContextSidecar(sidecar, {
+      acceptedOnChain: 'observed',
+      acceptedObservationMethod: 'battle.submitTurn.receipt',
+      acceptedObservationError: null,
+    }, 'submit-turn-receipt')
+    saveRunContextSidecar(sidecar)
+
     cp.prevByAgent[side] = {
       nccSalt,
       nccIdx: intendedIdx,
@@ -793,7 +891,9 @@ async function main(): Promise<void> {
   console.log(`✅ v05 loop complete. saved checkpoint=${CHECKPOINT_PATH}`)
 }
 
-main().catch((err) => {
-  console.error('❌ v05 battle loop failed:', err)
-  process.exit(1)
-})
+if (process.env.CLAWTTACK_SKIP_MAIN !== '1') {
+  main().catch((err) => {
+    console.error('❌ v05 battle loop failed:', err)
+    process.exit(1)
+  })
+}
