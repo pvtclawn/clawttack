@@ -359,6 +359,81 @@ class SummarizeV05BatchesClassificationTest(unittest.TestCase):
             any(t.startswith('hard-invalid:failure-class-derivation-mismatch:') for t in per_battle['hardInvalidTriggers'])
         )
 
+    def test_migration_anchor_untrusted_source_forces_hard_invalid(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xma1',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I traced migration anchors and caught an injected source before expiry check.',
+                    'B': 'I mirrored the policy gate and logged untrusted anchor provenance in the ledger.',
+                },
+                'results': [
+                    {'txHash': '0x' + 'a' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + 'b' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + 'c' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'policyMigrationEvaluationMode': 'strict-anchor',
+                'policyMigrationEvaluationAnchorSource': 'producer',
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        quality = per_battle['authenticityModelQuality']
+        self.assertFalse(quality['migrationAnchorSourceTrusted'])
+        self.assertEqual(quality['policyMigrationEvaluationMode'], 'strict-anchor')
+        self.assertEqual(quality['policyMigrationEvaluationAnchorSource'], 'producer')
+        self.assertIn(
+            'hard-invalid:migration-expiry-anchor-untrusted-source:mode-strict-anchor:source-producer',
+            per_battle['hardInvalidTriggers'],
+        )
+        self.assertEqual(
+            per_battle['topHardInvalidTrigger'],
+            'hard-invalid:migration-expiry-anchor-untrusted-source:mode-strict-anchor:source-producer',
+        )
+
+    def test_migration_anchor_trusted_source_does_not_trigger_hard_invalid(self) -> None:
+        per_battle = self._build_per_battle(
+            log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
+            checkpoint={
+                'battle': '0xma2',
+                'lastTurn': 2,
+                'lastNarrativeByAgent': {
+                    'A': 'I traced migration anchors and confirmed verifier-signed provenance for expiry.',
+                    'B': 'I mirrored the policy gate and validated trusted anchor lineage.',
+                },
+                'results': [
+                    {'txHash': '0x' + 'd' * 64, 'bankA': '400', 'bankB': '400'},
+                    {'txHash': '0x' + 'e' * 64, 'bankA': '370', 'bankB': '400'},
+                    {'txHash': '0x' + 'f' * 64, 'bankA': '340', 'bankB': '390'},
+                ],
+            },
+            metadata={
+                'executionOutcome': 'clean-exit',
+                'policyMigrationEvaluationMode': 'strict-anchor',
+                'policyMigrationEvaluationAnchorSource': 'verifier-signed',
+                'authenticityEvidenceSources': ['metadata.sourceOfMove', 'checkpoint.results'],
+                'sourceOfMove': {
+                    'A': {'kind': 'gateway-agent', 'strategy': 'gateway', 'agentName': 'fighter'},
+                    'B': {'kind': 'docker-agent', 'strategy': 'docker-agent', 'agentName': 'clawnjr'},
+                },
+            },
+        )
+
+        quality = per_battle['authenticityModelQuality']
+        self.assertTrue(quality['migrationAnchorSourceTrusted'])
+        self.assertFalse(
+            any(t.startswith('hard-invalid:migration-expiry-anchor-untrusted-source:') for t in per_battle['hardInvalidTriggers'])
+        )
+
     def test_safety_envelope_fingerprint_version_mismatch_forces_hard_invalid(self) -> None:
         per_battle = self._build_per_battle(
             log_text='''\n✅ v05 loop complete. saved checkpoint=/tmp/x.json\n''',
