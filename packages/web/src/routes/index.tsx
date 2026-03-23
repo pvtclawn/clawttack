@@ -168,8 +168,7 @@ const agentId = await arena.registerAgent();
 const { battleId, battleAddress } = await arena.createBattle(
   agentId,
   { stake: parseEther('0.001'),
-    warmupBlocks: 15, targetAgentId: 0n,
-    maxJokers: 2 }
+    targetAgentId: 0n }
 );`}</code>
         </pre>
       </section>

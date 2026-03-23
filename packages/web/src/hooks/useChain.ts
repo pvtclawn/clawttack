@@ -10,13 +10,33 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { createPublicClient, http, parseAbiItem, type Address } from 'viem'
-import { baseSepolia } from 'viem/chains'
-import { CONTRACTS, ARENA_DEPLOY_BLOCK } from '../config/wagmi'
+import { createPublicClient, http, parseAbiItem, defineChain, type Address } from 'viem'
+import { base, baseSepolia } from 'viem/chains'
+import { CONTRACTS, ARENA_DEPLOY_BLOCK, deployment } from '../config/wagmi'
+
+// Custom Anvil chain with multicall3 (viem's built-in `foundry` chain lacks it)
+const anvilLocal = defineChain({
+  id: 31337,
+  name: 'Anvil',
+  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['http://127.0.0.1:8545'] } },
+  contracts: {
+    multicall3: { address: '0xcA11bde05977b3631167028862bE2a173976CA11' },
+  },
+})
+
+function resolveChain(chainId: number) {
+  switch (chainId) {
+    case 8453: return base
+    case 84532: return baseSepolia
+    case 31337: return anvilLocal
+    default: return baseSepolia
+  }
+}
 
 const client = createPublicClient({
-  chain: baseSepolia,
-  transport: http('https://sepolia.base.org', {
+  chain: resolveChain(deployment.chainId),
+  transport: http(deployment.rpc, {
     retryCount: 3,
     retryDelay: 1000,
   }),
@@ -94,7 +114,7 @@ export interface BattleInfo {
   firstMoverA: boolean
   winnerId?: bigint
   loserId?: bigint
-  resultType?: number  // 0=None, 1=Compromise, 2=InvalidSolution, 3=PoisonViolation, 4=Timeout, 5=BankEmpty, 6=FlagCaptured, 7=NccRevealFailed
+  resultType?: number  // 0=None, 1=Compromise, 2=InvalidSolution, 3=PoisonViolation, 4=Timeout, 5=BankEmpty, 6=NccRevealFailed, 7=VopRevealFailed
 }
 
 export interface TurnEvent {
@@ -116,7 +136,7 @@ export interface SettledEvent {
   battleId: bigint
   winnerId: bigint
   loserId: bigint
-  resultType: number  // 0=None, 1=Compromise, 2=InvalidSolution, 3=PoisonViolation, 4=Timeout, 5=BankEmpty, 6=FlagCaptured, 7=NccRevealFailed
+  resultType: number  // 0=None, 1=Compromise, 2=InvalidSolution, 3=PoisonViolation, 4=Timeout, 5=BankEmpty, 6=NccRevealFailed, 7=VopRevealFailed
   blockNumber: bigint
   txHash: `0x${string}`
 }
@@ -172,9 +192,8 @@ const WORD_DICTIONARY_ABI = [
 const BATTLE_CONFIG_ABI = [
   { type: 'function', name: 'config', inputs: [], outputs: [
     { name: 'stake', type: 'uint256' },
-    { name: 'warmupBlocks', type: 'uint32' },
     { name: 'targetAgentId', type: 'uint256' },
-    { name: 'maxJokers', type: 'uint8' },
+    { name: 'inviteHash', type: 'bytes32' },
   ], stateMutability: 'view' },
 ] as const
 
@@ -335,7 +354,7 @@ export function useBattleList(live = false) {
         const offset = i * FIELDS_PER_BATTLE
         try {
           const battleState = stateResults[offset].result as [number, number, bigint, bigint, `0x${string}`, bigint]
-          const config = stateResults[offset + 7].result as [bigint, number, bigint, number]
+          const config = stateResults[offset + 7].result as [bigint, bigint, `0x${string}`]
           const [state, turn, bankA, bankB, seqHash] = battleState
 
           battles.push({

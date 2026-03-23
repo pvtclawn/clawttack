@@ -36,9 +36,11 @@ contract ClawttackBattle is Initializable {
 
     uint256 public constant MAX_NARRATIVE_LEN = 256;
     uint256 public constant JOKER_NARRATIVE_LEN = 1024;
+
     uint256 public constant MIN_POISON_WORD_LEN = 4;
     uint256 public constant MAX_POISON_WORD_LEN = 32;
-    uint256 public constant BPS_DENOMINATOR = 10000;
+
+    uint256 public constant BPS = 100_00;
 
     // ─── Storage ────────────────────────────────────────────────────────────
     address public arena;
@@ -53,6 +55,7 @@ contract ClawttackBattle is Initializable {
     uint8 public jokersRemainingB;
 
     ClawttackTypes.BattleConfig public config;
+    ClawttackTypes.GameConfig public gameConfig;
     ClawttackTypes.ResultType public state; // reusing ResultType.None as "Open"
 
     uint256 public totalPot;
@@ -135,7 +138,6 @@ contract ClawttackBattle is Initializable {
         challengerOwner = _challengerOwner;
         config = _config;
         phase = BattlePhase.Open;
-        jokersRemainingA = _config.maxJokers;
         totalPot = _config.stake;
     }
 
@@ -143,28 +145,40 @@ contract ClawttackBattle is Initializable {
 
     // ─── Accept ─────────────────────────────────────────────────────────────
 
-    function acceptBattle(uint256 _acceptorId) external payable {
+    function acceptBattle(uint256 _acceptorId, bytes32 _inviteSecret) external payable {
         if (phase != BattlePhase.Open) revert ClawttackErrors.BattleNotOpen();
         if (msg.value != config.stake) revert ClawttackErrors.InsufficientValue();
         if (_acceptorId == challengerId) revert ClawttackErrors.CannotBattleSelf();
 
         IClawttackArenaView arenaView = IClawttackArenaView(arena);
-        _validateAcceptor(arenaView, _acceptorId);
+        _validateAcceptor(arenaView, _acceptorId, _inviteSecret);
 
         acceptorId = _acceptorId;
         acceptorOwner = msg.sender;
-        jokersRemainingB = config.maxJokers;
         totalPot += msg.value;
 
         _initBattleState(arenaView, _acceptorId);
 
+        // Snapshot gameConfig at acceptance time (immutable for this battle)
+        gameConfig = arenaView.gameConfig();
+        jokersRemainingA = gameConfig.maxJokers;
+        jokersRemainingB = gameConfig.maxJokers;
+
         emit BattleAccepted(battleId, _acceptorId, firstMoverA);
     }
 
-    function _validateAcceptor(IClawttackArenaView arenaView, uint256 _acceptorId) internal view {
+    function _validateAcceptor(IClawttackArenaView arenaView, uint256 _acceptorId, bytes32 _inviteSecret) internal view {
         (address _agentOwner,,,,,) = arenaView.agents(_acceptorId);
         if (_agentOwner != msg.sender) revert ClawttackErrors.NotParticipant();
 
+        // Invite hash check (secret-based invitation for tournaments)
+        if (config.inviteHash != bytes32(0)) {
+            if (keccak256(abi.encodePacked(_inviteSecret)) != config.inviteHash) {
+                revert ClawttackErrors.InvalidInviteSecret();
+            }
+        }
+
+        // Target agent check (agent-specific invitation)
         if (config.targetAgentId != 0) {
             if (_acceptorId != config.targetAgentId) revert ClawttackErrors.WrongTargetAgent();
         }
@@ -174,7 +188,9 @@ contract ClawttackBattle is Initializable {
             (, uint32 aRating,,,,) = arenaView.agents(_acceptorId);
 
             uint32 diff = cRating >= aRating ? cRating - aRating : aRating - cRating;
-            if (diff > arenaView.MAX_ELO_DIFF()) revert ClawttackErrors.EloDifferenceTooHigh();
+
+            ClawttackTypes.GameConfig memory gc = arenaView.gameConfig();
+            if (diff > gc.maxEloDiff) revert ClawttackErrors.EloDifferenceTooHigh();
         }
     }
 
@@ -184,8 +200,10 @@ contract ClawttackBattle is Initializable {
         uint256 r = uint256(keccak256(abi.encodePacked(DOMAIN_TYPE_INIT, block.prevrandao, battleId)));
         firstMoverA = (r % 2 == 0);
 
-        startBlock = uint32(block.number + config.warmupBlocks);
-        clock.init();
+        startBlock = uint32(block.number + arenaView.gameConfig().warmupBlocks);
+
+        ClawttackTypes.GameConfig memory gc = arenaView.gameConfig();
+        clock.init(gc);
 
         currentTurn = 0;
         sequenceHash = keccak256(abi.encodePacked(DOMAIN_TYPE_INIT, battleId, _acceptorId, r));
@@ -312,7 +330,7 @@ contract ClawttackBattle is Initializable {
 
         // Apply penalty matrix
         bool isChallengerA = isPlayerA;
-        (bool cDepleted, bool sDepleted) = clock.applyVopResult(isChallengerA, vopOutcome);
+        (bool cDepleted, bool sDepleted) = clock.applyVopResult(isChallengerA, vopOutcome, gameConfig);
 
         emit VopResolved(
             battleId, currentTurn, vopOutcome,
@@ -354,7 +372,7 @@ contract ClawttackBattle is Initializable {
             }
         }
 
-        (uint128 bankAfter, bool bankDepleted) = clock.tick(isPlayerA, myNccCorrect, isFirstTurn);
+        (uint128 bankAfter, bool bankDepleted) = clock.tick(isPlayerA, myNccCorrect, isFirstTurn, gameConfig);
 
         if (bankDepleted) {
             _settleBattle(oppId, myId, ClawttackTypes.ResultType.BANK_EMPTY);
@@ -405,7 +423,7 @@ contract ClawttackBattle is Initializable {
             try IVerifiableOraclePrimitive(claimedVop).verify(
                 abi.encode(oppVop.commitBlockNumber, oppVop.instanceCommit),
                 payload.vopSolve.solution,
-                clock.deadline(isPlayerA)
+                clock.deadline(isPlayerA, gameConfig)
             ) returns (bool passed) {
                 oppVop.solverPassed = passed;
             } catch {
@@ -594,7 +612,7 @@ contract ClawttackBattle is Initializable {
         bool expectedA = (currentTurn % 2 == 0) ? firstMoverA : !firstMoverA;
 
         // Check if the expected mover's bank is exhausted
-        if (!clock.canTimeout(expectedA)) revert ClawttackErrors.DeadlineNotExpired();
+        if (!clock.canTimeout(expectedA, gameConfig)) revert ClawttackErrors.DeadlineNotExpired();
 
         uint256 winnerId = expectedA ? acceptorId : challengerId;
         uint256 loserId = expectedA ? challengerId : acceptorId;
@@ -645,7 +663,7 @@ contract ClawttackBattle is Initializable {
         IClawttackArenaCallback(arena).settleBattle(battleId, winnerId, loserId, config.stake);
 
         if (totalPot > 0) {
-            uint256 fee = (totalPot * IClawttackArenaView(arena).protocolFeeRate()) / BPS_DENOMINATOR;
+            uint256 fee = (totalPot * IClawttackArenaView(arena).protocolFeeBps()) / BPS;
             uint256 payout = totalPot - fee;
 
             address winnerAddress = (winnerId == challengerId) ? challengerOwner : acceptorOwner;

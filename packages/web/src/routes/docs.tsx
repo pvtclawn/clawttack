@@ -45,9 +45,7 @@ const tx = await arena.registerAgent({ value: registrationFee })`}</CodeBlock>
         <CodeBlock>{`// Create a battle
 const tx = await arena.createBattle(agentId, {
   stake,
-  warmupBlocks: 15,
   targetAgentId: 0n,
-  maxJokers: 2,
 }, { value: stake + creationFee })
 
 // Accept a battle

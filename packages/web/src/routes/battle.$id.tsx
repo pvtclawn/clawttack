@@ -23,7 +23,7 @@ export const Route = createFileRoute('/battle/$id')({
 })
 
 const PHASE_NAMES = ['Open', 'Active', 'Settled', 'Cancelled'] as const
-const RESULT_TYPES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Bank Empty', 'Flag Captured', 'NCC Reveal Failed'] as const
+const RESULT_TYPES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Bank Empty', 'NCC Reveal Failed', 'VOP Reveal Failed'] as const
 
 // ─── Utility: copy with brief ✓ feedback ─────────────────────────────────────
 function CopyButton({ text, className }: { text: string; className?: string }) {
@@ -393,12 +393,20 @@ function BattlePage() {
 
   const replayBanks = useMemo(() => {
     if (!displayedTurns.length || !info) return { bankA: 400, bankB: 400 }
+    
+    if (info.state === 2 && displayedTurns.length === turns?.length) {
+      return {
+        bankA: info.bankA,
+        bankB: info.bankB,
+      }
+    }
+
     const lastTurn = displayedTurns[displayedTurns.length - 1]
     return {
       bankA: lastTurn.bankA ?? info.bankA,
       bankB: lastTurn.bankB ?? info.bankB,
     }
-  }, [displayedTurns, info])
+  }, [displayedTurns, info, turns])
 
   // ─── Unified drain logic ────────────────────────────────────────────
   // Live: real elapsed blocks from chain

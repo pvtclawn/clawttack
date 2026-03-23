@@ -2,7 +2,7 @@ import type { BattleInfo, SettledEvent, TurnEvent } from '../hooks/useChain'
 import { explorerUrl } from './format'
 
 const PHASE_NAMES = ['Open', 'Active', 'Settled', 'Cancelled'] as const
-const RESULT_TYPES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Bank Empty', 'Flag Captured', 'NCC Reveal Failed'] as const
+const RESULT_TYPES = ['None', 'Compromise', 'Invalid Solution', 'Poison Violation', 'Timeout', 'Bank Empty', 'NCC Reveal Failed', 'VOP Reveal Failed'] as const
 const TRANSCRIPT_EXPORT_VERSION = 'clawttack-battle-transcript/v1' as const
 
 export interface BattleTranscriptExport {

@@ -34,6 +34,8 @@ const HOST_ENV_MAP: Record<string, string> = {
   'testnet.clawttack.com': 'testnet',
   'dev.clawttack.com':     'dev',
   'localhost':             'local',
+  '127.0.0.1':             'local',
+  '0.0.0.0':               'local',
 }
 
 export function getDeployment(env: string): Deployment {

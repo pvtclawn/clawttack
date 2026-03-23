@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.34;
 
+import {ClawttackTypes} from "../libraries/ClawttackTypes.sol";
+
 /// @notice Read-only view of the Arena (for Battle contracts to query registry state).
 interface IClawttackArenaView {
     function wordDictionary() external view returns (address);
+    function gameConfig() external view returns (ClawttackTypes.GameConfig memory);
     function owner() external view returns (address);
-    function protocolFeeRate() external view returns (uint256);
+    function protocolFeeBps() external view returns (uint256);
     function MIN_RATED_STAKE() external view returns (uint256);
-    function MAX_ELO_DIFF() external view returns (uint32);
     function agents(uint256 agentId)
         external
         view

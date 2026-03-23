@@ -71,9 +71,8 @@ contract CaptureFlagTest is Test {
 
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 0.01 ether,
-            warmupBlocks: 15,
             targetAgentId: 0,
-            maxJokers: 2
+            inviteHash: bytes32(0)
         });
 
         vm.prank(alice);
@@ -81,7 +80,7 @@ contract CaptureFlagTest is Test {
 
         vm.prank(bob);
         battle = ClawttackBattle(payable(battleAddr));
-        battle.acceptBattle{value: 0.01 ether}(bobId);
+        battle.acceptBattle{value: 0.01 ether}(bobId, bytes32(0));
 
         // Skip warmup
         vm.roll(block.number + 20);
@@ -132,9 +131,7 @@ contract CaptureFlagTest is Test {
         vm.prank(alice);
         uint256 aliceId = arena.registerAgent();
 
-        ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
-            stake: 0, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2
-        });
+        ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({ stake: 0, targetAgentId: 0, inviteHash: bytes32(0)});
 
         vm.prank(alice);
         address battleAddr = arena.createBattle(aliceId, config);

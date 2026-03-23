@@ -1,1489 +1,2800 @@
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// ClawttackArena
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/**
+ * Auto-generated from forge build artifacts.
+ * Do not edit manually.
+ */
 
 export const clawttackArenaAbi = [
   {
-    type: 'constructor',
-    inputs: [
-      { name: '_wordDictionary', internalType: 'address', type: 'address' },
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "_wordDictionary",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    stateMutability: 'nonpayable',
-  },
-  { type: 'receive', stateMutability: 'payable' },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'DEFAULT_ELO_RATING',
-    outputs: [{ name: '', internalType: 'uint32', type: 'uint32' }],
-    stateMutability: 'view',
+    "stateMutability": "nonpayable"
   },
   {
-    type: 'function',
-    inputs: [],
-    name: 'MAX_CREATION_FEE',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
+    "type": "receive",
+    "stateMutability": "payable"
   },
   {
-    type: 'function',
-    inputs: [],
-    name: 'MAX_ELO_DIFF',
-    outputs: [{ name: '', internalType: 'uint32', type: 'uint32' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'MAX_JOKERS',
-    outputs: [{ name: '', internalType: 'uint8', type: 'uint8' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'MAX_PROTOCOL_FEE_RATE',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'MAX_REGISTRATION_FEE',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'MAX_WARMUP_BLOCKS',
-    outputs: [{ name: '', internalType: 'uint32', type: 'uint32' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'MIN_RATED_STAKE',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'MIN_WARMUP_BLOCKS',
-    outputs: [{ name: '', internalType: 'uint32', type: 'uint32' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'acceptOwnership',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: 'vopAddress', internalType: 'address', type: 'address' }],
-    name: 'addVop',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'agentRegistrationFee',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    name: 'agents',
-    outputs: [
-      { name: 'owner', internalType: 'address', type: 'address' },
-      { name: 'eloRating', internalType: 'uint32', type: 'uint32' },
-      { name: 'totalWins', internalType: 'uint32', type: 'uint32' },
-      { name: 'totalLosses', internalType: 'uint32', type: 'uint32' },
-      { name: 'totalStaked', internalType: 'uint256', type: 'uint256' },
-      { name: 'totalWon', internalType: 'uint256', type: 'uint256' },
+    "type": "function",
+    "name": "BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    stateMutability: 'view',
+    "stateMutability": "view"
   },
   {
-    type: 'function',
-    inputs: [],
-    name: 'agentsCount',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'battleCreationFee',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'battleImplementation',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    name: 'battles',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'battlesCount',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [
-      { name: 'challengerId', internalType: 'uint256', type: 'uint256' },
+    "type": "function",
+    "name": "MAX_CREATION_FEE",
+    "inputs": [],
+    "outputs": [
       {
-        name: 'config',
-        internalType: 'struct ClawttackTypes.BattleConfig',
-        type: 'tuple',
-        components: [
-          { name: 'stake', internalType: 'uint256', type: 'uint256' },
-          { name: 'warmupBlocks', internalType: 'uint32', type: 'uint32' },
-          { name: 'targetAgentId', internalType: 'uint256', type: 'uint256' },
-          { name: 'maxJokers', internalType: 'uint8', type: 'uint8' },
-        ],
-      },
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: 'createBattle',
-    outputs: [
-      { name: 'battleAddress', internalType: 'address', type: 'address' },
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_PROTOCOL_FEE_BPS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    stateMutability: 'payable',
+    "stateMutability": "view"
   },
   {
-    type: 'function',
-    inputs: [{ name: 'index', internalType: 'uint8', type: 'uint8' }],
-    name: 'deactivateVop',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: '', internalType: 'uint8', type: 'uint8' }],
-    name: 'deactivatedVOPs',
-    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: 'index', internalType: 'uint8', type: 'uint8' }],
-    name: 'getVopByIndex',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'getVopCount',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: 'index', internalType: 'uint8', type: 'uint8' }],
-    name: 'isVopActive',
-    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: '', internalType: 'address', type: 'address' }],
-    name: 'isVopRegistered',
-    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'owner',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'pendingOwner',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'protocolFeeRate',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'protocolFees',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'registerAgent',
-    outputs: [{ name: 'agentId', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'payable',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'renounceOwnership',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: '_fee', internalType: 'uint256', type: 'uint256' }],
-    name: 'setAgentRegistrationFee',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: '_fee', internalType: 'uint256', type: 'uint256' }],
-    name: 'setBattleCreationFee',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: '_impl', internalType: 'address', type: 'address' }],
-    name: 'setBattleImplementation',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: '_rate', internalType: 'uint256', type: 'uint256' }],
-    name: 'setProtocolFeeRate',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [
-      { name: 'battleId', internalType: 'uint256', type: 'uint256' },
-      { name: 'winnerId', internalType: 'uint256', type: 'uint256' },
-      { name: 'loserId', internalType: 'uint256', type: 'uint256' },
-      { name: 'battleStake', internalType: 'uint256', type: 'uint256' },
+    "type": "function",
+    "name": "MAX_REGISTRATION_FEE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: 'settleBattle',
-    outputs: [],
-    stateMutability: 'nonpayable',
+    "stateMutability": "view"
   },
   {
-    type: 'function',
-    inputs: [],
-    name: 'totalVolume',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: 'newOwner', internalType: 'address', type: 'address' }],
-    name: 'transferOwnership',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    name: 'vopRegistry',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: 'to', internalType: 'address payable', type: 'address' }],
-    name: 'withdrawFees',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'wordDictionary',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "MIN_RATED_STAKE",
+    "inputs": [],
+    "outputs": [
       {
-        name: 'agentId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      {
-        name: 'owner',
-        internalType: 'address',
-        type: 'address',
-        indexed: true,
-      },
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: 'AgentRegistered',
+    "stateMutability": "view"
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "acceptOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "addVop",
+    "inputs": [
       {
-        name: 'oldFee',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'newFee',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
+        "name": "vopAddress",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    name: 'AgentRegistrationFeeUpdated',
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "agentRegistrationFee",
+    "inputs": [],
+    "outputs": [
       {
-        name: 'battleId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      {
-        name: 'challengerId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      {
-        name: 'stake',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'targetAgentId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: 'BattleCreated',
+    "stateMutability": "view"
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "agents",
+    "inputs": [
       {
-        name: 'oldFee',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'newFee',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: 'BattleCreationFeeUpdated',
-  },
-  {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "outputs": [
       {
-        name: 'previousOwner',
-        internalType: 'address',
-        type: 'address',
-        indexed: true,
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
       },
       {
-        name: 'newOwner',
-        internalType: 'address',
-        type: 'address',
-        indexed: true,
+        "name": "eloRating",
+        "type": "uint32",
+        "internalType": "uint32"
       },
+      {
+        "name": "totalWins",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "totalLosses",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "totalStaked",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalWon",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: 'OwnershipTransferStarted',
+    "stateMutability": "view"
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "agentsCount",
+    "inputs": [],
+    "outputs": [
       {
-        name: 'previousOwner',
-        internalType: 'address',
-        type: 'address',
-        indexed: true,
-      },
-      {
-        name: 'newOwner',
-        internalType: 'address',
-        type: 'address',
-        indexed: true,
-      },
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: 'OwnershipTransferred',
+    "stateMutability": "view"
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "battleCreationFee",
+    "inputs": [],
+    "outputs": [
       {
-        name: 'oldRate',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
-      {
-        name: 'newRate',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: false,
-      },
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: 'ProtocolFeeUpdated',
+    "stateMutability": "view"
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "battleImplementation",
+    "inputs": [],
+    "outputs": [
       {
-        name: 'agentId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      {
-        name: 'newRating',
-        internalType: 'uint32',
-        type: 'uint32',
-        indexed: false,
-      },
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    name: 'RatingUpdated',
+    "stateMutability": "view"
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "battles",
+    "inputs": [
       {
-        name: 'vopAddress',
-        internalType: 'address',
-        type: 'address',
-        indexed: true,
-      },
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: 'VOPAdded',
-  },
-  {
-    type: 'event',
-    anonymous: false,
-    inputs: [
-      { name: 'index', internalType: 'uint8', type: 'uint8', indexed: true },
+    "outputs": [
       {
-        name: 'vopAddress',
-        internalType: 'address',
-        type: 'address',
-        indexed: true,
-      },
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    name: 'VOPDeactivated',
-  },
-  { type: 'error', inputs: [], name: 'ConfigOutOfBounds' },
-  { type: 'error', inputs: [], name: 'ERC1167FailedCreateClone' },
-  { type: 'error', inputs: [], name: 'FeeTooHigh' },
-  { type: 'error', inputs: [], name: 'InsufficientValue' },
-  { type: 'error', inputs: [], name: 'InvalidCall' },
-  { type: 'error', inputs: [], name: 'NotAgentOwner' },
-  { type: 'error', inputs: [], name: 'NotParticipant' },
-  {
-    type: 'error',
-    inputs: [{ name: 'owner', internalType: 'address', type: 'address' }],
-    name: 'OwnableInvalidOwner',
+    "stateMutability": "view"
   },
   {
-    type: 'error',
-    inputs: [{ name: 'account', internalType: 'address', type: 'address' }],
-    name: 'OwnableUnauthorizedAccount',
+    "type": "function",
+    "name": "battlesCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
-  { type: 'error', inputs: [], name: 'ReentrancyGuardReentrantCall' },
-  { type: 'error', inputs: [], name: 'TransferFailed' },
-  { type: 'error', inputs: [], name: 'VOPAlreadyRegistered' },
-  { type: 'error', inputs: [], name: 'VopIndexOutOfRange' },
+  {
+    "type": "function",
+    "name": "createBattle",
+    "inputs": [
+      {
+        "name": "challengerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "config",
+        "type": "tuple",
+        "internalType": "struct ClawttackTypes.BattleConfig",
+        "components": [
+          {
+            "name": "stake",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "targetAgentId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "inviteHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "battleAddress",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "deactivateVop",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "deactivatedVOPs",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "gameConfig",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "initialBank",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "nccRefundBps",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "nccFailPenalty",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "bankDecayBps",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "minTurnInterval",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxTurnTimeout",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "vopPenaltyBase",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "defaultEloRating",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxEloDiff",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "warmupBlocks",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxJokers",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getVopByIndex",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getVopCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isVopActive",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isVopRegistered",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "minRatedStake",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingOwner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "protocolFeeBps",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "protocolFees",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "ratedBattlesCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "registerAgent",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "renounceOwnership",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setAgentRegistrationFee",
+    "inputs": [
+      {
+        "name": "_fee",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setBattleCreationFee",
+    "inputs": [
+      {
+        "name": "_fee",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setBattleImplementation",
+    "inputs": [
+      {
+        "name": "_impl",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setGameConfig",
+    "inputs": [
+      {
+        "name": "_config",
+        "type": "tuple",
+        "internalType": "struct ClawttackTypes.GameConfig",
+        "components": [
+          {
+            "name": "initialBank",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "nccRefundBps",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "nccFailPenalty",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "bankDecayBps",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "minTurnInterval",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "maxTurnTimeout",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "vopPenaltyBase",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "defaultEloRating",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "maxEloDiff",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "warmupBlocks",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "maxJokers",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setMinRatedStake",
+    "inputs": [
+      {
+        "name": "_stake",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setProtocolFeeRate",
+    "inputs": [
+      {
+        "name": "_rate",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "settleBattle",
+    "inputs": [
+      {
+        "name": "battleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "winnerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "loserId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "battleStake",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "totalVolume",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "transferOwnership",
+    "inputs": [
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "vopRegistry",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "withdrawFees",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address payable"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "wordDictionary",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "AgentRegistered",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "AgentRegistrationFeeUpdated",
+    "inputs": [
+      {
+        "name": "oldFee",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newFee",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "BattleCreated",
+    "inputs": [
+      {
+        "name": "battleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "challengerId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "stake",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "targetAgentId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "inviteHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "BattleCreationFeeUpdated",
+    "inputs": [
+      {
+        "name": "oldFee",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newFee",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FeesWithdrawn",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "GameConfigUpdated",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MinRatedStakeUpdated",
+    "inputs": [
+      {
+        "name": "oldStake",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newStake",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferStarted",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OwnershipTransferred",
+    "inputs": [
+      {
+        "name": "previousOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newOwner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProtocolFeeBpsUpdated",
+    "inputs": [
+      {
+        "name": "oldRate",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newRate",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RatingUpdated",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newRating",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "VOPAdded",
+    "inputs": [
+      {
+        "name": "vopAddress",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "VOPDeactivated",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "uint8"
+      },
+      {
+        "name": "vopAddress",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "ConfigOutOfBounds",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ERC1167FailedCreateClone",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FeeTooHigh",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientValue",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidTargetAgent",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotAgentOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotParticipant",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "OwnableInvalidOwner",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OwnableUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ReentrancyGuardReentrantCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TransferFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "VOPAlreadyRegistered",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "VopIndexOutOfRange",
+    "inputs": []
+  }
 ] as const
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// ClawttackBattle
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 export const clawttackBattleAbi = [
-  { type: 'constructor', inputs: [], stateMutability: 'nonpayable' },
-  { type: 'receive', stateMutability: 'payable' },
   {
-    type: 'function',
-    inputs: [],
-    name: 'BPS_DENOMINATOR',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
+    "type": "constructor",
+    "inputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    type: 'function',
-    inputs: [],
-    name: 'COMPROMISE_REASON',
-    outputs: [{ name: '', internalType: 'string', type: 'string' }],
-    stateMutability: 'view',
+    "type": "receive",
+    "stateMutability": "payable"
   },
   {
-    type: 'function',
-    inputs: [],
-    name: 'DOMAIN_TYPE_INIT',
-    outputs: [{ name: '', internalType: 'string', type: 'string' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'DOMAIN_TYPE_TURN',
-    outputs: [{ name: '', internalType: 'string', type: 'string' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'JOKER_NARRATIVE_LEN',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'MAX_NARRATIVE_LEN',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'MAX_POISON_WORD_LEN',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'MIN_POISON_WORD_LEN',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: '_acceptorId', internalType: 'uint256', type: 'uint256' }],
-    name: 'acceptBattle',
-    outputs: [],
-    stateMutability: 'payable',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'acceptorId',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'acceptorOwner',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'arena',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'battleId',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'cancelBattle',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: 'signature', internalType: 'bytes', type: 'bytes' }],
-    name: 'captureFlag',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'captureFlag',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'challengerId',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'challengerOwner',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'claimTimeoutWin',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'clock',
-    outputs: [
-      { name: 'bankA', internalType: 'uint128', type: 'uint128' },
-      { name: 'bankB', internalType: 'uint128', type: 'uint128' },
-      { name: 'lastTurnBlock', internalType: 'uint64', type: 'uint64' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'config',
-    outputs: [
-      { name: 'stake', internalType: 'uint256', type: 'uint256' },
-      { name: 'warmupBlocks', internalType: 'uint32', type: 'uint32' },
-      { name: 'targetAgentId', internalType: 'uint256', type: 'uint256' },
-      { name: 'maxJokers', internalType: 'uint8', type: 'uint8' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'currentTurn',
-    outputs: [{ name: '', internalType: 'uint32', type: 'uint32' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'firstMoverA',
-    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'getBattleState',
-    outputs: [
+    "type": "function",
+    "name": "BPS",
+    "inputs": [],
+    "outputs": [
       {
-        name: '_phase',
-        internalType: 'enum ClawttackBattle.BattlePhase',
-        type: 'uint8',
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "COMPROMISE_REASON",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "DOMAIN_TYPE_INIT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "DOMAIN_TYPE_TURN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "JOKER_NARRATIVE_LEN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_NARRATIVE_LEN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_POISON_WORD_LEN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_POISON_WORD_LEN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "acceptBattle",
+    "inputs": [
+      {
+        "name": "_acceptorId",
+        "type": "uint256",
+        "internalType": "uint256"
       },
-      { name: '_currentTurn', internalType: 'uint32', type: 'uint32' },
-      { name: '_bankA', internalType: 'uint128', type: 'uint128' },
-      { name: '_bankB', internalType: 'uint128', type: 'uint128' },
-      { name: '_sequenceHash', internalType: 'bytes32', type: 'bytes32' },
-      { name: '_battleId', internalType: 'uint256', type: 'uint256' },
+      {
+        "name": "_inviteSecret",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
     ],
-    stateMutability: 'view',
+    "outputs": [],
+    "stateMutability": "payable"
   },
   {
-    type: 'function',
-    inputs: [
-      { name: '_arena', internalType: 'address', type: 'address' },
-      { name: '_battleId', internalType: 'uint256', type: 'uint256' },
-      { name: '_challengerId', internalType: 'uint256', type: 'uint256' },
-      { name: '_challengerOwner', internalType: 'address', type: 'address' },
+    "type": "function",
+    "name": "acceptorId",
+    "inputs": [],
+    "outputs": [
       {
-        name: '_config',
-        internalType: 'struct ClawttackTypes.BattleConfig',
-        type: 'tuple',
-        components: [
-          { name: 'stake', internalType: 'uint256', type: 'uint256' },
-          { name: 'warmupBlocks', internalType: 'uint32', type: 'uint32' },
-          { name: 'targetAgentId', internalType: 'uint256', type: 'uint256' },
-          { name: 'maxJokers', internalType: 'uint8', type: 'uint8' },
-        ],
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "acceptorOwner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "arena",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "battleId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cancelBattle",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "captureFlag",
+    "inputs": [
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "captureFlag",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "challengerId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "challengerOwner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "claimTimeoutWin",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "clock",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "bankA",
+        "type": "uint128",
+        "internalType": "uint128"
       },
-    ],
-    name: 'initialize',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'jokersRemainingA',
-    outputs: [{ name: '', internalType: 'uint8', type: 'uint8' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'jokersRemainingB',
-    outputs: [{ name: '', internalType: 'uint8', type: 'uint8' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'nccResultA',
-    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'nccResultAReady',
-    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'nccResultB',
-    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'nccResultBReady',
-    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'pendingNccA',
-    outputs: [
-      { name: 'commitment', internalType: 'bytes32', type: 'bytes32' },
-      { name: 'defenderGuessIdx', internalType: 'uint8', type: 'uint8' },
-      { name: 'hasDefenderGuess', internalType: 'bool', type: 'bool' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'pendingNccB',
-    outputs: [
-      { name: 'commitment', internalType: 'bytes32', type: 'bytes32' },
-      { name: 'defenderGuessIdx', internalType: 'uint8', type: 'uint8' },
-      { name: 'hasDefenderGuess', internalType: 'bool', type: 'bool' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'pendingVopA',
-    outputs: [
-      { name: 'commitment', internalType: 'bytes32', type: 'bytes32' },
-      { name: 'solverClaimedIndex', internalType: 'uint8', type: 'uint8' },
-      { name: 'solverSolution', internalType: 'bytes', type: 'bytes' },
-      { name: 'commitBlockNumber', internalType: 'uint64', type: 'uint64' },
-      { name: 'solverPassed', internalType: 'bool', type: 'bool' },
-      { name: 'hasSolverResponse', internalType: 'bool', type: 'bool' },
-      { name: 'instanceCommit', internalType: 'bytes32', type: 'bytes32' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'pendingVopB',
-    outputs: [
-      { name: 'commitment', internalType: 'bytes32', type: 'bytes32' },
-      { name: 'solverClaimedIndex', internalType: 'uint8', type: 'uint8' },
-      { name: 'solverSolution', internalType: 'bytes', type: 'bytes' },
-      { name: 'commitBlockNumber', internalType: 'uint64', type: 'uint64' },
-      { name: 'solverPassed', internalType: 'bool', type: 'bool' },
-      { name: 'hasSolverResponse', internalType: 'bool', type: 'bool' },
-      { name: 'instanceCommit', internalType: 'bytes32', type: 'bytes32' },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'phase',
-    outputs: [
       {
-        name: '',
-        internalType: 'enum ClawttackBattle.BattlePhase',
-        type: 'uint8',
+        "name": "bankB",
+        "type": "uint128",
+        "internalType": "uint128"
       },
-    ],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'poisonWord',
-    outputs: [{ name: '', internalType: 'string', type: 'string' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: 'to', internalType: 'address payable', type: 'address' }],
-    name: 'rescueStuckFunds',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'sequenceHash',
-    outputs: [{ name: '', internalType: 'bytes32', type: 'bytes32' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'startBlock',
-    outputs: [{ name: '', internalType: 'uint32', type: 'uint32' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'state',
-    outputs: [
       {
-        name: '',
-        internalType: 'enum ClawttackTypes.ResultType',
-        type: 'uint8',
+        "name": "lastTurnBlock",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "config",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "stake",
+        "type": "uint256",
+        "internalType": "uint256"
       },
+      {
+        "name": "targetAgentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "inviteHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
     ],
-    stateMutability: 'view',
+    "stateMutability": "view"
   },
   {
-    type: 'function',
-    inputs: [
+    "type": "function",
+    "name": "currentTurn",
+    "inputs": [],
+    "outputs": [
       {
-        name: 'payload',
-        internalType: 'struct ClawttackTypes.TurnPayload',
-        type: 'tuple',
-        components: [
-          { name: 'narrative', internalType: 'string', type: 'string' },
-          { name: 'customPoisonWord', internalType: 'string', type: 'string' },
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "firstMoverA",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "gameConfig",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "initialBank",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "nccRefundBps",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "nccFailPenalty",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "bankDecayBps",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "minTurnInterval",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxTurnTimeout",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "vopPenaltyBase",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "defaultEloRating",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxEloDiff",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "warmupBlocks",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "maxJokers",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getBattleState",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "_phase",
+        "type": "uint8",
+        "internalType": "enum ClawttackBattle.BattlePhase"
+      },
+      {
+        "name": "_currentTurn",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "_bankA",
+        "type": "uint128",
+        "internalType": "uint128"
+      },
+      {
+        "name": "_bankB",
+        "type": "uint128",
+        "internalType": "uint128"
+      },
+      {
+        "name": "_sequenceHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "_battleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "initialize",
+    "inputs": [
+      {
+        "name": "_arena",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_battleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_challengerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_challengerOwner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_config",
+        "type": "tuple",
+        "internalType": "struct ClawttackTypes.BattleConfig",
+        "components": [
           {
-            name: 'nccAttack',
-            internalType: 'struct ClawttackTypes.NccAttack',
-            type: 'tuple',
-            components: [
+            "name": "stake",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "targetAgentId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "inviteHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "jokersRemainingA",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "jokersRemainingB",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nccResultA",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nccResultAReady",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nccResultB",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nccResultBReady",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingNccA",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "commitment",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "defenderGuessIdx",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "hasDefenderGuess",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingNccB",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "commitment",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "defenderGuessIdx",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "hasDefenderGuess",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingVopA",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "commitment",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "solverClaimedIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "solverSolution",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "commitBlockNumber",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "solverPassed",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "hasSolverResponse",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "instanceCommit",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingVopB",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "commitment",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "solverClaimedIndex",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "solverSolution",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "commitBlockNumber",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "solverPassed",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "hasSolverResponse",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "instanceCommit",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "phase",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "enum ClawttackBattle.BattlePhase"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "poisonWord",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "rescueStuckFunds",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address payable"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "sequenceHash",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "startBlock",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint32",
+        "internalType": "uint32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "state",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "enum ClawttackTypes.ResultType"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "submitTurn",
+    "inputs": [
+      {
+        "name": "payload",
+        "type": "tuple",
+        "internalType": "struct ClawttackTypes.TurnPayload",
+        "components": [
+          {
+            "name": "narrative",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "customPoisonWord",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "nccAttack",
+            "type": "tuple",
+            "internalType": "struct ClawttackTypes.NccAttack",
+            "components": [
               {
-                name: 'candidateWordIndices',
-                internalType: 'uint16[4]',
-                type: 'uint16[4]',
+                "name": "candidateWordIndices",
+                "type": "uint16[4]",
+                "internalType": "uint16[4]"
               },
               {
-                name: 'candidateOffsets',
-                internalType: 'uint16[4]',
-                type: 'uint16[4]',
+                "name": "candidateOffsets",
+                "type": "uint16[4]",
+                "internalType": "uint16[4]"
               },
               {
-                name: 'nccCommitment',
-                internalType: 'bytes32',
-                type: 'bytes32',
-              },
-            ],
+                "name": "nccCommitment",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              }
+            ]
           },
           {
-            name: 'nccDefense',
-            internalType: 'struct ClawttackTypes.NccDefense',
-            type: 'tuple',
-            components: [
-              { name: 'guessIdx', internalType: 'uint8', type: 'uint8' },
-            ],
-          },
-          {
-            name: 'nccReveal',
-            internalType: 'struct ClawttackTypes.NccReveal',
-            type: 'tuple',
-            components: [
-              { name: 'salt', internalType: 'bytes32', type: 'bytes32' },
-              { name: 'intendedIdx', internalType: 'uint8', type: 'uint8' },
-            ],
-          },
-          {
-            name: 'vopCommit',
-            internalType: 'struct ClawttackTypes.VopCommit',
-            type: 'tuple',
-            components: [
+            "name": "nccDefense",
+            "type": "tuple",
+            "internalType": "struct ClawttackTypes.NccDefense",
+            "components": [
               {
-                name: 'vopCommitment',
-                internalType: 'bytes32',
-                type: 'bytes32',
+                "name": "guessIdx",
+                "type": "uint8",
+                "internalType": "uint8"
+              }
+            ]
+          },
+          {
+            "name": "nccReveal",
+            "type": "tuple",
+            "internalType": "struct ClawttackTypes.NccReveal",
+            "components": [
+              {
+                "name": "salt",
+                "type": "bytes32",
+                "internalType": "bytes32"
               },
               {
-                name: 'instanceCommit',
-                internalType: 'bytes32',
-                type: 'bytes32',
+                "name": "intendedIdx",
+                "type": "uint8",
+                "internalType": "uint8"
+              }
+            ]
+          },
+          {
+            "name": "vopCommit",
+            "type": "tuple",
+            "internalType": "struct ClawttackTypes.VopCommit",
+            "components": [
+              {
+                "name": "vopCommitment",
+                "type": "bytes32",
+                "internalType": "bytes32"
               },
-            ],
+              {
+                "name": "instanceCommit",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              }
+            ]
           },
           {
-            name: 'vopSolve',
-            internalType: 'struct ClawttackTypes.VopSolve',
-            type: 'tuple',
-            components: [
-              { name: 'vopClaimedIndex', internalType: 'uint8', type: 'uint8' },
-              { name: 'solution', internalType: 'bytes', type: 'bytes' },
-            ],
+            "name": "vopSolve",
+            "type": "tuple",
+            "internalType": "struct ClawttackTypes.VopSolve",
+            "components": [
+              {
+                "name": "vopClaimedIndex",
+                "type": "uint8",
+                "internalType": "uint8"
+              },
+              {
+                "name": "solution",
+                "type": "bytes",
+                "internalType": "bytes"
+              }
+            ]
           },
           {
-            name: 'vopReveal',
-            internalType: 'struct ClawttackTypes.VopReveal',
-            type: 'tuple',
-            components: [
-              { name: 'vopSalt', internalType: 'bytes32', type: 'bytes32' },
-              { name: 'vopIndex', internalType: 'uint8', type: 'uint8' },
-            ],
-          },
-        ],
-      },
+            "name": "vopReveal",
+            "type": "tuple",
+            "internalType": "struct ClawttackTypes.VopReveal",
+            "components": [
+              {
+                "name": "vopSalt",
+                "type": "bytes32",
+                "internalType": "bytes32"
+              },
+              {
+                "name": "vopIndex",
+                "type": "uint8",
+                "internalType": "uint8"
+              }
+            ]
+          }
+        ]
+      }
     ],
-    name: 'submitTurn',
-    outputs: [],
-    stateMutability: 'nonpayable',
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
-    type: 'function',
-    inputs: [],
-    name: 'targetWordIndex',
-    outputs: [{ name: '', internalType: 'uint16', type: 'uint16' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'totalPot',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "targetWordIndex",
+    "inputs": [],
+    "outputs": [
       {
-        name: 'battleId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      {
-        name: 'acceptorId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      {
-        name: 'challengerGoesFirst',
-        internalType: 'bool',
-        type: 'bool',
-        indexed: false,
-      },
+        "name": "",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
     ],
-    name: 'BattleAccepted',
+    "stateMutability": "view"
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "function",
+    "name": "totalPot",
+    "inputs": [],
+    "outputs": [
       {
-        name: 'battleId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    name: 'BattleCancelled',
+    "stateMutability": "view"
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "event",
+    "name": "BattleAccepted",
+    "inputs": [
       {
-        name: 'battleId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
+        "name": "battleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
-        name: 'winnerId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
+        "name": "acceptorId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
-        name: 'loserId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      {
-        name: 'resultType',
-        internalType: 'enum ClawttackTypes.ResultType',
-        type: 'uint8',
-        indexed: false,
-      },
+        "name": "challengerGoesFirst",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
     ],
-    name: 'BattleSettled',
+    "anonymous": false
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "event",
+    "name": "BattleCancelled",
+    "inputs": [
       {
-        name: 'battleId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      {
-        name: 'winnerId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      {
-        name: 'loserId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
+        "name": "battleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
     ],
-    name: 'FlagCaptured',
+    "anonymous": false
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "event",
+    "name": "BattleSettled",
+    "inputs": [
       {
-        name: 'version',
-        internalType: 'uint64',
-        type: 'uint64',
-        indexed: false,
+        "name": "battleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
       },
+      {
+        "name": "winnerId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "loserId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "resultType",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum ClawttackTypes.ResultType"
+      }
     ],
-    name: 'Initialized',
+    "anonymous": false
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "event",
+    "name": "FlagCaptured",
+    "inputs": [
       {
-        name: 'battleId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
+        "name": "battleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
-        name: 'agentId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
+        "name": "winnerId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
-        name: 'jokersRemaining',
-        internalType: 'uint8',
-        type: 'uint8',
-        indexed: false,
-      },
+        "name": "loserId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
     ],
-    name: 'JokerPlayed',
+    "anonymous": false
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "event",
+    "name": "Initialized",
+    "inputs": [
       {
-        name: 'battleId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      { name: 'turn', internalType: 'uint32', type: 'uint32', indexed: false },
-      {
-        name: 'defenderCorrect',
-        internalType: 'bool',
-        type: 'bool',
-        indexed: false,
-      },
-      {
-        name: 'newBank',
-        internalType: 'uint128',
-        type: 'uint128',
-        indexed: false,
-      },
+        "name": "version",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
     ],
-    name: 'NccResolved',
+    "anonymous": false
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "event",
+    "name": "JokerPlayed",
+    "inputs": [
       {
-        name: 'battleId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
+        "name": "battleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
-        name: 'claimantId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
+        "name": "agentId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
       },
+      {
+        "name": "jokersRemaining",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      }
     ],
-    name: 'TimeoutClaimed',
+    "anonymous": false
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "event",
+    "name": "NccResolved",
+    "inputs": [
       {
-        name: 'battleId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
+        "name": "battleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
-        name: 'playerId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
+        "name": "turn",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
       },
       {
-        name: 'turnNumber',
-        internalType: 'uint32',
-        type: 'uint32',
-        indexed: false,
+        "name": "defenderCorrect",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
       },
       {
-        name: 'sequenceHash',
-        internalType: 'bytes32',
-        type: 'bytes32',
-        indexed: false,
-      },
-      {
-        name: 'targetWord',
-        internalType: 'uint16',
-        type: 'uint16',
-        indexed: false,
-      },
-      {
-        name: 'poisonWord',
-        internalType: 'string',
-        type: 'string',
-        indexed: false,
-      },
-      {
-        name: 'narrative',
-        internalType: 'string',
-        type: 'string',
-        indexed: false,
-      },
-      {
-        name: 'bankA',
-        internalType: 'uint128',
-        type: 'uint128',
-        indexed: false,
-      },
-      {
-        name: 'bankB',
-        internalType: 'uint128',
-        type: 'uint128',
-        indexed: false,
-      },
+        "name": "newBank",
+        "type": "uint128",
+        "indexed": false,
+        "internalType": "uint128"
+      }
     ],
-    name: 'TurnSubmitted',
+    "anonymous": false
   },
   {
-    type: 'event',
-    anonymous: false,
-    inputs: [
+    "type": "event",
+    "name": "TimeoutClaimed",
+    "inputs": [
       {
-        name: 'battleId',
-        internalType: 'uint256',
-        type: 'uint256',
-        indexed: true,
-      },
-      { name: 'turn', internalType: 'uint32', type: 'uint32', indexed: false },
-      {
-        name: 'outcome',
-        internalType: 'enum ClawttackTypes.VopOutcome',
-        type: 'uint8',
-        indexed: false,
+        "name": "battleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
       },
       {
-        name: 'challengerVopIndex',
-        internalType: 'uint8',
-        type: 'uint8',
-        indexed: false,
-      },
-      {
-        name: 'solverClaimedIndex',
-        internalType: 'uint8',
-        type: 'uint8',
-        indexed: false,
-      },
-      {
-        name: 'bankA',
-        internalType: 'uint128',
-        type: 'uint128',
-        indexed: false,
-      },
-      {
-        name: 'bankB',
-        internalType: 'uint128',
-        type: 'uint128',
-        indexed: false,
-      },
+        "name": "claimantId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
     ],
-    name: 'VopResolved',
-  },
-  { type: 'error', inputs: [], name: 'BattleNotActive' },
-  { type: 'error', inputs: [], name: 'BattleNotCancellable' },
-  { type: 'error', inputs: [], name: 'BattleNotOpen' },
-  { type: 'error', inputs: [], name: 'CandidateNotInNarrative' },
-  { type: 'error', inputs: [], name: 'CannotBattleSelf' },
-  { type: 'error', inputs: [], name: 'DeadlineNotExpired' },
-  { type: 'error', inputs: [], name: 'DuplicateCandidate' },
-  { type: 'error', inputs: [], name: 'ECDSAInvalidSignature' },
-  {
-    type: 'error',
-    inputs: [{ name: 'length', internalType: 'uint256', type: 'uint256' }],
-    name: 'ECDSAInvalidSignatureLength',
+    "anonymous": false
   },
   {
-    type: 'error',
-    inputs: [{ name: 's', internalType: 'bytes32', type: 'bytes32' }],
-    name: 'ECDSAInvalidSignatureS',
+    "type": "event",
+    "name": "TurnSubmitted",
+    "inputs": [
+      {
+        "name": "battleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "playerId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "turnNumber",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      },
+      {
+        "name": "sequenceHash",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "targetWord",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
+      },
+      {
+        "name": "poisonWord",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "narrative",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "bankA",
+        "type": "uint128",
+        "indexed": false,
+        "internalType": "uint128"
+      },
+      {
+        "name": "bankB",
+        "type": "uint128",
+        "indexed": false,
+        "internalType": "uint128"
+      }
+    ],
+    "anonymous": false
   },
-  { type: 'error', inputs: [], name: 'EloDifferenceTooHigh' },
-  { type: 'error', inputs: [], name: 'InsufficientValue' },
-  { type: 'error', inputs: [], name: 'InvalidASCII' },
-  { type: 'error', inputs: [], name: 'InvalidCompromiseSignature' },
-  { type: 'error', inputs: [], name: 'InvalidGuessIndex' },
-  { type: 'error', inputs: [], name: 'InvalidInitialization' },
-  { type: 'error', inputs: [], name: 'InvalidPoisonWord' },
-  { type: 'error', inputs: [], name: 'MissingCommitment' },
-  { type: 'error', inputs: [], name: 'NarrativeTooLong' },
-  { type: 'error', inputs: [], name: 'NarrativeTooShort' },
-  { type: 'error', inputs: [], name: 'NoJokersRemaining' },
-  { type: 'error', inputs: [], name: 'NoSecretCommitted' },
-  { type: 'error', inputs: [], name: 'NotInitializing' },
-  { type: 'error', inputs: [], name: 'NotParticipant' },
-  { type: 'error', inputs: [], name: 'PoisonWordDetected' },
-  { type: 'error', inputs: [], name: 'TargetWordMissing' },
-  { type: 'error', inputs: [], name: 'TransferFailed' },
-  { type: 'error', inputs: [], name: 'TurnTooFast' },
-  { type: 'error', inputs: [], name: 'UnauthorizedTurn' },
-  { type: 'error', inputs: [], name: 'WrongTargetAgent' },
+  {
+    "type": "event",
+    "name": "VopResolved",
+    "inputs": [
+      {
+        "name": "battleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "turn",
+        "type": "uint32",
+        "indexed": false,
+        "internalType": "uint32"
+      },
+      {
+        "name": "outcome",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum ClawttackTypes.VopOutcome"
+      },
+      {
+        "name": "challengerVopIndex",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "solverClaimedIndex",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "bankA",
+        "type": "uint128",
+        "indexed": false,
+        "internalType": "uint128"
+      },
+      {
+        "name": "bankB",
+        "type": "uint128",
+        "indexed": false,
+        "internalType": "uint128"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "BattleNotActive",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BattleNotCancellable",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BattleNotOpen",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CandidateNotInNarrative",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CannotBattleSelf",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DeadlineNotExpired",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DuplicateCandidate",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignatureLength",
+    "inputs": [
+      {
+        "name": "length",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ECDSAInvalidSignatureS",
+    "inputs": [
+      {
+        "name": "s",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "EloDifferenceTooHigh",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficientValue",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidASCII",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCompromiseSignature",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidGuessIndex",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidInviteSecret",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPoisonWord",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MissingCommitment",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NarrativeTooLong",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NarrativeTooShort",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoJokersRemaining",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoSecretCommitted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotInitializing",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotParticipant",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PoisonWordDetected",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TargetWordMissing",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TransferFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "TurnTooFast",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UnauthorizedTurn",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "WrongTargetAgent",
+    "inputs": []
+  }
 ] as const
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// IClawttackArenaCallback
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-export const iClawttackArenaCallbackAbi = [
-  {
-    type: 'function',
-    inputs: [
-      { name: 'battleId', internalType: 'uint256', type: 'uint256' },
-      { name: 'winnerId', internalType: 'uint256', type: 'uint256' },
-      { name: 'loserId', internalType: 'uint256', type: 'uint256' },
-      { name: 'stake', internalType: 'uint256', type: 'uint256' },
-    ],
-    name: 'settleBattle',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
-] as const
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// IClawttackArenaView
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 export const iClawttackArenaViewAbi = [
   {
-    type: 'function',
-    inputs: [],
-    name: 'MAX_ELO_DIFF',
-    outputs: [{ name: '', internalType: 'uint32', type: 'uint32' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [],
-    name: 'MIN_RATED_STAKE',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
-  },
-  {
-    type: 'function',
-    inputs: [{ name: 'agentId', internalType: 'uint256', type: 'uint256' }],
-    name: 'agents',
-    outputs: [
-      { name: 'owner', internalType: 'address', type: 'address' },
-      { name: 'eloRating', internalType: 'uint32', type: 'uint32' },
-      { name: 'totalWins', internalType: 'uint32', type: 'uint32' },
-      { name: 'totalLosses', internalType: 'uint32', type: 'uint32' },
-      { name: 'totalStaked', internalType: 'uint256', type: 'uint256' },
-      { name: 'totalWon', internalType: 'uint256', type: 'uint256' },
+    "type": "function",
+    "name": "MIN_RATED_STAKE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    stateMutability: 'view',
+    "stateMutability": "view"
   },
   {
-    type: 'function',
-    inputs: [{ name: 'index', internalType: 'uint8', type: 'uint8' }],
-    name: 'getVopByIndex',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
+    "type": "function",
+    "name": "agents",
+    "inputs": [
+      {
+        "name": "agentId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "eloRating",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "totalWins",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "totalLosses",
+        "type": "uint32",
+        "internalType": "uint32"
+      },
+      {
+        "name": "totalStaked",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalWon",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
-    type: 'function',
-    inputs: [],
-    name: 'getVopCount',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
+    "type": "function",
+    "name": "gameConfig",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ClawttackTypes.GameConfig",
+        "components": [
+          {
+            "name": "initialBank",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "nccRefundBps",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "nccFailPenalty",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "bankDecayBps",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "minTurnInterval",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "maxTurnTimeout",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "vopPenaltyBase",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "defaultEloRating",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "maxEloDiff",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "warmupBlocks",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "maxJokers",
+            "type": "uint8",
+            "internalType": "uint8"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
   },
   {
-    type: 'function',
-    inputs: [{ name: 'index', internalType: 'uint8', type: 'uint8' }],
-    name: 'isVopActive',
-    outputs: [{ name: '', internalType: 'bool', type: 'bool' }],
-    stateMutability: 'view',
+    "type": "function",
+    "name": "getVopByIndex",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
-    type: 'function',
-    inputs: [],
-    name: 'owner',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
+    "type": "function",
+    "name": "getVopCount",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
-    type: 'function',
-    inputs: [],
-    name: 'protocolFeeRate',
-    outputs: [{ name: '', internalType: 'uint256', type: 'uint256' }],
-    stateMutability: 'view',
+    "type": "function",
+    "name": "isVopActive",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
-    type: 'function',
-    inputs: [],
-    name: 'wordDictionary',
-    outputs: [{ name: '', internalType: 'address', type: 'address' }],
-    stateMutability: 'view',
+    "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
   },
+  {
+    "type": "function",
+    "name": "protocolFeeBps",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "wordDictionary",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  }
 ] as const
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// IClawttackBattle
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 export const iClawttackBattleAbi = [
   {
-    type: 'function',
-    inputs: [
-      { name: '_arena', internalType: 'address', type: 'address' },
-      { name: '_battleId', internalType: 'uint256', type: 'uint256' },
-      { name: '_challengerId', internalType: 'uint256', type: 'uint256' },
-      { name: '_challengerOwner', internalType: 'address', type: 'address' },
+    "type": "function",
+    "name": "initialize",
+    "inputs": [
       {
-        name: '_config',
-        internalType: 'struct ClawttackTypes.BattleConfig',
-        type: 'tuple',
-        components: [
-          { name: 'stake', internalType: 'uint256', type: 'uint256' },
-          { name: 'warmupBlocks', internalType: 'uint32', type: 'uint32' },
-          { name: 'targetAgentId', internalType: 'uint256', type: 'uint256' },
-          { name: 'maxJokers', internalType: 'uint8', type: 'uint8' },
-        ],
+        "name": "_arena",
+        "type": "address",
+        "internalType": "address"
       },
+      {
+        "name": "_battleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_challengerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_challengerOwner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_config",
+        "type": "tuple",
+        "internalType": "struct ClawttackTypes.BattleConfig",
+        "components": [
+          {
+            "name": "stake",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "targetAgentId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "inviteHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
     ],
-    name: 'initialize',
-    outputs: [],
-    stateMutability: 'nonpayable',
-  },
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  }
 ] as const
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// IVerifiableOraclePrimitive
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 export const iVerifiableOraclePrimitiveAbi = [
   {
-    type: 'function',
-    inputs: [],
-    name: 'name',
-    outputs: [{ name: '', internalType: 'string', type: 'string' }],
-    stateMutability: 'pure',
-  },
-  {
-    type: 'function',
-    inputs: [
-      { name: 'params', internalType: 'bytes', type: 'bytes' },
-      { name: 'solution', internalType: 'bytes', type: 'bytes' },
-      { name: 'referenceBlock', internalType: 'uint256', type: 'uint256' },
+    "type": "function",
+    "name": "name",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
     ],
-    name: 'verify',
-    outputs: [{ name: 'isValid', internalType: 'bool', type: 'bool' }],
-    stateMutability: 'view',
+    "stateMutability": "pure"
   },
   {
-    type: 'error',
-    inputs: [{ name: 'reason', internalType: 'string', type: 'string' }],
-    name: 'VerificationFailed',
+    "type": "function",
+    "name": "verify",
+    "inputs": [
+      {
+        "name": "params",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "solution",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "referenceBlock",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "isValid",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
+  {
+    "type": "error",
+    "name": "VerificationFailed",
+    "inputs": [
+      {
+        "name": "reason",
+        "type": "string",
+        "internalType": "string"
+      }
+    ]
+  }
 ] as const
+

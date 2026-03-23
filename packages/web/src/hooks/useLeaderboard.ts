@@ -6,13 +6,33 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { createPublicClient, http, type Address } from 'viem'
-import { baseSepolia } from 'viem/chains'
-import { CONTRACTS } from '../config/wagmi'
+import { createPublicClient, http, defineChain, type Address } from 'viem'
+import { base, baseSepolia } from 'viem/chains'
+import { CONTRACTS, deployment } from '../config/wagmi'
+
+// Custom Anvil chain with multicall3 (viem's built-in `foundry` chain lacks it)
+const anvilLocal = defineChain({
+  id: 31337,
+  name: 'Anvil',
+  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['http://127.0.0.1:8545'] } },
+  contracts: {
+    multicall3: { address: '0xcA11bde05977b3631167028862bE2a173976CA11' },
+  },
+})
+
+function resolveChain(chainId: number) {
+  switch (chainId) {
+    case 8453: return base
+    case 84532: return baseSepolia
+    case 31337: return anvilLocal
+    default: return baseSepolia
+  }
+}
 
 const client = createPublicClient({
-  chain: baseSepolia,
-  transport: http('https://sepolia.base.org', {
+  chain: resolveChain(deployment.chainId),
+  transport: http(deployment.rpc, {
     retryCount: 3,
     retryDelay: 1000,
   }),

@@ -22,15 +22,11 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     uint256 public constant MIN_RATED_STAKE          = 0.001 ether;
     uint256 public constant MAX_CREATION_FEE         = 0.01 ether;
     uint256 public constant MAX_REGISTRATION_FEE     = 0.1 ether;
-    uint256 public constant MAX_PROTOCOL_FEE_RATE    = 1_000;
 
-    uint32 public constant DEFAULT_ELO_RATING        = 1500;
-    uint32 public constant MAX_ELO_DIFF              = 300;
+    uint256 public constant MAX_PROTOCOL_FEE_BPS     = 30_00;
 
-    uint32 public constant MIN_WARMUP_BLOCKS         = 15;
-    uint32 public constant MAX_WARMUP_BLOCKS         = 150;
+    uint256 public constant BPS                      = 100_00;
 
-    uint8  public constant MAX_JOKERS                = 2;
 
     // ─── Immutables ──────────────────────────────────────────────────────────
 
@@ -40,14 +36,18 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
     address public battleImplementation;
 
+    uint256 public minRatedStake;
     uint256 public agentRegistrationFee;
     uint256 public battleCreationFee;
-    uint256 public protocolFeeRate;
+
+    uint256 public protocolFeeBps;
 
     uint256 public protocolFees;
+    uint256 public totalVolume;
 
-    uint256 public battlesCount;
     uint256 public agentsCount;
+    uint256 public battlesCount;
+    uint256 public ratedBattlesCount;
 
     mapping(uint256 => ClawttackTypes.AgentProfile) public agents;
     mapping(uint256 => address) public battles;
@@ -58,22 +58,50 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     mapping(address => bool) public isVopRegistered;
     mapping(uint8 => bool) public deactivatedVOPs;
 
+    // ─── Game Config ─────────────────────────────────────────────────────────
+
+    ClawttackTypes.GameConfig public gameConfig;
+
     // ─── Events ──────────────────────────────────────────────────────────────
 
     event AgentRegistered(uint256 indexed agentId, address indexed owner);
-    event BattleCreated(uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint256 targetAgentId);
+    event BattleCreated(uint256 indexed battleId, uint256 indexed challengerId, uint256 stake, uint256 targetAgentId, bytes32 inviteHash);
     event RatingUpdated(uint256 indexed agentId, uint32 newRating);
-    event ProtocolFeeUpdated(uint256 oldRate, uint256 newRate);
+
+    event MinRatedStakeUpdated(uint256 oldStake, uint256 newStake);
     event BattleCreationFeeUpdated(uint256 oldFee, uint256 newFee);
     event AgentRegistrationFeeUpdated(uint256 oldFee, uint256 newFee);
+    event ProtocolFeeBpsUpdated(uint256 oldRate, uint256 newRate);
+
     event VOPAdded(address indexed vopAddress);
     event VOPDeactivated(uint8 indexed index, address indexed vopAddress);
+
+    event GameConfigUpdated();
+    event FeesWithdrawn(address indexed to, uint256 amount);
 
     // ─── Constructor / Receive ───────────────────────────────────────────────
 
     constructor(address _wordDictionary) Ownable(msg.sender) {
         if (_wordDictionary == address(0)) revert ClawttackErrors.InvalidCall();
         wordDictionary = _wordDictionary;
+
+        // Initialize with default balanced values
+        gameConfig = ClawttackTypes.GameConfig({
+            initialBank: 400,
+            nccRefundBps: 5000,
+            nccFailPenalty: 20,
+            bankDecayBps: 200,
+
+            minTurnInterval: 5,
+            maxTurnTimeout: 80,
+            vopPenaltyBase: 15,
+
+            defaultEloRating: 1500,
+            maxEloDiff: 300,
+
+            warmupBlocks: 30,
+            maxJokers: 2
+        });
     }
 
     receive() external payable {
@@ -85,6 +113,12 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     function setBattleImplementation(address _impl) external onlyOwner {
         if (_impl == address(0)) revert ClawttackErrors.InvalidCall();
         battleImplementation = _impl;
+    }
+
+    function setMinRatedStake(uint256 _stake) external onlyOwner {
+        if (_stake < MIN_RATED_STAKE) revert ClawttackErrors.ConfigOutOfBounds();
+        emit MinRatedStakeUpdated(minRatedStake, _stake);
+        minRatedStake = _stake;
     }
 
     function setBattleCreationFee(uint256 _fee) external onlyOwner {
@@ -100,9 +134,18 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
     }
 
     function setProtocolFeeRate(uint256 _rate) external onlyOwner {
-        if (_rate > MAX_PROTOCOL_FEE_RATE) revert ClawttackErrors.FeeTooHigh();
-        emit ProtocolFeeUpdated(protocolFeeRate, _rate);
-        protocolFeeRate = _rate;
+        if (_rate > MAX_PROTOCOL_FEE_BPS) revert ClawttackErrors.FeeTooHigh();
+        emit ProtocolFeeBpsUpdated(protocolFeeBps, _rate);
+        protocolFeeBps = _rate;
+    }
+
+    function setGameConfig(ClawttackTypes.GameConfig calldata _config) external onlyOwner {
+        if (_config.initialBank == 0) revert ClawttackErrors.ConfigOutOfBounds();
+        if (_config.nccRefundBps > BPS) revert ClawttackErrors.ConfigOutOfBounds();
+        if (_config.bankDecayBps > BPS) revert ClawttackErrors.ConfigOutOfBounds();
+        
+        gameConfig = _config;
+        emit GameConfigUpdated();
     }
 
     function withdrawFees(address payable to) external onlyOwner {
@@ -112,6 +155,8 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
         (bool success,) = to.call{value: amount}("");
         if (!success) revert ClawttackErrors.TransferFailed();
+
+        emit FeesWithdrawn(to, amount);
     }
 
     // ─── External: VOP Management ────────────────────────────────────────────
@@ -129,8 +174,6 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         emit VOPDeactivated(index, vopRegistry[index]);
     }
 
-    uint256 public totalVolume; // Cumulative ETH staked across all battles
-
     // ─── External: Core Protocol ─────────────────────────────────────────────
 
     /**
@@ -145,7 +188,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
         agents[agentId] = ClawttackTypes.AgentProfile({
             owner: msg.sender,
-            eloRating: DEFAULT_ELO_RATING,
+            eloRating: gameConfig.defaultEloRating,
             totalWins: 0,
             totalLosses: 0,
             totalStaked: 0,
@@ -172,16 +215,19 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
         if (agents[challengerId].owner == address(0)) revert ClawttackErrors.NotParticipant();
         if (agents[challengerId].owner != msg.sender) revert ClawttackErrors.NotAgentOwner();
 
-        if (config.maxJokers > MAX_JOKERS) revert ClawttackErrors.ConfigOutOfBounds();
-        if (config.warmupBlocks < MIN_WARMUP_BLOCKS || config.warmupBlocks > MAX_WARMUP_BLOCKS) {
-            revert ClawttackErrors.ConfigOutOfBounds();
-        }
-
         if (msg.value != config.stake + battleCreationFee) revert ClawttackErrors.InsufficientValue();
         protocolFees += battleCreationFee;
 
+        // Validate targetAgentId if set
+        if (config.targetAgentId != 0) {
+            if (agents[config.targetAgentId].owner == address(0)) revert ClawttackErrors.InvalidTargetAgent();
+        }
+
         uint256 battleId;
         unchecked { battleId = ++battlesCount; }
+        if (config.stake >= minRatedStake) {
+            unchecked { ratedBattlesCount++; }
+        }
 
         battleAddress = Clones.clone(battleImplementation);
         battles[battleId] = battleAddress;
@@ -193,7 +239,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
             if (!success) revert ClawttackErrors.TransferFailed();
         }
 
-        emit BattleCreated(battleId, challengerId, config.stake, config.targetAgentId);
+        emit BattleCreated(battleId, challengerId, config.stake, config.targetAgentId, config.inviteHash);
     }
 
     /**
@@ -216,7 +262,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
 
         _recordBattleOutcome(winnerId, loserId, battleStake);
 
-        if (battleStake >= MIN_RATED_STAKE) {
+        if (battleStake >= minRatedStake) {
             _updateElo(winnerId, loserId);
         }
     }
@@ -237,7 +283,7 @@ contract ClawttackArena is Ownable2Step, ReentrancyGuard {
             agents[winnerId].totalStaked += stake;
             agents[loserId].totalStaked  += stake;
             totalVolume += stake * 2;
-            uint256 protocolCut = (stake * 2 * protocolFeeRate) / 10000;
+            uint256 protocolCut = (stake * 2 * protocolFeeBps) / BPS;
             agents[winnerId].totalWon += stake - (protocolCut / 2);
         }
     }

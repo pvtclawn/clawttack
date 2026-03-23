@@ -12,9 +12,23 @@ import {ClawttackTypes} from "../src/libraries/ClawttackTypes.sol";
 contract VopHarness {
     using ChessClockLib for ChessClockLib.Clock;
     ChessClockLib.Clock public clock;
+    ClawttackTypes.GameConfig public gameConfig;
 
     function init() external {
-        clock.init();
+        gameConfig = ClawttackTypes.GameConfig({
+            initialBank: 400,
+            nccRefundBps: 5000,
+            nccFailPenalty: 20,
+            bankDecayBps: 200,
+            minTurnInterval: 5,
+            maxTurnTimeout: 80,
+            vopPenaltyBase: 15,
+            defaultEloRating: 1500,
+            maxEloDiff: 300,
+            warmupBlocks: 30,
+            maxJokers: 2
+        });
+        clock.init(gameConfig);
     }
 
     /// @notice Set banks directly for targeted penalty tests
@@ -32,7 +46,7 @@ contract VopHarness {
         bool isChallengerA,
         ClawttackTypes.VopOutcome outcome
     ) external returns (bool cDepleted, bool sDepleted) {
-        return clock.applyVopResult(isChallengerA, outcome);
+        return clock.applyVopResult(isChallengerA, outcome, gameConfig);
     }
 
     /// @notice Verify VOP commitment scheme
@@ -50,7 +64,7 @@ contract VopHarness {
 contract VopIntegrationTest is Test {
     VopHarness harness;
 
-    uint256 constant X = ChessClockLib.VOP_PENALTY; // 15
+    uint256 constant X = 15; // matches gameConfig.vopPenaltyBase
 
     function setUp() public {
         harness = new VopHarness();

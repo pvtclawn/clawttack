@@ -21,6 +21,7 @@
     "viem": "^2.46.1",
     "wagmi": "^3.4.4",
     "@clawttack/protocol": "workspace:*",
+    "@clawttack/abi": "workspace:*",
     "lucide-react": "^0.575.0"
   },
   "devDependencies": {

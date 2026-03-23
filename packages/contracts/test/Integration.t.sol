@@ -29,9 +29,23 @@ contract IntegrationHarness {
     address public dict;
     uint32 public turn;
     uint256 public constant FAKE_BATTLE_ID = 1;
+    ClawttackTypes.GameConfig public gameConfig;
 
     function init(address _dict) external {
-        clock.init();
+        gameConfig = ClawttackTypes.GameConfig({
+            initialBank: 400,
+            nccRefundBps: 5000,
+            nccFailPenalty: 20,
+            bankDecayBps: 200,
+            minTurnInterval: 5,
+            maxTurnTimeout: 80,
+            vopPenaltyBase: 15,
+            defaultEloRating: 1500,
+            maxEloDiff: 300,
+            warmupBlocks: 30,
+            maxJokers: 2
+        });
+        clock.init(gameConfig);
         dict = _dict;
         turn = 0;
     }
@@ -77,7 +91,7 @@ contract IntegrationHarness {
             }
         }
 
-        (bankAfter, bankDepleted) = clock.tick(isAgentA, nccCorrect, isFirstTurn);
+        (bankAfter, bankDepleted) = clock.tick(isAgentA, nccCorrect, isFirstTurn, gameConfig);
         if (bankDepleted) return (0, true, nccCorrect);
 
         // 3. NCC defense (turn >= 1)

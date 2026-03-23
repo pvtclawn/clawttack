@@ -1,0 +1,103 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Clawttack Hermes Agent — Real Agent Docker Image
+#
+# Installs the real Hermes Agent (Python) with its full cognitive pipeline:
+#   • Skills system (loads SKILL.md natively)
+#   • Gateway API server (OpenAI-compatible on port 8642)
+#   • Terminal tools (pty, subprocess)
+#   • Memory and context management
+#   • LLM provider routing (OpenRouter, Codex OAuth, Anthropic, etc.)
+#
+# The Gateway's API server processes each turn through the agent's full
+# reasoning chain, making the agent genuinely vulnerable to PI/SE attacks
+# embedded in opponent narratives.
+#
+# Build:
+#   docker build -f scripts/agent/docker/Dockerfile.hermes -t clawttack-hermes .
+#
+# Run:
+#   docker run --rm --network host \
+#     -e RPC_URL=http://127.0.0.1:8545 \
+#     -e FIGHTER_PRIVATE_KEY=0x... \
+#     clawttack-hermes
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Stage 1: Hermes Agent (Python) ──────────────────────────────────────────
+FROM python:3.11-slim AS hermes-build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git build-essential curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv (fast Python package manager)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
+
+# Clone and install Hermes Agent
+RUN git clone --depth 1 https://github.com/NousResearch/hermes-agent.git /opt/hermes-agent
+WORKDIR /opt/hermes-agent
+RUN uv pip install --system -e ".[all]"
+
+# ── Stage 2: Final Image (Python + Bun) ────────────────────────────────────
+FROM python:3.11-slim
+
+# Install Bun + system deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates git unzip \
+    && curl -fsSL https://bun.sh/install | bash \
+    && rm -rf /var/lib/apt/lists/*
+ENV PATH="/root/.bun/bin:$PATH"
+
+# Copy Python environment from build stage
+COPY --from=hermes-build /usr/local/lib/python3.11 /usr/local/lib/python3.11
+COPY --from=hermes-build /usr/local/bin /usr/local/bin
+COPY --from=hermes-build /opt/hermes-agent /opt/hermes-agent
+
+# Ensure hermes CLI is on PATH
+ENV PYTHONPATH="/opt/hermes-agent"
+
+# ── Install Clawttack SKILL.md into Hermes skills directory ─────────────────
+# Hermes loads skills from ~/.hermes/skills/<category>/<name>/SKILL.md
+RUN mkdir -p /root/.hermes/skills/web3/clawttack
+COPY scripts/agent/docker/SKILL.md /root/.hermes/skills/web3/clawttack/SKILL.md
+
+# ── Hermes Gateway config ──────────────────────────────────────────────────
+# Gateway reads ~/.hermes/config.yaml — platforms at top level, not nested
+RUN mkdir -p /root/.hermes && cat > /root/.hermes/config.yaml << 'EOF'
+# Hermes Agent config for Clawttack battles
+platforms:
+  api_server:
+    enabled: true
+    extra:
+      host: "127.0.0.1"
+      port: 8642
+
+# Skills to always activate in battle context
+skills:
+  active:
+    - clawttack
+EOF
+
+# ── Clawttack workspace ────────────────────────────────────────────────────
+WORKDIR /workspace
+
+# Copy and install Clawttack dependencies
+COPY package.json bun.lock* ./
+COPY packages/ ./packages/
+COPY scripts/ ./scripts/
+COPY tsconfig.base.json tsconfig.json wagmi.config.ts ./
+RUN bun install --frozen-lockfile 2>/dev/null || bun install
+
+# ── Entrypoint ──────────────────────────────────────────────────────────────
+COPY scripts/agent/docker/entrypoint-hermes.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Default env
+ENV BATTLE_STRATEGY_A=hermes
+ENV BATTLE_STRATEGY_B=smart-script
+ENV BATTLE_ROUNDS=1
+ENV HERMES_API_PORT=8642
+
+EXPOSE 8642
+
+ENTRYPOINT ["/entrypoint.sh"]

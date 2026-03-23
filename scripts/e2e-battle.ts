@@ -1,15 +1,16 @@
 #!/usr/bin/env bun
 /**
- * E2E Battle Test — Full lifecycle against local Anvil
+ * E2E Battle Test — Full lifecycle with actual turns against local Anvil
  *
  * Prerequisites: Run `bun run dev` first to deploy contracts.
  *
- * Tests: register agents → create battle → accept → play turns with
- * NCC + VOP + narratives → timeout → claim win → verify settlement.
+ * Flow: register agents → create battle → accept → wait warmup →
+ *       play 6 turns with NCC commit/defend/reveal + VOP commit/solve/reveal →
+ *       timeout → claim win → verify settlement + Elo.
  */
 
 import { createPublicClient, createWalletClient, http, encodePacked, keccak256, encodeAbiParameters, parseAbiParameters, toHex, type Address, type Hex } from 'viem'
-import { hardhat } from 'viem/chains'
+import { foundry } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
 import { clawttackArenaAbi, clawttackBattleAbi } from '../packages/abi/abi'
 import localDeployment from '../packages/abi/deployments/local.json'
@@ -23,9 +24,9 @@ const ARENA = localDeployment.contracts.arena as Address
 const ACCOUNT_A = privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80')
 const ACCOUNT_B = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d')
 
-const publicClient = createPublicClient({ chain: hardhat, transport: http(RPC) })
-const walletA = createWalletClient({ account: ACCOUNT_A, chain: hardhat, transport: http(RPC) })
-const walletB = createWalletClient({ account: ACCOUNT_B, chain: hardhat, transport: http(RPC) })
+const publicClient = createPublicClient({ chain: foundry, transport: http(RPC) })
+const walletA = createWalletClient({ account: ACCOUNT_A, chain: foundry, transport: http(RPC) })
+const walletB = createWalletClient({ account: ACCOUNT_B, chain: foundry, transport: http(RPC) })
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -39,19 +40,22 @@ function randomBytes32(): Hex {
   return toHex(bytes)
 }
 
+const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex
+const MIN_TURN_INTERVAL = 5   // must match ChessClockLib.MIN_TURN_INTERVAL
+
 /** Build NCC commitment: keccak256(abi.encodePacked(battleId, turnNumber, "NCC", salt, intendedIdx)) */
 function nccCommitment(battleId: bigint, turnNumber: number, salt: Hex, intendedIdx: number): Hex {
   return keccak256(encodePacked(
-    ['uint256', 'uint32', 'string', 'bytes32', 'uint8'],
-    [battleId, turnNumber, 'NCC', salt, intendedIdx]
+    ['uint256', 'uint256', 'string', 'bytes32', 'uint8'],
+    [battleId, BigInt(turnNumber), 'NCC', salt, intendedIdx]
   ))
 }
 
 /** Build VOP commitment: keccak256(abi.encodePacked(battleId, turnNumber, "VOP", salt, vopIndex, instanceCommit)) */
 function vopCommitment(battleId: bigint, turnNumber: number, salt: Hex, vopIndex: number, instanceCommit: Hex): Hex {
   return keccak256(encodePacked(
-    ['uint256', 'uint32', 'string', 'bytes32', 'uint8', 'bytes32'],
-    [battleId, turnNumber, 'VOP', salt, vopIndex, instanceCommit]
+    ['uint256', 'uint256', 'string', 'bytes32', 'uint8', 'bytes32'],
+    [battleId, BigInt(turnNumber), 'VOP', salt, vopIndex, instanceCommit]
   ))
 }
 
@@ -67,8 +71,8 @@ async function getWord(index: number): Promise<string> {
 }
 
 /**
- * Build a narrative containing the target word and 4 BIP39 candidate words at trackable offsets.
- * Returns the narrative string and the byte offsets of each candidate word.
+ * Build a narrative containing the target word and 4 candidate BIP39 words at tracked offsets.
+ * Narrative must be ≥64 bytes, ≤256 bytes, contain targetWord on word boundary, avoid poisonWord.
  */
 async function buildNarrative(
   targetWord: string,
@@ -77,57 +81,72 @@ async function buildNarrative(
 ): Promise<{ narrative: string; offsets: [number, number, number, number] }> {
   const words = await Promise.all(candidateIndices.map(i => getWord(i)))
   
-  // Build a narrative ≥64 bytes containing target word and 4 candidates
-  // Format: "The {target} calls forth {word0} and {word1} across the {word2} realm of {word3} in this battle arena."
-  let narrative = `The ${targetWord} calls forth ${words[0]} and ${words[1]} across the ${words[2]} realm of ${words[3]} in this battle arena saga.`
+  // Build narrative: "{target} amid {w0} and {w1} across the {w2} realm of {w3} in battle"
+  let narrative = `The ${targetWord} amid ${words[0]} and ${words[1]} across the ${words[2]} realm of ${words[3]} in this arena.`
   
-  // Pad if needed to reach 64 bytes minimum
+  // Pad to ≥64 bytes
   while (Buffer.byteLength(narrative) < 64) {
     narrative += ' Fight on.'
   }
   
-  // Verify poison word isn't present (case-insensitive)
-  if (poisonWord && narrative.toLowerCase().includes(poisonWord.toLowerCase())) {
-    throw new Error(`Narrative contains poison word "${poisonWord}"!`)
+  // Truncate to ≤256 bytes
+  if (Buffer.byteLength(narrative) > 256) {
+    narrative = narrative.slice(0, 256)
   }
   
-  // Find byte offsets
-  const narrativeBytes = Buffer.from(narrative)
+  // Verify poison word isn't present (case-insensitive)
+  if (poisonWord && narrative.toLowerCase().includes(poisonWord.toLowerCase())) {
+    // Replace narrative to avoid poison — simple fallback
+    narrative = `The ${targetWord} summons ${words[0]} with ${words[1]} near ${words[2]} at ${words[3]} now.`
+    while (Buffer.byteLength(narrative) < 64) narrative += ' Continue.'
+  }
+  
+  // Find byte offsets for each candidate word
   const offsets: [number, number, number, number] = [0, 0, 0, 0]
   for (let i = 0; i < 4; i++) {
-    const wordLower = words[i]!.toLowerCase()
-    const idx = narrative.toLowerCase().indexOf(wordLower)
-    if (idx === -1) throw new Error(`Word "${words[i]}" not found in narrative`)
+    const idx = narrative.toLowerCase().indexOf(words[i]!.toLowerCase())
+    if (idx === -1) throw new Error(`Word "${words[i]}" not found in narrative: "${narrative}"`)
     offsets[i] = idx
   }
 
   return { narrative, offsets }
 }
 
-/** Mine a VOP solution (brute-force nonce for leading zero bits) */
-async function solveHashPreimageVop(blockNumber: bigint): Promise<bigint> {
-  const blockHash = await publicClient.getBlock({ blockNumber }).then(b => b.hash)
-  const difficulty = 8 + Number(blockNumber % 4n)
-
-  for (let nonce = 0n; nonce < 100_000n; nonce++) {
-    const hash = keccak256(encodeAbiParameters(
-      parseAbiParameters('bytes32, uint256'),
-      [blockHash, nonce]
-    ))
-    const val = BigInt(hash)
-    if (val >> BigInt(256 - difficulty) === 0n) {
-      return nonce
-    }
+/** Mine exactly N blocks on Anvil */
+async function mineBlocks(n: number) {
+  for (let i = 0; i < n; i++) {
+    await publicClient.request({ method: 'evm_mine' as any, params: [] as any })
   }
-  throw new Error('VOP solve failed — no nonce found')
 }
+
+// ─── Per-side NCC/VOP tracking ──────────────────────────────────────────────
+
+interface NccRecord {
+  salt: Hex
+  intendedIdx: number
+  commitTurn: number   // the turn number when this was committed
+}
+
+interface VopRecord {
+  salt: Hex
+  vopIndex: number
+  commitTurn: number
+}
+
+// Each "side" (A or B) stores their own pending NCC/VOP commits.
+// A player reveals their own commit from 2 turns ago on their next turn.
+// Turn 0 → Player X (commit), Turn 1 → Player Y (commit), Turn 2 → Player X (reveal Turn 0's commit + new commit), etc.
+let sideANcc: NccRecord | null = null
+let sideBNcc: NccRecord | null = null
+let sideAVop: VopRecord | null = null
+let sideBVop: VopRecord | null = null
 
 // ─── Main Test ──────────────────────────────────────────────────────────────
 
 async function main() {
   console.log('')
   console.log('═══════════════════════════════════════════════════════')
-  console.log('  🦞 Clawttack E2E Battle Test')
+  console.log('  🦞 Clawttack E2E Battle Test (with turns)')
   console.log('═══════════════════════════════════════════════════════')
   console.log(`  Arena: ${ARENA}`)
   console.log(`  RPC:   ${RPC}`)
@@ -157,154 +176,151 @@ async function main() {
   // ── 2. Create battle ───────────────────────────────────────────────────
   console.log('[2/7] Creating battle...')
   
-  const STAKE = 0n // Zero stake for testing
+  const STAKE = 0n
   const config = {
     stake: STAKE,
-    warmupBlocks: 15,
     targetAgentId: agentIdB,
-    maxJokers: 2,
+    inviteHash: '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`,
   }
 
   const battleTxHash = await walletA.writeContract({
     address: ARENA, abi: clawttackArenaAbi, functionName: 'createBattle',
     args: [agentIdA, config], value: STAKE,
   })
-  const battleReceipt = await publicClient.waitForTransactionReceipt({ hash: battleTxHash })
+  await publicClient.waitForTransactionReceipt({ hash: battleTxHash })
   
-  // Read battle address from battlesCount
   const battlesCount = await publicClient.readContract({
     address: ARENA, abi: clawttackArenaAbi, functionName: 'battlesCount',
   })
   const battleAddr = await publicClient.readContract({
     address: ARENA, abi: clawttackArenaAbi, functionName: 'battles',
     args: [battlesCount],
-  })
+  }) as Address
   log('✅', `Battle created at ${battleAddr}`)
 
-  const BATTLE = battleAddr as Address
+  const BATTLE = battleAddr
 
   // ── 3. Accept battle ───────────────────────────────────────────────────
   console.log('[3/7] Accepting battle...')
   
   const acceptTx = await walletB.writeContract({
     address: BATTLE, abi: clawttackBattleAbi, functionName: 'acceptBattle',
-    args: [agentIdB], value: STAKE,
+    args: [agentIdB, '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`], value: STAKE,
   })
   await publicClient.waitForTransactionReceipt({ hash: acceptTx })
   log('✅', 'Battle accepted')
 
-  // Read initial state
   const firstMoverA = await publicClient.readContract({
     address: BATTLE, abi: clawttackBattleAbi, functionName: 'firstMoverA',
-  })
+  }) as boolean
   const battleId = await publicClient.readContract({
     address: BATTLE, abi: clawttackBattleAbi, functionName: 'battleId',
-  })
+  }) as bigint
   const startBlock = await publicClient.readContract({
     address: BATTLE, abi: clawttackBattleAbi, functionName: 'startBlock',
-  })
+  }) as bigint
   log('ℹ️', `First mover A: ${firstMoverA}, battleId: ${battleId}, startBlock: ${startBlock}`)
 
   // ── 4. Wait for warmup ─────────────────────────────────────────────────
   console.log('[4/7] Waiting for warmup...')
 
-  // Mine blocks until past startBlock
   let currentBlock = await publicClient.getBlockNumber()
-  while (currentBlock < BigInt(startBlock)) {
-    await publicClient.request({ method: 'evm_mine' as any, params: [] })
-    currentBlock = await publicClient.getBlockNumber()
+  const blocksToMine = Number(startBlock) - Number(currentBlock) + 1
+  if (blocksToMine > 0) {
+    await mineBlocks(blocksToMine)
   }
-  log('✅', `Past warmup (block ${currentBlock})`)
+  currentBlock = await publicClient.getBlockNumber()
+  log('✅', `Past warmup (block ${currentBlock}, startBlock was ${startBlock})`)
 
   // ── 5. Play turns ──────────────────────────────────────────────────────
   console.log('[5/7] Playing turns...')
 
-  // Track NCC state for reveals
-  const pendingNcc: { salt: Hex; intendedIdx: number; turnNumber: number }[] = []
-  const pendingVop: { salt: Hex; vopIndex: number; turnNumber: number }[] = []
+  const NUM_TURNS = 6
+  const CANDIDATE_SETS: [number, number, number, number][] = [
+    [100, 200, 300, 400],
+    [500, 600, 700, 800],
+    [900, 1000, 1100, 1200],
+    [101, 201, 301, 401],
+    [501, 601, 701, 801],
+    [901, 1001, 1101, 1201],
+  ]
+  const POISON_WORDS = ['zephyr', 'quantum', 'nebula', 'cipher', 'primal', 'vortex']
 
-  // We'll play 4 turns (0, 1, 2, 3) to exercise NCC reveal + VOP reveal
-  for (let turn = 0; turn < 4; turn++) {
+  for (let turn = 0; turn < NUM_TURNS; turn++) {
+    // Determine whose turn it is
     const isPlayerATurn = (turn % 2 === 0) ? firstMoverA : !firstMoverA
     const wallet = isPlayerATurn ? walletA : walletB
-    const account = isPlayerATurn ? ACCOUNT_A : ACCOUNT_B
     const label = isPlayerATurn ? 'A' : 'B'
 
-    // Read current state
+    // Mine exactly MIN_TURN_INTERVAL blocks to satisfy the clock
+    await mineBlocks(MIN_TURN_INTERVAL + 1)
+
+    // Read current target word
     const targetWordIndex = await publicClient.readContract({
       address: BATTLE, abi: clawttackBattleAbi, functionName: 'targetWordIndex',
-    })
+    }) as number
     const targetWord = await getWord(targetWordIndex)
-    const poisonWord = turn > 0
+    
+    // Read poison word (empty on turn 0)
+    const currentPoisonWord = turn > 0
       ? await publicClient.readContract({
           address: BATTLE, abi: clawttackBattleAbi, functionName: 'poisonWord',
         }) as string
       : ''
 
-    // Pick 4 random distinct BIP39 candidate indices (different from target)
-    const candidates: [number, number, number, number] = [100, 200, 300, 400]
-
     // Build narrative
-    const { narrative, offsets } = await buildNarrative(targetWord, candidates, poisonWord)
+    const candidates = CANDIDATE_SETS[turn]!
+    const { narrative, offsets } = await buildNarrative(targetWord, candidates, currentPoisonWord)
 
-    // NCC Attack
+    // ── NCC Attack (every turn) ──
     const nccSalt = randomBytes32()
-    const nccIdx = 0 // Always pick first candidate as intended answer
+    const nccIdx = turn % 4  // Vary the intended answer
     const commitment = nccCommitment(battleId, turn, nccSalt, nccIdx)
 
-    // VOP Commit (always index 0 = HashPreimage, simple VOP)
+    // ── NCC Reveal (turn ≥ 2, reveal my own commit from 2 turns ago) ──
+    let nccReveal = { salt: ZERO_BYTES32, intendedIdx: 0 }
+    if (turn >= 2) {
+      const myPrevNcc = isPlayerATurn ? sideANcc : sideBNcc
+      if (myPrevNcc) {
+        nccReveal = { salt: myPrevNcc.salt, intendedIdx: myPrevNcc.intendedIdx }
+        log('🔓', `  NCC reveal: turn ${myPrevNcc.commitTurn}'s commit (intendedIdx=${myPrevNcc.intendedIdx})`)
+      }
+    }
+
+    // ── NCC Defense (turn ≥ 1, guess opponent's intended answer) ──
+    const nccDefenseGuess = (turn + 1) % 4  // Just guess something
+
+    // ── VOP Commit (every turn) ──
     const vopSalt = randomBytes32()
-    const vopIdx = 0
-    const instanceCommit = '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex
+    const vopIdx = 0  // Always HashPreimage VOP
+    const instanceCommit = ZERO_BYTES32  // Simple VOP
     const vopCommit = vopCommitment(battleId, turn, vopSalt, vopIdx, instanceCommit)
 
-    // NCC Defense (turn >= 1)
-    const nccDefenseGuess = 0 // Just guess 0
-
-    // NCC Reveal (turn >= 2)
-    let nccReveal = { salt: '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex, intendedIdx: 0 }
-    if (turn >= 2) {
-      // Find our pending reveal from 2 turns ago
-      const prev = pendingNcc.find(p => p.turnNumber === turn - 2)
-      if (prev) {
-        nccReveal = { salt: prev.salt, intendedIdx: prev.intendedIdx }
-      }
-    }
-
-    // VOP Solve (turn >= 1) — solve opponent's previous VOP
+    // ── VOP Solve (turn ≥ 1, attempt to solve opponent's VOP from previous turn) ──
     let vopSolveData = { vopClaimedIndex: 0, solution: '0x' as Hex }
     if (turn >= 1) {
-      const prevVop = pendingVop.find(p => p.turnNumber === turn - 1)
-      if (prevVop) {
-        // Read the block number from the pending VOP to solve against
-        const oppVopStorage = isPlayerATurn
-          ? await publicClient.readContract({ address: BATTLE, abi: clawttackBattleAbi, functionName: 'pendingVopB' })
-          : await publicClient.readContract({ address: BATTLE, abi: clawttackBattleAbi, functionName: 'pendingVopA' })
-        
-        // Mine a block to have a fresh blockhash, then solve
-        await publicClient.request({ method: 'evm_mine' as any, params: [] })
-        
-        // Just claim index 0 with a dummy solution — we don't need to actually solve for this test
-        vopSolveData = {
-          vopClaimedIndex: prevVop.vopIndex,
-          solution: encodeAbiParameters(parseAbiParameters('uint256'), [42n]),
-        }
+      // We claim the VOP index is 0 (HashPreimage) with a dummy solution
+      // The solver won't pass verification, but that's OK — it just costs bank penalty
+      vopSolveData = {
+        vopClaimedIndex: 0,
+        solution: encodeAbiParameters(parseAbiParameters('uint256'), [42n]),
       }
     }
 
-    // VOP Reveal (turn >= 2)
-    let vopReveal = { vopSalt: '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex, vopIndex: 0 }
+    // ── VOP Reveal (turn ≥ 2, reveal my own VOP commit from 2 turns ago) ──
+    let vopReveal = { vopSalt: ZERO_BYTES32, vopIndex: 0 }
     if (turn >= 2) {
-      const prev = pendingVop.find(p => p.turnNumber === turn - 2)
-      if (prev) {
-        vopReveal = { vopSalt: prev.salt, vopIndex: prev.vopIndex }
+      const myPrevVop = isPlayerATurn ? sideAVop : sideBVop
+      if (myPrevVop) {
+        vopReveal = { vopSalt: myPrevVop.salt, vopIndex: myPrevVop.vopIndex }
+        log('🔓', `  VOP reveal: turn ${myPrevVop.commitTurn}'s commit (vopIdx=${myPrevVop.vopIndex})`)
       }
     }
 
     // Build TurnPayload
     const payload = {
       narrative,
-      customPoisonWord: 'xylophone', // Harmless poison word
+      customPoisonWord: POISON_WORDS[turn]!,
       nccAttack: {
         candidateWordIndices: candidates,
         candidateOffsets: offsets,
@@ -317,36 +333,45 @@ async function main() {
       vopReveal,
     }
 
-    // Mine to ensure min turn interval (5 blocks)
-    for (let i = 0; i < 6; i++) {
-      await publicClient.request({ method: 'evm_mine' as any, params: [] })
-    }
-
     // Submit turn
     try {
-      await wallet.writeContract({
+      const txHash = await wallet.writeContract({
         address: BATTLE,
         abi: clawttackBattleAbi,
         functionName: 'submitTurn',
         args: [payload],
       })
-      log('✅', `Turn ${turn} (${label}): "${narrative.slice(0, 50)}..."`)
+      await publicClient.waitForTransactionReceipt({ hash: txHash })
+
+      // Read updated banks
+      const bankA = await publicClient.readContract({
+        address: BATTLE, abi: clawttackBattleAbi, functionName: 'getBattleState',
+      }) as any[]
+      
+      log('✅', `Turn ${turn} (${label}): target="${targetWord}" | "${narrative.slice(0, 60)}..."`)
+      log('📊', `  Banks: A=${bankA[2]?.toString()}, B=${bankA[3]?.toString()}`)
     } catch (err: any) {
       log('❌', `Turn ${turn} (${label}) FAILED: ${err.shortMessage || err.message}`)
+      
       // Check if battle was settled during this turn
       const phase = await publicClient.readContract({
         address: BATTLE, abi: clawttackBattleAbi, functionName: 'phase',
       })
-      if (phase !== 1) { // 1 = Active
+      if (phase !== 1) {
         log('ℹ️', `Battle ended during turn ${turn} (phase: ${phase})`)
         break
       }
       throw err
     }
 
-    // Track NCC + VOP for reveals
-    pendingNcc.push({ salt: nccSalt, intendedIdx: nccIdx, turnNumber: turn })
-    pendingVop.push({ salt: vopSalt, vopIndex: vopIdx, turnNumber: turn })
+    // Store NCC + VOP commits for this side to reveal 2 turns later
+    if (isPlayerATurn) {
+      sideANcc = { salt: nccSalt, intendedIdx: nccIdx, commitTurn: turn }
+      sideAVop = { salt: vopSalt, vopIndex: vopIdx, commitTurn: turn }
+    } else {
+      sideBNcc = { salt: nccSalt, intendedIdx: nccIdx, commitTurn: turn }
+      sideBVop = { salt: vopSalt, vopIndex: vopIdx, commitTurn: turn }
+    }
   }
 
   // ── 6. Check state after turns ─────────────────────────────────────────
@@ -365,28 +390,24 @@ async function main() {
     // ── 7. Trigger timeout ───────────────────────────────────────────────
     console.log('[7/7] Testing timeout...')
 
-    // Mine enough blocks to exhaust the current player's bank (80 blocks = max timeout)
     log('⏳', 'Mining 90 blocks to trigger timeout...')
-    for (let i = 0; i < 90; i++) {
-      await publicClient.request({ method: 'evm_mine' as any, params: [] })
-    }
+    await mineBlocks(90)
 
-    // Determine who should claim timeout
     const turnNow = await publicClient.readContract({
       address: BATTLE, abi: clawttackBattleAbi, functionName: 'currentTurn',
-    })
+    }) as number
     const expectedA = (Number(turnNow) % 2 === 0) ? firstMoverA : !firstMoverA
-    const claimWallet = expectedA ? walletB : walletA // Opponent of expected mover claims
+    const claimWallet = expectedA ? walletB : walletA
     const claimLabel = expectedA ? 'B' : 'A'
 
     try {
-      await claimWallet.writeContract({
+      const claimTx = await claimWallet.writeContract({
         address: BATTLE, abi: clawttackBattleAbi, functionName: 'claimTimeoutWin',
       })
+      await publicClient.waitForTransactionReceipt({ hash: claimTx })
       log('✅', `Timeout claimed by ${claimLabel}`)
     } catch (err: any) {
       log('⚠️', `Timeout claim failed: ${err.shortMessage || err.message}`)
-      log('ℹ️', 'Battle may have already settled during turns')
     }
   } else {
     log('ℹ️', 'Battle already settled during turns')
@@ -402,13 +423,12 @@ async function main() {
   if (finalPhase === 2) { // Settled
     log('🏆', 'Battle settled successfully!')
     
-    // Check Elo was updated
     const agentA = await publicClient.readContract({
       address: ARENA, abi: clawttackArenaAbi, functionName: 'agents', args: [agentIdA],
-    })
+    }) as any[]
     const agentB = await publicClient.readContract({
       address: ARENA, abi: clawttackArenaAbi, functionName: 'agents', args: [agentIdB],
-    })
+    }) as any[]
     log('📊', `Agent A: elo=${agentA[1]}, W=${agentA[2]}, L=${agentA[3]}`)
     log('📊', `Agent B: elo=${agentB[1]}, W=${agentB[2]}, L=${agentB[3]}`)
     console.log('═══════════════════════════════════════════════════════')

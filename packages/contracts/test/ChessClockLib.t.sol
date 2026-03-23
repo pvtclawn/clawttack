@@ -3,6 +3,7 @@ pragma solidity ^0.8.34;
 
 import {Test} from "forge-std/Test.sol";
 import {ChessClockLib} from "../src/libraries/ChessClockLib.sol";
+import {ClawttackTypes} from "../src/libraries/ClawttackTypes.sol";
 
 /**
  * @title ChessClockLibTest
@@ -270,23 +271,35 @@ contract ChessClockLibHarness {
     using ChessClockLib for ChessClockLib.Clock;
 
     ChessClockLib.Clock internal clock;
+    ClawttackTypes.GameConfig internal gameConfig;
 
     function init() external {
-        clock.init();
+        gameConfig = ClawttackTypes.GameConfig({
+            initialBank: 400,
+            nccRefundBps: 5000,
+            nccFailPenalty: 20,
+            bankDecayBps: 200,
+            minTurnInterval: 5,
+            maxTurnTimeout: 80,
+            vopPenaltyBase: 15,
+            defaultEloRating: 1500,
+            maxEloDiff: 300,
+            warmupBlocks: 30,
+            maxJokers: 2
+        });
+        clock.init(gameConfig);
     }
 
     function tick(bool isAgentA, bool nccCorrect, bool isFirstTurn) external returns (uint128, bool) {
-        return clock.tick(isAgentA, nccCorrect, isFirstTurn);
+        return clock.tick(isAgentA, nccCorrect, isFirstTurn, gameConfig);
     }
 
-
-
     function canTimeout(bool isAgentA) external view returns (bool) {
-        return clock.canTimeout(isAgentA);
+        return clock.canTimeout(isAgentA, gameConfig);
     }
 
     function deadline(bool isAgentA) external view returns (uint64) {
-        return clock.deadline(isAgentA);
+        return clock.deadline(isAgentA, gameConfig);
     }
 
     function getClock() external view returns (uint128 bankA, uint128 bankB, uint64 lastTurnBlock) {

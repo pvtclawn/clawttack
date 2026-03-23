@@ -19,6 +19,7 @@ import "../src/vops/TimestampHashVOP.sol";
 import "../src/vops/CoinbaseHashVOP.sol";
 import "../src/vops/PopCountVOP.sol";
 import "../src/vops/FibHashVOP.sol";
+import "../src/vops/BitwiseNotVOP.sol";
 
 // Instance-aware VOPs (4)
 import "../src/vops/ArithmeticVOP.sol";
@@ -87,18 +88,18 @@ contract DeployV0 is Script {
         address[16] memory vops;
 
         // Simple VOPs (0-11)
-        vops[0]  = address(new HashPreimageVOP());
-        vops[1]  = address(new L1MetadataVOP());
-        vops[2]  = address(new MirrorHashVOP());
-        vops[3]  = address(new CascadeHashVOP());
-        vops[4]  = address(new PrimeModuloVOP());
-        vops[5]  = address(new XorFoldVOP());
-        vops[6]  = address(new EntropyMixVOP());
-        vops[7]  = address(new SequenceHashVOP());
-        vops[8]  = address(new TimestampHashVOP());
-        vops[9]  = address(new CoinbaseHashVOP());
-        vops[10] = address(new PopCountVOP());
-        vops[11] = address(new FibHashVOP());
+        vops[0]  = address(new L1MetadataVOP());
+        vops[1]  = address(new MirrorHashVOP());
+        vops[2]  = address(new CascadeHashVOP());
+        vops[3]  = address(new PrimeModuloVOP());
+        vops[4]  = address(new XorFoldVOP());
+        vops[5]  = address(new EntropyMixVOP());
+        vops[6]  = address(new SequenceHashVOP());
+        vops[7]  = address(new TimestampHashVOP());
+        vops[8]  = address(new CoinbaseHashVOP());
+        vops[9] = address(new PopCountVOP());
+        vops[10] = address(new FibHashVOP());
+        vops[11] = address(new BitwiseNotVOP());
 
         // Instance-aware VOPs (12-15)
         vops[12] = address(new ArithmeticVOP());
@@ -107,9 +108,9 @@ contract DeployV0 is Script {
         vops[15] = address(new PhraseHashVOP());
 
         string[16] memory names = [
-            "HashPreimage", "L1Metadata", "MirrorHash", "CascadeHash",
+            "L1Metadata", "MirrorHash", "CascadeHash",
             "PrimeModulo", "XorFold", "EntropyMix", "SequenceHash",
-            "TimestampHash", "CoinbaseHash", "PopCount", "FibHash",
+            "TimestampHash", "CoinbaseHash", "PopCount", "FibHash", "BitwiseNot",
             "Arithmetic", "KeywordHash", "Coordinate", "PhraseHash"
         ];
 

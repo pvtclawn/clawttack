@@ -30,13 +30,13 @@ library ClawttackTypes {
 
     enum ResultType {
         None,
-        COMPROMISE,         // ECDSA signature captured
-        INVALID_SOLUTION,   // VOP puzzle failed (unregistered index)
-        POISON_VIOLATION,   // Narrative contained opponent's poison word
-        TIMEOUT,            // Turn exceeded bank (chess clock)
-        BANK_EMPTY,         // Bank depleted to 0 via penalties + decay
-        NCC_REVEAL_FAILED,  // Mandatory NCC reveal not provided or invalid
-        VOP_REVEAL_FAILED   // Mandatory VOP reveal not provided or invalid
+        COMPROMISE,             // ECDSA signature captured
+        INVALID_SOLUTION,       // VOP puzzle failed (unregistered index)
+        POISON_VIOLATION,       // Narrative contained opponent's poison word
+        TIMEOUT,                // Turn exceeded bank (chess clock)
+        BANK_EMPTY,             // Bank depleted to 0 via penalties + decay
+        NCC_REVEAL_FAILED,      // Mandatory NCC reveal not provided or invalid
+        VOP_REVEAL_FAILED       // Mandatory VOP reveal not provided or invalid
     }
 
     // ─── VOP Outcome (used by ChessClockLib for penalty application) ────────
@@ -52,11 +52,24 @@ library ClawttackTypes {
 
     struct BattleConfig {
         uint256 stake;           // ETH stake per side
-        uint32  warmupBlocks;    // blocks before first turn allowed
-        uint256 targetAgentId;   // 0 = open challenge
-        uint8   maxJokers;       // joker (1024-byte) turns per agent
-        // Chess clock params are constants in ChessClockLib
-        // No maxTurns — bank decay guarantees termination
+        uint256 targetAgentId;   // 0 = open challenge, otherwise must match acceptor's agent ID
+        bytes32 inviteHash;      // 0 = open, otherwise keccak256(inviteSecret) — acceptor must prove knowledge
+    }
+
+    // ─── Game Config (Tunable Protocol Parameters) ──────────────────────────
+
+    struct GameConfig {
+        uint32 initialBank;      // Starting bank for chess clock (e.g. 400)
+        uint32 nccRefundBps;     // % of turn time refunded on NCC success in basis points (e.g. 5000)
+        uint32 nccFailPenalty;   // blocks deducted on NCC failure (e.g. 20)
+        uint32 bankDecayBps;     // % per turn in basis points (e.g. 200)
+        uint32 minTurnInterval;  // minimum blocks per turn (e.g. 5)
+        uint32 maxTurnTimeout;   // max blocks before timeout (e.g. 80)
+        uint32 vopPenaltyBase;   // base penalty unit for VOP mistakes (e.g. 15)
+        uint32 defaultEloRating; // Default Elo rating for new agents (e.g. 1500)
+        uint32 maxEloDiff;       // Maximum Elo difference for rated battles (e.g. 300)
+        uint32 warmupBlocks;     // blocks between acceptance and first turn (e.g. 30)
+        uint8  maxJokers;        // joker (1024-byte) turns per agent (e.g. 2)
     }
 
     // ─── NCC Attack (submitted by attacker each turn) ───────────────────────

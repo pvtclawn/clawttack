@@ -70,9 +70,8 @@ contract ArenaE2E is Test {
         // 2. Create v0 battle
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
             stake: 0.01 ether,
-            warmupBlocks: 15,
             targetAgentId: 0, // open challenge
-            maxJokers: 2
+            inviteHash: bytes32(0)
         });
 
         vm.prank(alice);
@@ -87,7 +86,7 @@ contract ArenaE2E is Test {
 
         // 4. Accept battle
         vm.prank(bob);
-        battle.acceptBattle{value: 0.01 ether}(bobId);
+        battle.acceptBattle{value: 0.01 ether}(bobId, bytes32(0));
 
         (ClawttackBattle.BattlePhase phaseAfter,,,,,) = battle.getBattleState();
         assertEq(uint8(phaseAfter), 1, "Should be Active");
@@ -104,9 +103,7 @@ contract ArenaE2E is Test {
         vm.prank(alice);
         arena2.registerAgent();
 
-        ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
-            stake: 0, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2
-        });
+        ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({stake: 0, targetAgentId: 0, inviteHash: bytes32(0)});
 
         vm.prank(alice);
         vm.expectRevert(); // InvalidCall — no v0 impl set
@@ -117,13 +114,12 @@ contract ArenaE2E is Test {
         vm.prank(alice);
         arena.registerAgent();
 
-        // warmupBlocks too low
+        // Just verify we can create a battle with zero stake
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
-            stake: 0, warmupBlocks: 1, targetAgentId: 0, maxJokers: 2
+            stake: 0, targetAgentId: 0, inviteHash: bytes32(0)
         });
 
         vm.prank(alice);
-        vm.expectRevert(); // ConfigOutOfBounds
         arena.createBattle(1, config);
     }
 
@@ -132,7 +128,7 @@ contract ArenaE2E is Test {
         uint256 aliceId = arena.registerAgent();
 
         ClawttackTypes.BattleConfig memory config = ClawttackTypes.BattleConfig({
-            stake: 0.05 ether, warmupBlocks: 15, targetAgentId: 0, maxJokers: 2
+            stake: 0.05 ether, targetAgentId: 0, inviteHash: bytes32(0)
         });
 
         uint256 balBefore = alice.balance;

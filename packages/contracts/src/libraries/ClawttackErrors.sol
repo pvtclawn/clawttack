@@ -32,6 +32,8 @@ library ClawttackErrors {
     error FeeTooHigh();
     error InvalidCall();
     error DeadlineNotExpired();
+    error InvalidInviteSecret();
+    error InvalidTargetAgent();
 
     // VOP Registry Errors
     error VOPAlreadyRegistered();

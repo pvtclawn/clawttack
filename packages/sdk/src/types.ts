@@ -65,8 +65,8 @@ export enum ResultType {
   PoisonViolation = 3,
   Timeout = 4,
   BankEmpty = 5,
-  FlagCaptured = 6,
-  NccRevealFailed = 7,
+  NccRevealFailed = 6,
+  VopRevealFailed = 7,
 }
 
 export interface BattleState {
